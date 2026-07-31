@@ -3,6 +3,7 @@ import { messageContentSchema } from "@faqchatbot/contracts";
 import { BadRequestException, ForbiddenException, Inject, Injectable, type MessageEvent } from "@nestjs/common";
 import type { Observable } from "rxjs";
 import type { Database } from "../../db/client.js";
+import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
 import { createMessagesRepository } from "../../db/repositories/messages.repository.js";
 import type { messages } from "../../db/schema.js";
 import type { WidgetTokenClaims } from "../auth/access-token-claims.js";
@@ -11,6 +12,8 @@ import { DATABASE } from "../core/core.module.js";
 // which needs a real (non `import type`) reference.
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import { AgentRouterService } from "../agent-router/agent-router.service.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { AnalyticsService } from "../analytics/analytics.service.js";
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import { RateLimitService } from "../rate-limit/rate-limit.service.js";
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -46,6 +49,7 @@ export class ChatService {
     private readonly broker: ChatStreamBroker,
     private readonly agentRouter: AgentRouterService,
     private readonly rateLimit: RateLimitService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   async sendMessage(claims: WidgetTokenClaims, input: SendMessageInput): Promise<ChatMessage> {
@@ -85,6 +89,38 @@ export class ChatService {
     this.assertOwnsConversation(claims, conversationId);
 
     return this.broker.stream(conversationId);
+  }
+
+  recordButtonClick(claims: WidgetTokenClaims, input: { conversationId: string; buttonId: string }): void {
+    this.assertOwnsConversation(claims, input.conversationId);
+
+    this.analytics.record({
+      type: "ButtonClicked",
+      tenantId: claims.tenantId,
+      occurredAt: new Date().toISOString(),
+      conversationId: claims.conversationId,
+      buttonId: input.buttonId
+    });
+  }
+
+  async endConversation(
+    claims: WidgetTokenClaims,
+    conversationId: string,
+    input: { reason?: "resolved" | "abandoned" },
+  ): Promise<void> {
+    this.assertOwnsConversation(claims, conversationId);
+
+    const endedAt = new Date();
+    const conversation = await createConversationsRepository(this.db).close(conversationId, endedAt);
+
+    this.analytics.record({
+      type: "ConversationEnded",
+      tenantId: claims.tenantId,
+      occurredAt: endedAt.toISOString(),
+      conversationId,
+      reason: input.reason,
+      durationMs: endedAt.getTime() - conversation.startedAt.getTime()
+    });
   }
 
   private assertOwnsConversation(claims: WidgetTokenClaims, conversationId: string): void {

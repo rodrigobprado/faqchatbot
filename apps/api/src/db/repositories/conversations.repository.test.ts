@@ -81,4 +81,16 @@ describe("ConversationsRepository", () => {
 
     expect(found).toBeNull();
   });
+
+  it("closes an open conversation and stamps its end time", async () => {
+    const { tenant, session } = await createSession();
+    const conversations = createConversationsRepository(db);
+    const conversation = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+    const endedAt = new Date();
+
+    const closed = await conversations.close(conversation.id, endedAt);
+
+    expect(closed.status).toBe("closed");
+    expect(closed.endedAt?.toISOString()).toBe(endedAt.toISOString());
+  });
 });

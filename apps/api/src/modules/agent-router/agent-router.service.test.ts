@@ -8,6 +8,7 @@ import { createTenantAgentConfigsRepository } from "../../db/repositories/tenant
 import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
 import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
 import { createWebhookEndpointsRepository } from "../../db/repositories/webhook-endpoints.repository.js";
+import { AnalyticsService } from "../analytics/analytics.service.js";
 import { AgentRoutingError, type AgentRequest } from "./agent-adapter.js";
 import { AgentRouterService } from "./agent-router.service.js";
 
@@ -76,7 +77,7 @@ describe("AgentRouterService.route", () => {
   it("routes to the n8n adapter configured for the tenant", async () => {
     const { tenant } = await createTenantWithAgent();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ text: "Oi!" }) }));
-    const router = new AgentRouterService(db);
+    const router = new AgentRouterService(db, new AnalyticsService(db));
 
     const response = await router.route(await buildRequest(tenant.id));
 
@@ -92,7 +93,7 @@ describe("AgentRouterService.route", () => {
       name: "Acme Inc",
       planId: plan.id
     });
-    const router = new AgentRouterService(db);
+    const router = new AgentRouterService(db, new AnalyticsService(db));
 
     await expect(router.route(await buildRequest(tenant.id))).rejects.toBeInstanceOf(AgentRoutingError);
   });
@@ -104,7 +105,7 @@ describe("AgentRouterService.route", () => {
       .mockRejectedValueOnce(new Error("network blip"))
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ text: "Recuperado" }) });
     vi.stubGlobal("fetch", fetchMock);
-    const router = new AgentRouterService(db);
+    const router = new AgentRouterService(db, new AnalyticsService(db));
 
     const response = await router.route(await buildRequest(tenant.id));
 
@@ -115,7 +116,7 @@ describe("AgentRouterService.route", () => {
   it("gives up after exhausting retries and throws a safe error", async () => {
     const { tenant, webhook } = await createTenantWithAgent({ retryPolicy: { maxAttempts: 2, backoffMs: 1 } });
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error(`boom at ${webhook.url}`)));
-    const router = new AgentRouterService(db);
+    const router = new AgentRouterService(db, new AnalyticsService(db));
 
     await expect(router.route(await buildRequest(tenant.id))).rejects.toSatisfy((error: unknown) => {
       expect(error).toBeInstanceOf(AgentRoutingError);
@@ -128,7 +129,7 @@ describe("AgentRouterService.route", () => {
   it("opens the circuit breaker after repeated failures for the same tenant", async () => {
     const { tenant } = await createTenantWithAgent({ retryPolicy: { maxAttempts: 1 } });
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("down")));
-    const router = new AgentRouterService(db);
+    const router = new AgentRouterService(db, new AnalyticsService(db));
 
     for (let i = 0; i < 3; i += 1) {
       await expect(router.route(await buildRequest(tenant.id))).rejects.toBeInstanceOf(AgentRoutingError);

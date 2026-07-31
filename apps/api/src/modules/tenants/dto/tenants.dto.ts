@@ -6,6 +6,7 @@ import type {
   UpdateTenantRequest
 } from "@faqchatbot/contracts";
 import {
+  IsDateString,
   IsIn,
   IsInt,
   IsObject,
@@ -112,6 +113,16 @@ export class TenantAgentConfigDto implements TenantAgentConfigRequest {
   @IsOptional()
   @IsObject()
   retryPolicy: Record<string, unknown> = {};
+}
+
+export class AnalyticsQueryDto {
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @IsOptional()
+  @IsDateString()
+  to?: string;
 }
 
 export class RateLimitPolicyDto {

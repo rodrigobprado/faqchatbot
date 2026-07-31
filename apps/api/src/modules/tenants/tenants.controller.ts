@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UseGuards
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
@@ -19,6 +20,7 @@ import { PermissionsGuard } from "../auth/guards/permissions.guard.js";
 // resolve ValidationPipe/DI metatypes at runtime for these classes.
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import {
+  AnalyticsQueryDto,
   CreateTenantDomainDto,
   CreateTenantDto,
   RateLimitPolicyDto,
@@ -120,5 +122,14 @@ export class TenantsController {
   @RequirePermissions("tenants:write")
   upsertRateLimit(@Param("id") id: string, @Body() body: RateLimitPolicyDto) {
     return this.tenantsService.upsertRateLimit(id, body);
+  }
+
+  @Get(":id/analytics")
+  @RequirePermissions("tenants:read")
+  getAnalytics(@Param("id") id: string, @Query() query: AnalyticsQueryDto) {
+    return this.tenantsService.getAnalytics(id, {
+      from: query.from ? new Date(query.from) : undefined,
+      to: query.to ? new Date(query.to) : undefined
+    });
   }
 }

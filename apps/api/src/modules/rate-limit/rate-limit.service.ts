@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Database } from "../../db/client.js";
-import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { AnalyticsService } from "../analytics/analytics.service.js";
 import { DATABASE } from "../core/core.module.js";
 import { RateLimitExceededException } from "./rate-limit-exceeded.exception.js";
 import { resolveRateLimitPolicy, type RateLimitScope } from "./rate-limit-policy.js";
@@ -14,6 +15,7 @@ export class RateLimitService {
   constructor(
     private readonly limiter: RateLimiterService,
     @Inject(DATABASE) private readonly db: Database,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   async enforce(scope: RateLimitScope, key: string, tenantId: string | null): Promise<void> {
@@ -25,10 +27,11 @@ export class RateLimitService {
     }
 
     if (tenantId) {
-      await createAnalyticsEventsRepository(this.db).record({
+      this.analytics.record({
+        type: "RateLimitExceeded",
         tenantId,
-        eventType: "RateLimitExceeded",
-        payload: { type: "RateLimitExceeded", scope, occurredAt: new Date().toISOString() }
+        occurredAt: new Date().toISOString(),
+        scope
       });
     }
 

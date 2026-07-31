@@ -11,7 +11,6 @@ import { ForbiddenException, Inject, Injectable } from "@nestjs/common";
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import { JwtService } from "@nestjs/jwt";
 import type { Database } from "../../db/client.js";
-import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
 import {
   createConversationsRepository,
   type CreateConversationInput
@@ -21,6 +20,8 @@ import { createTenantConfigsRepository } from "../../db/repositories/tenant-conf
 import { createTenantDomainsRepository } from "../../db/repositories/tenant-domains.repository.js";
 import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
 import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { AnalyticsService } from "../analytics/analytics.service.js";
 import type { WidgetTokenClaims } from "../auth/access-token-claims.js";
 import { DATABASE, ENV } from "../core/core.module.js";
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -37,6 +38,20 @@ const INVALID_AGENT_OR_ORIGIN = "Invalid agent or origin";
 type VisitorSessionsRepository = ReturnType<typeof createVisitorSessionsRepository>;
 type ConversationsRepository = ReturnType<typeof createConversationsRepository>;
 
+// ponytail: regex heuristic, not a full UA parser; upgrade if device breakdown needs precision
+const deriveDevice = (userAgent: string | undefined): "desktop" | "mobile" | "tablet" | "unknown" => {
+  if (!userAgent) {
+    return "unknown";
+  }
+  if (/tablet|ipad/i.test(userAgent)) {
+    return "tablet";
+  }
+  if (/mobile|android|iphone/i.test(userAgent)) {
+    return "mobile";
+  }
+  return "desktop";
+};
+
 @Injectable()
 export class WidgetSessionService {
   constructor(
@@ -44,6 +59,7 @@ export class WidgetSessionService {
     @Inject(ENV) private readonly env: PlatformEnvironment,
     private readonly jwtService: JwtService,
     private readonly rateLimit: RateLimitService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   async start(
@@ -91,18 +107,16 @@ export class WidgetSessionService {
       input.conversationId,
     );
 
-    await createAnalyticsEventsRepository(this.db).record({
+    this.analytics.record({
+      type: "WidgetSessionStarted",
       tenantId: tenant.id,
+      occurredAt: new Date().toISOString(),
+      visitorId,
+      sessionId: session.id,
       conversationId: conversation.id,
-      eventType: "WidgetSessionStarted",
-      payload: {
-        type: "WidgetSessionStarted",
-        tenantId: tenant.id,
-        occurredAt: new Date().toISOString(),
-        visitorId,
-        sessionId: session.id,
-        conversationId: conversation.id
-      }
+      origin: domain,
+      pageUrl: input.context.url,
+      device: deriveDevice(input.context.userAgent)
     });
 
     const claims: WidgetTokenClaims = {

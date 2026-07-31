@@ -46,4 +46,26 @@ describe("ChatController", () => {
     expect(getHistory).toHaveBeenCalledWith(claims, claims.conversationId);
     expect(result).toEqual([]);
   });
+
+  it("delegates buttonClicked to ChatService", () => {
+    const recordButtonClick = vi.fn();
+    const controller = new ChatController({ recordButtonClick } as unknown as ChatService);
+    const request = { user: claims } as AuthenticatedWidgetRequest;
+    const body = { conversationId: claims.conversationId, buttonId: "cta-1" };
+
+    controller.buttonClicked(request, body);
+
+    expect(recordButtonClick).toHaveBeenCalledWith(claims, body);
+  });
+
+  it("delegates endConversation to ChatService", async () => {
+    const endConversation = vi.fn().mockResolvedValue(undefined);
+    const controller = new ChatController({ endConversation } as unknown as ChatService);
+    const request = { user: claims } as AuthenticatedWidgetRequest;
+    const body = { reason: "resolved" as const };
+
+    await controller.endConversation(request, claims.conversationId, body);
+
+    expect(endConversation).toHaveBeenCalledWith(claims, claims.conversationId, body);
+  });
 });

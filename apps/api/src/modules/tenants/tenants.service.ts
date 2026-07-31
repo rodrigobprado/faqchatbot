@@ -7,6 +7,7 @@ import type {
 } from "@faqchatbot/contracts";
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { Database } from "../../db/client.js";
+import { createAnalyticsEventsRepository, type AnalyticsPeriod } from "../../db/repositories/analytics-events.repository.js";
 import {
   createRateLimitPoliciesRepository,
   type RateLimitScope
@@ -20,6 +21,7 @@ import { DATABASE } from "../core/core.module.js";
 import { resolveRateLimitPolicy } from "../rate-limit/rate-limit-policy.js";
 
 const RATE_LIMIT_SCOPES: readonly RateLimitScope[] = ["ip", "tenant", "api_key", "visitor", "conversation"];
+const DEFAULT_ANALYTICS_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class TenantsService {
@@ -123,5 +125,23 @@ export class TenantsService {
   async upsertRateLimit(tenantId: string, input: { scope: RateLimitScope; limit: number; windowSeconds: number }) {
     await this.get(tenantId);
     return createRateLimitPoliciesRepository(this.db).upsert({ tenantId, ...input });
+  }
+
+  async getAnalytics(tenantId: string, period: Partial<AnalyticsPeriod>) {
+    await this.get(tenantId);
+
+    const range: AnalyticsPeriod = {
+      from: period.from ?? new Date(Date.now() - DEFAULT_ANALYTICS_PERIOD_MS),
+      to: period.to ?? new Date()
+    };
+    const events = createAnalyticsEventsRepository(this.db);
+
+    const [totalsByEventType, averageResponseTimeMs, averageConversationDurationMs] = await Promise.all([
+      events.aggregateByEventType(tenantId, range),
+      events.averageDurationMs(tenantId, "AgentRoutingCompleted", range),
+      events.averageDurationMs(tenantId, "ConversationEnded", range)
+    ]);
+
+    return { period: range, totalsByEventType, averageResponseTimeMs, averageConversationDurationMs };
   }
 }

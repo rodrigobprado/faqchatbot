@@ -2,9 +2,10 @@ import type { AgentProvider } from "@faqchatbot/contracts";
 import { createLogger } from "@faqchatbot/logger";
 import { Inject, Injectable } from "@nestjs/common";
 import type { Database } from "../../db/client.js";
-import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
 import { createTenantAgentConfigsRepository } from "../../db/repositories/tenant-agent-configs.repository.js";
 import { createWebhookEndpointsRepository } from "../../db/repositories/webhook-endpoints.repository.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { AnalyticsService } from "../analytics/analytics.service.js";
 import { DATABASE } from "../core/core.module.js";
 import { AgentRoutingError, type AgentAdapter, type AgentRequest, type AgentResponse } from "./agent-adapter.js";
 import { CircuitBreaker } from "./circuit-breaker.js";
@@ -45,7 +46,10 @@ export class AgentRouterService {
   });
   private readonly logger = createLogger("agent-router");
 
-  constructor(@Inject(DATABASE) private readonly db: Database) {
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly analytics: AnalyticsService,
+  ) {
     this.adapters = new Map<AgentProvider, AgentAdapter>([["n8n", new N8nAgentAdapter()]]);
   }
 
@@ -71,8 +75,15 @@ export class AgentRouterService {
       : null;
     const retryPolicy = parseRetryPolicy(config.retryPolicy);
 
-    await this.recordEvent(request, "AgentRoutingStarted", { provider: config.provider });
+    this.analytics.record({
+      type: "AgentRoutingStarted",
+      tenantId: request.tenantId,
+      conversationId: request.conversationId,
+      occurredAt: new Date().toISOString(),
+      provider: config.provider
+    });
 
+    const startedAt = Date.now();
     let lastError: unknown;
     for (let attempt = 1; attempt <= retryPolicy.maxAttempts; attempt += 1) {
       try {
@@ -82,6 +93,14 @@ export class AgentRouterService {
           tenantId: request.tenantId,
           provider: config.provider,
           attempt
+        });
+        this.analytics.record({
+          type: "AgentRoutingCompleted",
+          tenantId: request.tenantId,
+          conversationId: request.conversationId,
+          occurredAt: new Date().toISOString(),
+          provider: config.provider,
+          durationMs: Date.now() - startedAt
         });
         return response;
       } catch (error) {
@@ -100,30 +119,16 @@ export class AgentRouterService {
     }
 
     this.breaker.recordFailure(breakerKey);
-    await this.recordEvent(request, "AgentRoutingFailed", {
+    this.analytics.record({
+      type: "AgentRoutingFailed",
+      tenantId: request.tenantId,
+      conversationId: request.conversationId,
+      occurredAt: new Date().toISOString(),
       provider: config.provider,
-      reason: (lastError instanceof Error ? lastError.message : "unknown").slice(0, 500)
+      reason: (lastError instanceof Error ? lastError.message : "unknown").slice(0, 500),
+      durationMs: Date.now() - startedAt
     });
 
     throw new AgentRoutingError("Agent request failed");
-  }
-
-  private async recordEvent(
-    request: AgentRequest,
-    eventType: "AgentRoutingStarted" | "AgentRoutingFailed",
-    extra: Record<string, unknown>,
-  ): Promise<void> {
-    await createAnalyticsEventsRepository(this.db).record({
-      tenantId: request.tenantId,
-      conversationId: request.conversationId,
-      eventType,
-      payload: {
-        type: eventType,
-        tenantId: request.tenantId,
-        conversationId: request.conversationId,
-        occurredAt: new Date().toISOString(),
-        ...extra
-      }
-    });
   }
 }

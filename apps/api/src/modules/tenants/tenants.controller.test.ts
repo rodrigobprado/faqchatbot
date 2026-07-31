@@ -71,4 +71,25 @@ describe("TenantsController", () => {
 
     expect(upsertAgentConfig).toHaveBeenCalledWith("t1", body);
   });
+
+  it("delegates fetching analytics with a parsed period", async () => {
+    const getAnalytics = vi.fn().mockResolvedValue({ totalsByEventType: [] });
+    const controller = new TenantsController(fakeService({ getAnalytics }));
+
+    await controller.getAnalytics("t1", { from: "2026-01-01T00:00:00.000Z", to: "2026-01-31T00:00:00.000Z" });
+
+    expect(getAnalytics).toHaveBeenCalledWith("t1", {
+      from: new Date("2026-01-01T00:00:00.000Z"),
+      to: new Date("2026-01-31T00:00:00.000Z")
+    });
+  });
+
+  it("delegates fetching analytics with an open-ended period", async () => {
+    const getAnalytics = vi.fn().mockResolvedValue({ totalsByEventType: [] });
+    const controller = new TenantsController(fakeService({ getAnalytics }));
+
+    await controller.getAnalytics("t1", {});
+
+    expect(getAnalytics).toHaveBeenCalledWith("t1", { from: undefined, to: undefined });
+  });
 });

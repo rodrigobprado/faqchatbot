@@ -3,6 +3,7 @@ import { NotFoundException } from "@nestjs/common";
 import type { Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDatabase, type Database } from "../../db/client.js";
+import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
 import { createPlansRepository } from "../../db/repositories/plans.repository.js";
 import { TenantsService } from "./tenants.service.js";
 
@@ -126,5 +127,35 @@ describe("TenantsService", () => {
       limit: 5,
       windowSeconds: 30
     });
+  });
+
+  it("aggregates analytics events for a tenant within the requested period", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Acme Inc",
+      planId: plan.id
+    });
+    const events = createAnalyticsEventsRepository(db);
+    await events.record({ tenantId: tenant.id, eventType: "WidgetSessionStarted", payload: {} });
+    await events.record({ tenantId: tenant.id, eventType: "AgentRoutingCompleted", payload: { durationMs: 400 } });
+
+    const analytics = await tenantsService.getAnalytics(tenant.id, {
+      from: new Date(Date.now() - 60_000),
+      to: new Date(Date.now() + 60_000)
+    });
+
+    expect(analytics.totalsByEventType).toEqual(
+      expect.arrayContaining([
+        { eventType: "WidgetSessionStarted", count: 1 },
+        { eventType: "AgentRoutingCompleted", count: 1 }
+      ]),
+    );
+    expect(analytics.averageResponseTimeMs).toBe(400);
+    expect(analytics.averageConversationDurationMs).toBeNull();
+  });
+
+  it("throws NotFoundException when requesting analytics for an unknown tenant", async () => {
+    await expect(tenantsService.getAnalytics(randomUUID(), {})).rejects.toBeInstanceOf(NotFoundException);
   });
 });

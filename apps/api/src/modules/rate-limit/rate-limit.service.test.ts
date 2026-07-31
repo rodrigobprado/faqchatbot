@@ -2,11 +2,12 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { Redis } from "ioredis";
 import type { Sql } from "postgres";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDatabase, type Database } from "../../db/client.js";
 import { createPlansRepository } from "../../db/repositories/plans.repository.js";
 import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
 import { analyticsEvents } from "../../db/schema.js";
+import { AnalyticsService } from "../analytics/analytics.service.js";
 import { RateLimiterService } from "./rate-limiter.service.js";
 import { RateLimitExceededException } from "./rate-limit-exceeded.exception.js";
 import { RateLimitService } from "./rate-limit.service.js";
@@ -25,7 +26,7 @@ let rateLimit: RateLimitService;
 beforeAll(() => {
   ({ db, client } = createDatabase(databaseUrl));
   redis = new Redis(redisUrl);
-  rateLimit = new RateLimitService(new RateLimiterService(redis), db);
+  rateLimit = new RateLimitService(new RateLimiterService(redis), db, new AnalyticsService(db));
 });
 
 afterAll(async () => {
@@ -63,12 +64,14 @@ describe("RateLimitService.enforce", () => {
       RateLimitExceededException,
     );
 
-    const events = await db
-      .select()
-      .from(analyticsEvents)
-      .where(and(eq(analyticsEvents.tenantId, tenant.id), eq(analyticsEvents.eventType, "RateLimitExceeded")));
+    await vi.waitFor(async () => {
+      const events = await db
+        .select()
+        .from(analyticsEvents)
+        .where(and(eq(analyticsEvents.tenantId, tenant.id), eq(analyticsEvents.eventType, "RateLimitExceeded")));
 
-    expect(events).toHaveLength(1);
-    expect(events[0]?.payload).toMatchObject({ type: "RateLimitExceeded", scope: "conversation" });
+      expect(events).toHaveLength(1);
+      expect(events[0]?.payload).toMatchObject({ type: "RateLimitExceeded", scope: "conversation" });
+    });
   });
 });

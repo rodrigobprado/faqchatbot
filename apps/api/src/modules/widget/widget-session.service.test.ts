@@ -12,6 +12,7 @@ import { createPlansRepository } from "../../db/repositories/plans.repository.js
 import { createTenantDomainsRepository } from "../../db/repositories/tenant-domains.repository.js";
 import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
 import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
+import { AnalyticsService } from "../analytics/analytics.service.js";
 import type { WidgetTokenClaims } from "../auth/access-token-claims.js";
 import { RateLimiterService } from "../rate-limit/rate-limiter.service.js";
 import { RateLimitService } from "../rate-limit/rate-limit.service.js";
@@ -62,8 +63,8 @@ beforeAll(async () => {
   ({ db, client } = createDatabase(databaseUrl));
   redis = new Redis(redisUrl);
   env = parseEnvironment(process.env);
-  const rateLimit = new RateLimitService(new RateLimiterService(redis), db);
-  widgetSessionService = new WidgetSessionService(db, env, new JwtService(), rateLimit);
+  const rateLimit = new RateLimitService(new RateLimiterService(redis), db, new AnalyticsService(db));
+  widgetSessionService = new WidgetSessionService(db, env, new JwtService(), rateLimit, new AnalyticsService(db));
 
   const plans = createPlansRepository(db);
   const existing = await plans.findBySlug("starter");

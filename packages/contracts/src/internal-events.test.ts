@@ -42,6 +42,60 @@ describe("internalEventSchema", () => {
     expect(event.type).toBe("AgentRoutingFailed");
   });
 
+  it("accepts an AgentRoutingCompleted event with a response duration", () => {
+    const event = internalEventSchema.parse({
+      type: "AgentRoutingCompleted",
+      tenantId,
+      occurredAt,
+      conversationId,
+      provider: "n8n",
+      durationMs: 842
+    });
+
+    expect(event.type).toBe("AgentRoutingCompleted");
+  });
+
+  it("accepts a WidgetSessionStarted event with origin, pageUrl and device", () => {
+    const event = internalEventSchema.parse({
+      type: "WidgetSessionStarted",
+      tenantId,
+      occurredAt,
+      visitorId: "33333333-3333-4333-8333-333333333333",
+      sessionId: "44444444-4444-4444-8444-444444444444",
+      conversationId,
+      origin: "example.com",
+      pageUrl: "https://example.com/pricing",
+      device: "mobile"
+    });
+
+    expect(event.type).toBe("WidgetSessionStarted");
+  });
+
+  it("accepts a ConversationEnded event with reason and duration", () => {
+    const event = internalEventSchema.parse({
+      type: "ConversationEnded",
+      tenantId,
+      occurredAt,
+      conversationId,
+      reason: "abandoned",
+      durationMs: 120_000
+    });
+
+    expect(event.type).toBe("ConversationEnded");
+  });
+
+  it("rejects a ConversationEnded event with an unknown reason", () => {
+    expect(() =>
+      internalEventSchema.parse({
+        type: "ConversationEnded",
+        tenantId,
+        occurredAt,
+        conversationId,
+        reason: "closed_by_admin"
+      }),
+    ).toThrow();
+  });
+
   it("rejects an unknown event type", () => {
     expect(() =>
       internalEventSchema.parse({ type: "SomethingElse", tenantId, occurredAt }),

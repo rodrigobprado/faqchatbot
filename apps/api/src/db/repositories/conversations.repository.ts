@@ -30,5 +30,18 @@ export const createConversationsRepository = (db: Database) => ({
       .limit(1);
 
     return conversation ?? null;
+  },
+  close: async (id: string, endedAt: Date) => {
+    const [conversation] = await db
+      .update(conversations)
+      .set({ status: "closed", endedAt })
+      .where(eq(conversations.id, id))
+      .returning();
+
+    if (!conversation) {
+      throw new Error("Failed to close conversation");
+    }
+
+    return conversation;
   }
 });

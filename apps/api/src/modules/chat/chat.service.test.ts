@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { BadRequestException, ForbiddenException, type MessageEvent } from "@nestjs/common";
+import { and, eq } from "drizzle-orm";
 import { Redis } from "ioredis";
 import type { Sql } from "postgres";
 import { filter, firstValueFrom, take } from "rxjs";
@@ -12,6 +13,8 @@ import { createTenantAgentConfigsRepository } from "../../db/repositories/tenant
 import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
 import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
 import { createWebhookEndpointsRepository } from "../../db/repositories/webhook-endpoints.repository.js";
+import { analyticsEvents } from "../../db/schema.js";
+import { AnalyticsService } from "../analytics/analytics.service.js";
 import type { WidgetTokenClaims } from "../auth/access-token-claims.js";
 import { RateLimiterService } from "../rate-limit/rate-limiter.service.js";
 import { RateLimitService } from "../rate-limit/rate-limit.service.js";
@@ -32,7 +35,7 @@ let rateLimit: RateLimitService;
 beforeAll(() => {
   ({ db, client } = createDatabase(databaseUrl));
   redis = new Redis(redisUrl);
-  rateLimit = new RateLimitService(new RateLimiterService(redis), db);
+  rateLimit = new RateLimitService(new RateLimiterService(redis), db, new AnalyticsService(db));
 });
 
 afterAll(async () => {
@@ -44,7 +47,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const createChatService = () => new ChatService(db, new ChatStreamBroker(), new AgentRouterService(db), rateLimit);
+const createChatService = () =>
+  new ChatService(
+    db,
+    new ChatStreamBroker(),
+    new AgentRouterService(db, new AnalyticsService(db)),
+    rateLimit,
+    new AnalyticsService(db),
+  );
 
 const createConversationClaims = async (): Promise<WidgetTokenClaims> => {
   const plans = createPlansRepository(db);
@@ -138,7 +148,13 @@ describe("ChatService.sendMessage", () => {
 
   it("streams typing and token events, then persists and emits the assistant reply", async () => {
     const broker = new ChatStreamBroker();
-    const chatService = new ChatService(db, broker, new AgentRouterService(db), rateLimit);
+    const chatService = new ChatService(
+      db,
+      broker,
+      new AgentRouterService(db, new AnalyticsService(db)),
+      rateLimit,
+      new AnalyticsService(db),
+    );
     const claims = await createConversationClaims();
     await configureN8nAgent(claims.tenantId);
     vi.stubGlobal(
@@ -179,7 +195,13 @@ describe("ChatService.sendMessage", () => {
 
   it("emits a generic error event when the agent has no provider configured", async () => {
     const broker = new ChatStreamBroker();
-    const chatService = new ChatService(db, broker, new AgentRouterService(db), rateLimit);
+    const chatService = new ChatService(
+      db,
+      broker,
+      new AgentRouterService(db, new AnalyticsService(db)),
+      rateLimit,
+      new AnalyticsService(db),
+    );
     const claims = await createConversationClaims();
 
     const errorEventPromise: Promise<MessageEvent> = firstValueFrom(
@@ -220,5 +242,66 @@ describe("ChatService.stream", () => {
     const claims = await createConversationClaims();
 
     expect(() => chatService.stream(claims, randomUUID())).toThrow(ForbiddenException);
+  });
+});
+
+describe("ChatService.recordButtonClick", () => {
+  it("records a ButtonClicked analytics event for the conversation", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    chatService.recordButtonClick(claims, { conversationId: claims.conversationId, buttonId: "cta-1" });
+
+    await vi.waitFor(async () => {
+      const events = await db
+        .select()
+        .from(analyticsEvents)
+        .where(and(eq(analyticsEvents.tenantId, claims.tenantId), eq(analyticsEvents.eventType, "ButtonClicked")));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.payload).toMatchObject({ type: "ButtonClicked", buttonId: "cta-1" });
+    });
+  });
+
+  it("rejects a conversationId that does not match the token", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    expect(() =>
+      chatService.recordButtonClick(claims, { conversationId: randomUUID(), buttonId: "cta-1" }),
+    ).toThrow(ForbiddenException);
+  });
+});
+
+describe("ChatService.endConversation", () => {
+  it("closes the conversation and records its duration and reason", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    await chatService.endConversation(claims, claims.conversationId, { reason: "resolved" });
+
+    const conversation = await createConversationsRepository(db).findById(claims.conversationId);
+    expect(conversation?.status).toBe("closed");
+    expect(conversation?.endedAt).toBeTruthy();
+
+    await vi.waitFor(async () => {
+      const events = await db
+        .select()
+        .from(analyticsEvents)
+        .where(and(eq(analyticsEvents.tenantId, claims.tenantId), eq(analyticsEvents.eventType, "ConversationEnded")));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.payload).toMatchObject({ type: "ConversationEnded", reason: "resolved" });
+      expect((events[0]?.payload as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it("rejects a conversationId that does not match the token", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    await expect(chatService.endConversation(claims, randomUUID(), {})).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 });
