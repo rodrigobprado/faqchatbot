@@ -64,6 +64,43 @@ describe("RBAC repositories", () => {
   });
 });
 
+describe("RolesRepository.listByTenantId and findBySlugForTenant", () => {
+  it("lists roles scoped to a tenant and finds one by slug", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+    const roles = createRolesRepository(db);
+
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Acme Inc",
+      planId: plan.id
+    });
+    const role = await roles.create({ tenantId: tenant.id, slug: `admin-${randomUUID()}`, name: "Admin" });
+
+    const list = await roles.listByTenantId(tenant.id);
+    expect(list.some((row) => row.id === role.id)).toBe(true);
+
+    const found = await roles.findBySlugForTenant(tenant.id, role.slug);
+    expect(found?.id).toBe(role.id);
+
+    const notFound = await roles.findBySlugForTenant(tenant.id, `missing-${randomUUID()}`);
+    expect(notFound).toBeNull();
+  });
+});
+
+describe("PermissionsRepository.list", () => {
+  it("returns every permission", async () => {
+    const permissions = createPermissionsRepository(db);
+    const slug = `custom:${randomUUID()}`;
+    const permission = await permissions.create({ slug });
+
+    const all = await permissions.list();
+
+    expect(all.some((row) => row.id === permission.id)).toBe(true);
+  });
+});
+
 describe("ApiKeysRepository", () => {
   it("creates a key, finds it while active and stops matching once revoked", async () => {
     const plans = createPlansRepository(db);

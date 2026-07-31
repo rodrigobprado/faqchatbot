@@ -21,8 +21,11 @@ import { PermissionsGuard } from "../auth/guards/permissions.guard.js";
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import {
   AnalyticsQueryDto,
+  CreateRoleDto,
   CreateTenantDomainDto,
   CreateTenantDto,
+  CreateUserDto,
+  PaginationQueryDto,
   RateLimitPolicyDto,
   TenantAgentConfigDto,
   TenantConfigDto,
@@ -131,5 +134,47 @@ export class TenantsController {
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined
     });
+  }
+
+  @Get(":id/conversations")
+  @RequirePermissions("tenants:read")
+  listConversations(@Param("id") id: string, @Query() query: PaginationQueryDto) {
+    return this.tenantsService.listConversations(id, query);
+  }
+
+  @Get(":id/sessions")
+  @RequirePermissions("tenants:read")
+  listSessions(@Param("id") id: string, @Query() query: PaginationQueryDto) {
+    return this.tenantsService.listSessions(id, query);
+  }
+
+  @Get(":id/audit-logs")
+  @RequirePermissions("tenants:read")
+  listAuditLogs(@Param("id") id: string, @Query() query: PaginationQueryDto) {
+    return this.tenantsService.listAuditLogs(id, query);
+  }
+
+  @Get(":id/users")
+  @RequirePermissions("tenants:read")
+  listUsers(@Param("id") id: string) {
+    return this.tenantsService.listUsers(id);
+  }
+
+  @Post(":id/users")
+  @RequirePermissions("tenants:write")
+  createUser(@Param("id") id: string, @Body() body: CreateUserDto) {
+    return this.tenantsService.createUser(id, body);
+  }
+
+  @Get(":id/roles")
+  @RequirePermissions("tenants:read")
+  listRoles(@Param("id") id: string) {
+    return this.tenantsService.listRoles(id);
+  }
+
+  @Post(":id/roles")
+  @RequirePermissions("tenants:write")
+  createRole(@Param("id") id: string, @Body() body: CreateRoleDto) {
+    return this.tenantsService.createRole(id, body);
   }
 }

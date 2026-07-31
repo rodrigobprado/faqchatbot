@@ -1,3 +1,4 @@
+import { desc, eq } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { auditLogs } from "../schema.js";
 
@@ -29,5 +30,14 @@ export const createAuditLogsRepository = (db: Database) => ({
     }
 
     return log;
+  },
+  listByTenantId: async (tenantId: string, { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}) => {
+    return db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.tenantId, tenantId))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
   }
 });

@@ -5,8 +5,12 @@ import type {
   TenantConfigRequest,
   UpdateTenantRequest
 } from "@faqchatbot/contracts";
+import { Type } from "class-transformer";
 import {
+  ArrayUnique,
+  IsArray,
   IsDateString,
+  IsEmail,
   IsIn,
   IsInt,
   IsObject,
@@ -15,6 +19,7 @@ import {
   IsString,
   IsUrl,
   IsUUID,
+  Min,
   MaxLength,
   MinLength
 } from "class-validator";
@@ -123,6 +128,53 @@ export class AnalyticsQueryDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+}
+
+export class PaginationQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}
+
+export class CreateUserDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(8)
+  password!: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  roleSlugs?: string[];
+}
+
+export class CreateRoleDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  slug!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  name!: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  permissionSlugs?: string[];
 }
 
 export class RateLimitPolicyDto {

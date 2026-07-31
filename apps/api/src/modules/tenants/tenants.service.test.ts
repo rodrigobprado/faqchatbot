@@ -4,7 +4,11 @@ import type { Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDatabase, type Database } from "../../db/client.js";
 import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
+import { createAuditLogsRepository } from "../../db/repositories/audit-logs.repository.js";
+import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
+import { createPermissionsRepository } from "../../db/repositories/permissions.repository.js";
 import { createPlansRepository } from "../../db/repositories/plans.repository.js";
+import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
 import { TenantsService } from "./tenants.service.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -157,5 +161,118 @@ describe("TenantsService", () => {
 
   it("throws NotFoundException when requesting analytics for an unknown tenant", async () => {
     await expect(tenantsService.getAnalytics(randomUUID(), {})).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("lists the tenant's conversations most recent first", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Acme Inc",
+      planId: plan.id
+    });
+    const sessions = createVisitorSessionsRepository(db);
+    const conversations = createConversationsRepository(db);
+    const session = await sessions.create({ tenantId: tenant.id, visitorId: randomUUID(), pageContext: {} });
+    const first = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+
+    const page = await tenantsService.listConversations(tenant.id, { limit: 1 });
+
+    expect(page).toHaveLength(1);
+    expect(page[0]?.id).toBe(second.id);
+    void first;
+  });
+
+  it("lists the tenant's visitor sessions most recently seen first", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Acme Inc",
+      planId: plan.id
+    });
+    const sessions = createVisitorSessionsRepository(db);
+    const first = await sessions.create({ tenantId: tenant.id, visitorId: randomUUID(), pageContext: {} });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await sessions.create({ tenantId: tenant.id, visitorId: randomUUID(), pageContext: {} });
+
+    const page = await tenantsService.listSessions(tenant.id, { limit: 1 });
+
+    expect(page).toHaveLength(1);
+    expect(page[0]?.id).toBe(second.id);
+    void first;
+  });
+
+  it("lists the tenant's audit logs most recent first", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Acme Inc",
+      planId: plan.id
+    });
+    const logs = createAuditLogsRepository(db);
+    const first = await logs.create({ tenantId: tenant.id, action: "a", targetType: "tenant", targetId: tenant.id });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await logs.create({ tenantId: tenant.id, action: "b", targetType: "tenant", targetId: tenant.id });
+
+    const page = await tenantsService.listAuditLogs(tenant.id, { limit: 1 });
+
+    expect(page).toHaveLength(1);
+    expect(page[0]?.id).toBe(second.id);
+    void first;
+  });
+
+  it("creates a user with roles and lists it with the granted role slugs", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Acme Inc",
+      planId: plan.id
+    });
+    await tenantsService.createRole(tenant.id, { slug: "support", name: "Support" });
+
+    const email = `agent-${randomUUID()}@acme.example.com`;
+    const created = await tenantsService.createUser(tenant.id, {
+      email,
+      password: "password123",
+      roleSlugs: ["support"]
+    });
+
+    expect(created.email).toBe(email);
+    expect(JSON.stringify(created)).not.toContain("password123");
+
+    const list = await tenantsService.listUsers(tenant.id);
+    const found = list.find((row) => row.id === created.id);
+    expect(found?.roleSlugs).toEqual(["support"]);
+  });
+
+  it("creates a role with permissions and lists it with the granted permission slugs", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Acme Inc",
+      planId: plan.id
+    });
+    const permissionSlug = `custom:${randomUUID()}`;
+    await createPermissionsRepository(db).create({ slug: permissionSlug });
+
+    const created = await tenantsService.createRole(tenant.id, {
+      slug: "billing",
+      name: "Billing",
+      permissionSlugs: [permissionSlug]
+    });
+
+    const list = await tenantsService.listRoles(tenant.id);
+    const found = list.find((row) => row.id === created.id);
+    expect(found?.permissionSlugs).toEqual([permissionSlug]);
+  });
+
+  it("lists every global permission", async () => {
+    const slug = `custom:${randomUUID()}`;
+    await createPermissionsRepository(db).create({ slug });
+
+    const all = await tenantsService.listPermissions();
+
+    expect(all.some((permission) => permission.slug === slug)).toBe(true);
   });
 });

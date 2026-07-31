@@ -25,5 +25,8 @@ export const createUsersRepository = (db: Database) => ({
   findById: async (id: string) => {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user ?? null;
+  },
+  listByTenantId: async (tenantId: string) => {
+    return db.select().from(users).where(eq(users.tenantId, tenantId));
   }
 });

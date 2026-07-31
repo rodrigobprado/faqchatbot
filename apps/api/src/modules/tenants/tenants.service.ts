@@ -6,8 +6,17 @@ import type {
   UpdateTenantRequest
 } from "@faqchatbot/contracts";
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { hashPassword } from "../../auth/password.js";
 import type { Database } from "../../db/client.js";
 import { createAnalyticsEventsRepository, type AnalyticsPeriod } from "../../db/repositories/analytics-events.repository.js";
+import { createAuditLogsRepository } from "../../db/repositories/audit-logs.repository.js";
+import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
+import { createPermissionsRepository } from "../../db/repositories/permissions.repository.js";
+import { createRolePermissionsRepository } from "../../db/repositories/role-permissions.repository.js";
+import { createRolesRepository } from "../../db/repositories/roles.repository.js";
+import { createUserRolesRepository } from "../../db/repositories/user-roles.repository.js";
+import { createUsersRepository } from "../../db/repositories/users.repository.js";
+import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
 import {
   createRateLimitPoliciesRepository,
   type RateLimitScope
@@ -143,5 +152,95 @@ export class TenantsService {
     ]);
 
     return { period: range, totalsByEventType, averageResponseTimeMs, averageConversationDurationMs };
+  }
+
+  async listConversations(tenantId: string, page: { limit?: number; offset?: number }) {
+    await this.get(tenantId);
+    return createConversationsRepository(this.db).listByTenantId(tenantId, page);
+  }
+
+  async listSessions(tenantId: string, page: { limit?: number; offset?: number }) {
+    await this.get(tenantId);
+    return createVisitorSessionsRepository(this.db).listByTenantId(tenantId, page);
+  }
+
+  async listAuditLogs(tenantId: string, page: { limit?: number; offset?: number }) {
+    await this.get(tenantId);
+    return createAuditLogsRepository(this.db).listByTenantId(tenantId, page);
+  }
+
+  async listUsers(tenantId: string) {
+    await this.get(tenantId);
+    const users = await createUsersRepository(this.db).listByTenantId(tenantId);
+    const userRoles = createUserRolesRepository(this.db);
+
+    return Promise.all(
+      users.map(async (user) => ({
+        id: user.id,
+        tenantId: user.tenantId,
+        email: user.email,
+        status: user.status,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        roleSlugs: await userRoles.listRoleSlugsByUserId(user.id)
+      })),
+    );
+  }
+
+  async createUser(tenantId: string, input: { email: string; password: string; roleSlugs?: string[] }) {
+    await this.get(tenantId);
+    const passwordHash = await hashPassword(input.password);
+    const user = await createUsersRepository(this.db).create({ tenantId, email: input.email, passwordHash });
+
+    const roles = createRolesRepository(this.db);
+    const userRoles = createUserRolesRepository(this.db);
+    for (const slug of input.roleSlugs ?? []) {
+      const role = await roles.findBySlugForTenant(tenantId, slug);
+      if (role) {
+        await userRoles.assign(user.id, role.id);
+      }
+    }
+
+    return {
+      id: user.id,
+      tenantId: user.tenantId,
+      email: user.email,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+  }
+
+  async listRoles(tenantId: string) {
+    await this.get(tenantId);
+    const roles = await createRolesRepository(this.db).listByTenantId(tenantId);
+    const rolePermissions = createRolePermissionsRepository(this.db);
+
+    return Promise.all(
+      roles.map(async (role) => ({
+        ...role,
+        permissionSlugs: await rolePermissions.listPermissionSlugsByRoleId(role.id)
+      })),
+    );
+  }
+
+  async createRole(tenantId: string, input: { slug: string; name: string; permissionSlugs?: string[] }) {
+    await this.get(tenantId);
+    const role = await createRolesRepository(this.db).create({ tenantId, slug: input.slug, name: input.name });
+
+    const permissions = createPermissionsRepository(this.db);
+    const rolePermissions = createRolePermissionsRepository(this.db);
+    for (const slug of input.permissionSlugs ?? []) {
+      const permission = await permissions.findBySlug(slug);
+      if (permission) {
+        await rolePermissions.assign(role.id, permission.id);
+      }
+    }
+
+    return role;
+  }
+
+  listPermissions() {
+    return createPermissionsRepository(this.db).list();
   }
 }

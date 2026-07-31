@@ -31,6 +31,15 @@ export const createConversationsRepository = (db: Database) => ({
 
     return conversation ?? null;
   },
+  listByTenantId: async (tenantId: string, { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}) => {
+    return db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.tenantId, tenantId))
+      .orderBy(desc(conversations.startedAt))
+      .limit(limit)
+      .offset(offset);
+  },
   close: async (id: string, endedAt: Date) => {
     const [conversation] = await db
       .update(conversations)

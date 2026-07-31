@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { visitorSessions } from "../schema.js";
 
@@ -34,5 +34,14 @@ export const createVisitorSessionsRepository = (db: Database) => ({
     }
 
     return session;
+  },
+  listByTenantId: async (tenantId: string, { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}) => {
+    return db
+      .select()
+      .from(visitorSessions)
+      .where(eq(visitorSessions.tenantId, tenantId))
+      .orderBy(desc(visitorSessions.lastSeenAt))
+      .limit(limit)
+      .offset(offset);
   }
 });

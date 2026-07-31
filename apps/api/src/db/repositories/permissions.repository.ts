@@ -23,5 +23,8 @@ export const createPermissionsRepository = (db: Database) => ({
   findBySlug: async (slug: string) => {
     const [permission] = await db.select().from(permissions).where(eq(permissions.slug, slug));
     return permission ?? null;
+  },
+  list: async () => {
+    return db.select().from(permissions);
   }
 });

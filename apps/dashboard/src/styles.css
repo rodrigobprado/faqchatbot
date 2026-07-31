@@ -39,6 +39,73 @@ a {
   color: #475569;
 }
 
+.sidebar a.active {
+  color: #172033;
+  font-weight: 600;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.sidebar-footer button {
+  cursor: pointer;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  text-align: left;
+  color: #dc2626;
+  font: inherit;
+}
+
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.auth-card {
+  display: grid;
+  gap: 12px;
+  width: 320px;
+  padding: 32px;
+  border: 1px solid #d9e0ea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.auth-card label {
+  font-size: 14px;
+  color: #475569;
+}
+
+.auth-card input {
+  padding: 8px 10px;
+  border: 1px solid #d9e0ea;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.auth-card [role="alert"] {
+  color: #dc2626;
+  font-size: 14px;
+}
+
+.auth-card button {
+  margin-top: 8px;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
 .content {
   padding: 32px;
 }

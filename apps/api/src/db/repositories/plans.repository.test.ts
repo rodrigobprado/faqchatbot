@@ -38,3 +38,31 @@ describe("PlansRepository.findById", () => {
     expect(found).toBeNull();
   });
 });
+
+describe("PlansRepository.list", () => {
+  it("returns every plan", async () => {
+    const plans = createPlansRepository(db);
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+
+    const all = await plans.list();
+
+    expect(all.some((row) => row.id === plan.id)).toBe(true);
+  });
+});
+
+describe("PlansRepository.update", () => {
+  it("updates the plan's name, price and limits", async () => {
+    const plans = createPlansRepository(db);
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+
+    const updated = await plans.update(plan.id, {
+      name: "Starter Plus",
+      priceCents: 4900,
+      limits: { messagesPerMinute: 30 }
+    });
+
+    expect(updated.name).toBe("Starter Plus");
+    expect(updated.priceCents).toBe(4900);
+    expect(updated.limits).toEqual({ messagesPerMinute: 30 });
+  });
+});

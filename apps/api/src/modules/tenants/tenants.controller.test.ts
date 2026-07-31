@@ -92,4 +92,69 @@ describe("TenantsController", () => {
 
     expect(getAnalytics).toHaveBeenCalledWith("t1", { from: undefined, to: undefined });
   });
+
+  it("delegates listing conversations with the pagination query", async () => {
+    const listConversations = vi.fn().mockResolvedValue([]);
+    const controller = new TenantsController(fakeService({ listConversations }));
+
+    await controller.listConversations("t1", { limit: 10, offset: 5 });
+
+    expect(listConversations).toHaveBeenCalledWith("t1", { limit: 10, offset: 5 });
+  });
+
+  it("delegates listing sessions with the pagination query", async () => {
+    const listSessions = vi.fn().mockResolvedValue([]);
+    const controller = new TenantsController(fakeService({ listSessions }));
+
+    await controller.listSessions("t1", { limit: 10, offset: 5 });
+
+    expect(listSessions).toHaveBeenCalledWith("t1", { limit: 10, offset: 5 });
+  });
+
+  it("delegates listing audit logs with the pagination query", async () => {
+    const listAuditLogs = vi.fn().mockResolvedValue([]);
+    const controller = new TenantsController(fakeService({ listAuditLogs }));
+
+    await controller.listAuditLogs("t1", { limit: 10, offset: 5 });
+
+    expect(listAuditLogs).toHaveBeenCalledWith("t1", { limit: 10, offset: 5 });
+  });
+
+  it("delegates listing users", async () => {
+    const listUsers = vi.fn().mockResolvedValue([]);
+    const controller = new TenantsController(fakeService({ listUsers }));
+
+    await controller.listUsers("t1");
+
+    expect(listUsers).toHaveBeenCalledWith("t1");
+  });
+
+  it("delegates creating a user", async () => {
+    const createUser = vi.fn().mockResolvedValue({ id: "u1" });
+    const controller = new TenantsController(fakeService({ createUser }));
+
+    const body = { email: "a@b.com", password: "password123", roleSlugs: ["support"] };
+    await controller.createUser("t1", body);
+
+    expect(createUser).toHaveBeenCalledWith("t1", body);
+  });
+
+  it("delegates listing roles", async () => {
+    const listRoles = vi.fn().mockResolvedValue([]);
+    const controller = new TenantsController(fakeService({ listRoles }));
+
+    await controller.listRoles("t1");
+
+    expect(listRoles).toHaveBeenCalledWith("t1");
+  });
+
+  it("delegates creating a role", async () => {
+    const createRole = vi.fn().mockResolvedValue({ id: "r1" });
+    const controller = new TenantsController(fakeService({ createRole }));
+
+    const body = { slug: "support", name: "Support", permissionSlugs: ["tenants:read"] };
+    await controller.createRole("t1", body);
+
+    expect(createRole).toHaveBeenCalledWith("t1", body);
+  });
 });

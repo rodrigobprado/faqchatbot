@@ -73,4 +73,20 @@ describe("VisitorSessionsRepository", () => {
     expect(touched.pageContext).toEqual({ url: "https://acme.example.com/checkout" });
     expect(touched.lastSeenAt.getTime()).toBeGreaterThanOrEqual(session.lastSeenAt.getTime());
   });
+
+  it("lists sessions for a tenant, most recently seen first, respecting limit and offset", async () => {
+    const tenant = await createTenant();
+    const sessions = createVisitorSessionsRepository(db);
+    const first = await sessions.create({ tenantId: tenant.id, visitorId: randomUUID(), pageContext: {} });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await sessions.create({ tenantId: tenant.id, visitorId: randomUUID(), pageContext: {} });
+
+    const page = await sessions.listByTenantId(tenant.id, { limit: 1, offset: 0 });
+
+    expect(page).toHaveLength(1);
+    expect(page[0]?.id).toBe(second.id);
+
+    const nextPage = await sessions.listByTenantId(tenant.id, { limit: 1, offset: 1 });
+    expect(nextPage[0]?.id).toBe(first.id);
+  });
 });

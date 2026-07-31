@@ -82,6 +82,22 @@ describe("ConversationsRepository", () => {
     expect(found).toBeNull();
   });
 
+  it("lists conversations for a tenant, most recent first, respecting limit and offset", async () => {
+    const { tenant, session } = await createSession();
+    const conversations = createConversationsRepository(db);
+    const first = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+
+    const page = await conversations.listByTenantId(tenant.id, { limit: 1, offset: 0 });
+
+    expect(page).toHaveLength(1);
+    expect(page[0]?.id).toBe(second.id);
+
+    const nextPage = await conversations.listByTenantId(tenant.id, { limit: 1, offset: 1 });
+    expect(nextPage[0]?.id).toBe(first.id);
+  });
+
   it("closes an open conversation and stamps its end time", async () => {
     const { tenant, session } = await createSession();
     const conversations = createConversationsRepository(db);

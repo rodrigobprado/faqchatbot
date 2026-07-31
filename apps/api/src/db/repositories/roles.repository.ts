@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { roles } from "../schema.js";
 
@@ -27,6 +27,13 @@ export const createRolesRepository = (db: Database) => ({
   },
   findBySlug: async (slug: string) => {
     const [role] = await db.select().from(roles).where(eq(roles.slug, slug));
+    return role ?? null;
+  },
+  listByTenantId: async (tenantId: string) => {
+    return db.select().from(roles).where(eq(roles.tenantId, tenantId));
+  },
+  findBySlugForTenant: async (tenantId: string, slug: string) => {
+    const [role] = await db.select().from(roles).where(and(eq(roles.tenantId, tenantId), eq(roles.slug, slug)));
     return role ?? null;
   }
 });

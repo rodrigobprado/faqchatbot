@@ -85,4 +85,26 @@ describe("UsersRepository", () => {
 
     expect(found).toBeNull();
   });
+
+  it("lists users for a tenant", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+    const users = createUsersRepository(db);
+
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Tenant",
+      planId: plan.id
+    });
+    const user = await users.create({
+      tenantId: tenant.id,
+      email: `admin-${randomUUID()}@example.com`,
+      passwordHash: "salt:derivedkey"
+    });
+
+    const list = await users.listByTenantId(tenant.id);
+
+    expect(list.some((row) => row.id === user.id)).toBe(true);
+  });
 });
