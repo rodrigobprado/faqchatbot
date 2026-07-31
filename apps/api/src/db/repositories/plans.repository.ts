@@ -30,5 +30,9 @@ export const createPlansRepository = (db: Database) => ({
   findBySlug: async (slug: string) => {
     const [plan] = await db.select().from(plans).where(eq(plans.slug, slug));
     return plan ?? null;
+  },
+  findById: async (id: string) => {
+    const [plan] = await db.select().from(plans).where(eq(plans.id, id));
+    return plan ?? null;
   }
 });

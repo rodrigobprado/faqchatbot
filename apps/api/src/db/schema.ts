@@ -155,6 +155,20 @@ export const permissions = pgTable("permissions", {
   description: text("description")
 });
 
+export const rolePermissions = pgTable(
+  "role_permissions",
+  {
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => roles.id),
+    permissionId: uuid("permission_id")
+      .notNull()
+      .references(() => permissions.id),
+    createdAt: createdAt()
+  },
+  (table) => [primaryKey({ columns: [table.roleId, table.permissionId] })],
+);
+
 export const users = pgTable(
   "users",
   {

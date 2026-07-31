@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { tenants } from "../schema.js";
 
@@ -8,6 +8,13 @@ export type CreateTenantInput = {
   planId: string;
   defaultLocale?: string;
 };
+
+export type UpdateTenantInput = Partial<{
+  name: string;
+  status: "active" | "inactive" | "suspended";
+  planId: string;
+  defaultLocale: string;
+}>;
 
 export const createTenantsRepository = (db: Database) => ({
   create: async (input: CreateTenantInput) => {
@@ -28,11 +35,36 @@ export const createTenantsRepository = (db: Database) => ({
     return tenant;
   },
   findByPublicId: async (publicId: string) => {
-    const [tenant] = await db.select().from(tenants).where(eq(tenants.publicId, publicId));
+    const [tenant] = await db
+      .select()
+      .from(tenants)
+      .where(and(eq(tenants.publicId, publicId), isNull(tenants.deletedAt)));
     return tenant ?? null;
   },
   findById: async (id: string) => {
-    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id));
+    const [tenant] = await db
+      .select()
+      .from(tenants)
+      .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)));
+    return tenant ?? null;
+  },
+  list: async () => db.select().from(tenants).where(isNull(tenants.deletedAt)),
+  update: async (id: string, input: UpdateTenantInput) => {
+    const [tenant] = await db
+      .update(tenants)
+      .set({ ...input, updatedAt: new Date() })
+      .where(eq(tenants.id, id))
+      .returning();
+
+    return tenant ?? null;
+  },
+  softDelete: async (id: string) => {
+    const [tenant] = await db
+      .update(tenants)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(tenants.id, id))
+      .returning();
+
     return tenant ?? null;
   }
 });

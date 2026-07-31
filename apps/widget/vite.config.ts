@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  define: {
+    __API_URL__: JSON.stringify(process.env.API_PUBLIC_URL ?? "http://localhost:3000")
+  },
   build: {
     lib: {
       entry: "src/index.ts",

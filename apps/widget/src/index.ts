@@ -1,5 +1,8 @@
 import "./chat-widget.js";
 import type { ChatWidgetIdentifyPayload, FaqChatWidgetElement } from "./chat-widget.js";
+import { readWidgetConfig } from "./widget-config.js";
+
+declare const __API_URL__: string;
 
 export type ChatWidgetPublicApi = Readonly<{
   open(): void;
@@ -23,7 +26,10 @@ const mount = () => {
     return existing;
   }
 
+  const config = readWidgetConfig(document.currentScript as HTMLScriptElement | null, __API_URL__);
   const element = document.createElement("faq-chat-widget") as FaqChatWidgetElement;
+  element.agentId = config.agentId;
+  element.apiUrl = config.apiUrl;
   document.body.append(element);
   return element;
 };

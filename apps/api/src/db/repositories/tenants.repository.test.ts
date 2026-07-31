@@ -78,4 +78,48 @@ describe("TenantsRepository", () => {
     expect(domainsForA).toHaveLength(1);
     expect(domainsForA[0]?.domain).toBe("a.example.com");
   });
+
+  it("updates tenant fields and excludes soft-deleted tenants from list", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Original Name",
+      planId: plan.id
+    });
+
+    const updated = await tenants.update(tenant.id, { name: "Renamed", status: "suspended" });
+    expect(updated?.name).toBe("Renamed");
+    expect(updated?.status).toBe("suspended");
+
+    const listedBeforeDelete = await tenants.list();
+    expect(listedBeforeDelete.some((t) => t.id === tenant.id)).toBe(true);
+
+    const deleted = await tenants.softDelete(tenant.id);
+    expect(deleted?.deletedAt).not.toBeNull();
+
+    const listedAfterDelete = await tenants.list();
+    expect(listedAfterDelete.some((t) => t.id === tenant.id)).toBe(false);
+  });
+
+  it("removes a tenant domain", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+    const domains = createTenantDomainsRepository(db);
+
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Tenant",
+      planId: plan.id
+    });
+    const domain = await domains.create({ tenantId: tenant.id, domain: "remove-me.example.com" });
+
+    await domains.remove(domain.id);
+
+    const remaining = await domains.listByTenantId(tenant.id);
+    expect(remaining).toHaveLength(0);
+  });
 });

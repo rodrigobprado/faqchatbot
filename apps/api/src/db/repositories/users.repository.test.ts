@@ -55,4 +55,34 @@ describe("UsersRepository", () => {
 
     expect(found).toBeNull();
   });
+
+  it("finds a user by id", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+    const users = createUsersRepository(db);
+
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Tenant",
+      planId: plan.id
+    });
+    const created = await users.create({
+      tenantId: tenant.id,
+      email: `admin-${randomUUID()}@example.com`,
+      passwordHash: "salt:derivedkey"
+    });
+
+    const found = await users.findById(created.id);
+
+    expect(found?.email).toBe(created.email);
+  });
+
+  it("returns null for an id that does not exist", async () => {
+    const users = createUsersRepository(db);
+
+    const found = await users.findById(randomUUID());
+
+    expect(found).toBeNull();
+  });
 });
