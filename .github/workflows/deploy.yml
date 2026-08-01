@@ -115,7 +115,7 @@ jobs:
           fi
 
           if grep -q '^SEED_ADMIN_PASSWORD=' "${BRANCH_DIR}/shared/.env"; then
-            if grep -q '^SEED_ADMIN_PASSWORD=change-me-now$' "${BRANCH_DIR}/shared/.env"; then
+            if grep -Eq '^SEED_ADMIN_PASSWORD=(change-me-now)?$' "${BRANCH_DIR}/shared/.env"; then
               sed -i "s#^SEED_ADMIN_PASSWORD=.*#SEED_ADMIN_PASSWORD=${SEED_PASSWORD}#" "${BRANCH_DIR}/shared/.env"
             fi
           else
