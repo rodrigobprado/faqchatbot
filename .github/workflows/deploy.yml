@@ -15,9 +15,6 @@ jobs:
       BASE_DIR: /wwwroot/sites/faqchatbot
 
     steps:
-      - name: limpa workspace anterior
-        run: rm -Rf "${{ github.workspace }}"
-
       - name: checkout
         uses: actions/checkout@v4
 
