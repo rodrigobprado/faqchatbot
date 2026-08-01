@@ -70,6 +70,26 @@ jobs:
               ;;
           esac
 
+      - name: carrega variaveis da branch
+        shell: bash
+        run: |
+          BRANCH_DIR="${BASE_DIR}/${{ steps.env.outputs.branch }}"
+          if [ ! -f "${BRANCH_DIR}/shared/.env" ]; then
+            echo "::error::${BRANCH_DIR}/shared/.env nao encontrado"
+            exit 1
+          fi
+
+          set -a
+          source "${BRANCH_DIR}/shared/.env"
+          set +a
+
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::DATABASE_URL nao definido em ${BRANCH_DIR}/shared/.env"
+            exit 1
+          fi
+
+          echo "DATABASE_URL=${DATABASE_URL}" >> "$GITHUB_ENV"
+
       - name: prepara shared
         shell: bash
         run: |
