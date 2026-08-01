@@ -9,6 +9,12 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to run the seed");
 }
 
+const branch = process.env.APP_BRANCH ?? "main";
+const tenantPublicId = process.env.SEED_TENANT_PUBLIC_ID ?? `demo-${branch}`;
+const tenantName = process.env.SEED_TENANT_NAME ?? `Demo Tenant ${branch}`;
+const adminEmail = process.env.SEED_ADMIN_EMAIL ?? `admin+${branch}@faqchatbot.local`;
+const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "change-me-now";
+
 // ponytail: scrypt placeholder for the seed only; Fase 4 (auth) replaces this with Argon2.
 const hashPassword = (password: string): string => {
   const salt = randomBytes(16).toString("hex");
@@ -31,20 +37,28 @@ const plan =
   }));
 
 const tenant =
-  (await tenants.findByPublicId("demo")) ??
-  (await tenants.create({ publicId: "demo", name: "Demo Tenant", planId: plan.id }));
+  (await tenants.findByPublicId(tenantPublicId)) ??
+  (await tenants.create({ publicId: tenantPublicId, name: tenantName, planId: plan.id }));
 
-const adminEmail = "admin@faqchatbot.local";
 const admin =
   (await users.findByEmail(adminEmail)) ??
   (await users.create({
     tenantId: tenant.id,
     email: adminEmail,
-    passwordHash: hashPassword(process.env.SEED_ADMIN_PASSWORD ?? "change-me-now")
+    passwordHash: hashPassword(adminPassword)
   }));
 
 process.stdout.write(
-  `${JSON.stringify({ plan: plan.slug, tenant: tenant.publicId, admin: admin.email }, null, 2)}\n`,
+  `${JSON.stringify(
+    {
+      branch,
+      plan: plan.slug,
+      tenant: tenant.publicId,
+      admin: admin.email
+    },
+    null,
+    2,
+  )}\n`,
 );
 
 await client.end();
