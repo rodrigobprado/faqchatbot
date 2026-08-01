@@ -1,5 +1,9 @@
 import "./chat-widget.js";
-import type { ChatWidgetIdentifyPayload, FaqChatWidgetElement } from "./chat-widget.js";
+import type {
+  ChatWidgetIdentifyPayload,
+  ChatWidgetTheme,
+  FaqChatWidgetElement
+} from "./chat-widget.js";
 
 export type ChatWidgetPublicApi = Readonly<{
   open(): void;
@@ -7,7 +11,7 @@ export type ChatWidgetPublicApi = Readonly<{
   toggle(): void;
   send(message: string): void;
   identify(payload: ChatWidgetIdentifyPayload): void;
-  setTheme(): void;
+  setTheme(theme?: ChatWidgetTheme): void;
   destroy(): void;
 }>;
 
@@ -36,10 +40,11 @@ window.ChatWidget = Object.freeze({
   toggle: () => element.toggle(),
   send: (message: string) => element.send(message),
   identify: (payload: ChatWidgetIdentifyPayload) => element.identify(payload),
-  setTheme: () => element.setTheme(),
+  setTheme: (theme?: ChatWidgetTheme) => element.setTheme(theme),
   destroy: () => {
-    element.remove();
+    if (element.isConnected) {
+      element.remove();
+    }
     delete window.ChatWidget;
   }
 });
-

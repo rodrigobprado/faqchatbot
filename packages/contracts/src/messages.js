@@ -106,3 +106,16 @@ export const messageContentSchema = z.discriminatedUnion("type", [
 export const chatMessageSchema = baseMessageSchema.extend({
     content: messageContentSchema
 });
+export const chatMessageCreateRequestSchema = z.object({
+    content: messageContentSchema,
+    metadata: z.record(z.string(), z.unknown()).default({})
+});
+export const chatMessageExchangeResponseSchema = z.object({
+    conversationId: z.string().uuid(),
+    userMessage: chatMessageSchema,
+    assistantMessage: chatMessageSchema
+});
+export const chatMessageHistoryResponseSchema = z.object({
+    conversationId: z.string().uuid(),
+    messages: z.array(chatMessageSchema)
+});
