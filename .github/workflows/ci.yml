@@ -1,0 +1,58 @@
+name: CI faqchatbot
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: faqchatbot
+          POSTGRES_PASSWORD: faqchatbot
+          POSTGRES_DB: faqchatbot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U faqchatbot -d faqchatbot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://faqchatbot:faqchatbot@localhost:5432/faqchatbot
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+          run_install: false
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: habilita corepack
+        run: corepack enable
+
+      - name: instala dependencias
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: prepara database
+        run: corepack pnpm --filter @faqchatbot/api db:migrate
+
+      - name: valida qualidade
+        run: |
+          corepack pnpm lint
+          corepack pnpm typecheck
+          corepack pnpm test
+          corepack pnpm build
+          corepack pnpm audit
