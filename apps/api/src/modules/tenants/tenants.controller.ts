@@ -1,0 +1,90 @@
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
+import type { AdminRequest } from "../auth/admin-auth.guard.js";
+import { AdminAuthGuard } from "../auth/admin-auth.guard.js";
+import { TenantsService } from "./tenants.service.js";
+
+@ApiTags("admin-tenants")
+@UseGuards(AdminAuthGuard)
+@Controller("v1/admin/tenants")
+export class AdminTenantsController {
+  constructor(@Inject(TenantsService) private readonly tenantsService: TenantsService) {}
+
+  @Get()
+  @ApiOkResponse({ description: "Lists tenants visible to the current admin" })
+  list(@Req() request: AdminRequest) {
+    return this.tenantsService.listTenants(request.adminUser!);
+  }
+
+  @Post()
+  @ApiOkResponse({ description: "Creates a tenant" })
+  create(@Req() request: AdminRequest, @Body() body: unknown) {
+    return this.tenantsService.createTenant(request.adminUser!, body);
+  }
+
+  @Get(":tenantId")
+  @ApiOkResponse({ description: "Gets a tenant" })
+  get(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.getTenant(request.adminUser!, tenantId);
+  }
+
+  @Patch(":tenantId")
+  @ApiOkResponse({ description: "Updates a tenant" })
+  update(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+    return this.tenantsService.updateTenant(request.adminUser!, tenantId, body);
+  }
+
+  @Delete(":tenantId")
+  @ApiOkResponse({ description: "Deletes a tenant" })
+  remove(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.deleteTenant(request.adminUser!, tenantId);
+  }
+
+  @Get(":tenantId/domains")
+  @ApiOkResponse({ description: "Lists tenant domains" })
+  listDomains(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.listDomains(request.adminUser!, tenantId);
+  }
+
+  @Post(":tenantId/domains")
+  @ApiOkResponse({ description: "Creates a tenant domain" })
+  createDomain(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+    return this.tenantsService.createDomain(request.adminUser!, tenantId, body);
+  }
+
+  @Get(":tenantId/config")
+  @ApiOkResponse({ description: "Gets tenant widget config" })
+  getConfig(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.getTenantConfig(request.adminUser!, tenantId);
+  }
+
+  @Put(":tenantId/config")
+  @ApiOkResponse({ description: "Upserts tenant widget config" })
+  upsertConfig(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+    return this.tenantsService.upsertTenantConfig(request.adminUser!, tenantId, body);
+  }
+
+  @Get(":tenantId/agent-config")
+  @ApiOkResponse({ description: "Gets tenant agent config" })
+  getAgentConfig(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.getTenantAgentConfig(request.adminUser!, tenantId);
+  }
+
+  @Put(":tenantId/agent-config")
+  @ApiOkResponse({ description: "Upserts tenant agent config" })
+  upsertAgentConfig(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+    return this.tenantsService.upsertTenantAgentConfig(request.adminUser!, tenantId, body);
+  }
+}
+
+@ApiTags("public-tenants")
+@Controller("v1/widget/public")
+export class PublicTenantsController {
+  constructor(@Inject(TenantsService) private readonly tenantsService: TenantsService) {}
+
+  @Get(":publicId/config")
+  @ApiOkResponse({ description: "Gets the public widget config for a tenant" })
+  getPublicConfig(@Param("publicId") publicId: string) {
+    return this.tenantsService.getPublicConfig(publicId);
+  }
+}

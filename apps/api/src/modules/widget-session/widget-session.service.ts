@@ -129,7 +129,6 @@ export type WidgetSessionDependencies = Readonly<{
   };
   widgetTokenSecret: string;
   widgetTokenTtlSeconds: number;
-  close?: () => Promise<void>;
 }>;
 
 type StartHeaders = Readonly<{
@@ -244,10 +243,6 @@ export class WidgetSessionService {
       },
       config: defaultWidgetConfigFromTenant(tenant.defaultLocale)
     };
-  }
-
-  async onModuleDestroy() {
-    await this.dependencies.close?.();
   }
 
   private parseInput(rawInput: unknown): WidgetSessionStartRequest {

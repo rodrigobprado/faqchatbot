@@ -6,6 +6,10 @@ import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { randomUUID } from "node:crypto";
+import { HttpExceptionFilter } from "./common/filters/http-exception.filter.js";
+import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor.js";
+import { createCorsOriginResolver } from "./common/cors.js";
 import { AppModule } from "./modules/app.module.js";
 
 const bootstrap = async () => {
@@ -14,9 +18,20 @@ const bootstrap = async () => {
     new FastifyAdapter({ logger: true }),
   );
 
+  const fastify = app.getHttpAdapter().getInstance();
+  fastify.addHook("onRequest", (request, reply, done) => {
+    const headerId = request.headers["x-correlation-id"];
+    const correlationId =
+      typeof headerId === "string" && headerId.trim() ? headerId : randomUUID();
+
+    (request as typeof request & { correlationId?: string }).correlationId = correlationId;
+    reply.header("x-correlation-id", correlationId);
+    done();
+  });
+
   await app.register(helmet);
   await app.register(cors, {
-    origin: true,
+    origin: createCorsOriginResolver(process.env.CORS_ORIGINS),
     credentials: true
   });
 
@@ -27,6 +42,8 @@ const bootstrap = async () => {
       transform: true
     }),
   );
+  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalInterceptors(new ResponseEnvelopeInterceptor());
 
   const config = new DocumentBuilder()
     .setTitle("faqchatbot API")
@@ -42,4 +59,3 @@ const bootstrap = async () => {
 };
 
 void bootstrap();
-

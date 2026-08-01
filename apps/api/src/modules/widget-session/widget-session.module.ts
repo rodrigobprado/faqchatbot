@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
-import { createDatabase } from "../../db/client.js";
+import { DatabaseModule } from "../../db/database.module.js";
+import { DatabaseService } from "../../db/database.service.js";
 import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
 import { createTenantDomainsRepository } from "../../db/repositories/tenant-domains.repository.js";
 import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
@@ -21,28 +22,21 @@ const widgetTokenSecret = () => {
 };
 
 @Module({
+  imports: [DatabaseModule],
   controllers: [WidgetSessionController],
   providers: [
     {
       provide: WidgetSessionService,
-      useFactory: () => {
-        const databaseUrl = process.env.DATABASE_URL;
-        if (!databaseUrl) {
-          throw new Error("DATABASE_URL is required to initialize widget sessions");
-        }
-
-        const { db, client } = createDatabase(databaseUrl);
-
+      inject: [DatabaseService],
+      useFactory: (databaseService: DatabaseService) => {
+        const { db } = databaseService;
         return new WidgetSessionService({
           tenants: createTenantsRepository(db),
           tenantDomains: createTenantDomainsRepository(db),
           visitorSessions: createVisitorSessionsRepository(db),
           conversations: createConversationsRepository(db),
           widgetTokenSecret: widgetTokenSecret(),
-          widgetTokenTtlSeconds: 900,
-          close: async () => {
-            await client.end();
-          }
+          widgetTokenTtlSeconds: 900
         });
       }
     }

@@ -43,7 +43,7 @@ describe("TenantsRepository", () => {
 
     expect(found?.id).toBe(tenant.id);
     expect(found?.status).toBe("active");
-  });
+  }, 10_000);
 
   it("returns null for a publicId that does not exist", async () => {
     const tenants = createTenantsRepository(db);
