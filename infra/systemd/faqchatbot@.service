@@ -1,0 +1,19 @@
+[Unit]
+Description=faqchatbot API (%i)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/wwwroot/sites/faqchatbot/%i/current/apps/api
+Environment=NODE_ENV=production
+EnvironmentFile=-/wwwroot/sites/faqchatbot/%i/shared/.env
+ExecStart=/usr/bin/env node dist/main.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/wwwroot/sites/faqchatbot/%i/shared/log/api.log
+StandardError=append:/wwwroot/sites/faqchatbot/%i/shared/log/api.error.log
+
+[Install]
+WantedBy=multi-user.target
