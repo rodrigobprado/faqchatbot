@@ -253,7 +253,7 @@ export class WidgetSessionService {
   private parseInput(rawInput: unknown): WidgetSessionStartRequest {
     try {
       return widgetSessionStartRequestSchema.parse(rawInput);
-    } catch (error) {
+    } catch {
       throw new BadRequestException("Invalid widget session payload");
     }
   }
