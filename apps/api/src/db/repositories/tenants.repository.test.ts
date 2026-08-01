@@ -78,4 +78,25 @@ describe("TenantsRepository", () => {
     expect(domainsForA).toHaveLength(1);
     expect(domainsForA[0]?.domain).toBe("a.example.com");
   });
+
+  it("finds a tenant domain by domain", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+    const domains = createTenantDomainsRepository(db);
+    const domainName = `docs-${randomUUID()}.example.com`;
+
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Tenant A",
+      planId: plan.id
+    });
+
+    await domains.create({ tenantId: tenant.id, domain: domainName });
+
+    const found = await domains.findByDomain(domainName);
+
+    expect(found?.tenantId).toBe(tenant.id);
+    expect(found?.domain).toBe(domainName);
+  });
 });

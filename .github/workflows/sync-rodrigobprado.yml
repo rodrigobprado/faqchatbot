@@ -1,0 +1,57 @@
+name: Sync faqchatbot to rodrigobprado
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: sync-rodrigobprado-faqchatbot
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 20
+    env:
+      TARGET_REPO: git@github.com:rodrigobprado/faqchatbot.git
+      SYNC_ENABLED: ${{ secrets.FAQCHATBOT_SYNC_ENABLED }}
+
+    steps:
+      - name: guard loop de sync
+        shell: bash
+        run: |
+          if [ "${SYNC_ENABLED:-}" != "true" ]; then
+            echo "Sync disabled for this repository."
+            exit 0
+          fi
+
+      - name: setup ssh agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.FAQCHATBOT_SYNC_SSH_PRIVATE_KEY }}
+
+      - name: trust github.com
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: mirror repository
+        shell: bash
+        env:
+          SOURCE_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          workdir="$(mktemp -d)"
+          source_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${SOURCE_REPO}.git"
+
+          git init --bare "$workdir/source.git"
+          git -C "$workdir/source.git" remote add origin "$source_url"
+          git -C "$workdir/source.git" fetch --prune origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          git -C "$workdir/source.git" remote add target "$TARGET_REPO"
+          git -C "$workdir/source.git" push --mirror target

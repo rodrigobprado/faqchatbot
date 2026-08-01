@@ -1,6 +1,7 @@
 import { randomBytes, scryptSync } from "node:crypto";
 import { createDatabase } from "./client.js";
 import { createPlansRepository } from "./repositories/plans.repository.js";
+import { createTenantDomainsRepository } from "./repositories/tenant-domains.repository.js";
 import { createTenantsRepository } from "./repositories/tenants.repository.js";
 import { createUsersRepository } from "./repositories/users.repository.js";
 
@@ -12,6 +13,7 @@ if (!databaseUrl) {
 const branch = process.env.APP_BRANCH ?? "main";
 const tenantPublicId = process.env.SEED_TENANT_PUBLIC_ID ?? `demo-${branch}`;
 const tenantName = process.env.SEED_TENANT_NAME ?? `Demo Tenant ${branch}`;
+const tenantDomain = process.env.SEED_TENANT_DOMAIN ?? "localhost";
 const adminEmail = process.env.SEED_ADMIN_EMAIL ?? `admin+${branch}@faqchatbot.local`;
 const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "change-me-now";
 
@@ -26,6 +28,7 @@ const { db, client } = createDatabase(databaseUrl);
 
 const plans = createPlansRepository(db);
 const tenants = createTenantsRepository(db);
+const tenantDomains = createTenantDomainsRepository(db);
 const users = createUsersRepository(db);
 
 const plan =
@@ -39,6 +42,11 @@ const plan =
 const tenant =
   (await tenants.findByPublicId(tenantPublicId)) ??
   (await tenants.create({ publicId: tenantPublicId, name: tenantName, planId: plan.id }));
+
+const existingDomains = await tenantDomains.listByTenantId(tenant.id);
+if (!existingDomains.some((domain) => domain.domain === tenantDomain)) {
+  await tenantDomains.create({ tenantId: tenant.id, domain: tenantDomain });
+}
 
 const admin =
   (await users.findByEmail(adminEmail)) ??

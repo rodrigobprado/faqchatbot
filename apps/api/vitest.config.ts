@@ -9,6 +9,7 @@ export default defineConfig({
       exclude: [
         "src/main.ts",
         "src/modules/app.module.ts",
+        "src/modules/**/*.module.ts",
         "src/db/migrate.ts",
         "src/db/seed.ts",
         "**/*.config.ts",

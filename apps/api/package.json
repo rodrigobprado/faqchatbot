@@ -28,7 +28,8 @@
     "fastify": "^5.4.0",
     "postgres": "^3.4.9",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "zod": "^4.0.14"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.10",
