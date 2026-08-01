@@ -28,6 +28,11 @@ jobs:
             exit 0
           fi
 
+          if [ -z "${{ secrets.FAQCHATBOT_SYNC_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::FAQCHATBOT_SYNC_SSH_PRIVATE_KEY is not configured"
+            exit 1
+          fi
+
       - name: setup ssh agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
