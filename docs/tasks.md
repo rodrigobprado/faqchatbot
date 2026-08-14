@@ -353,33 +353,57 @@ Meta minima: 80% de cobertura global e cobertura alta nos dominios de seguranca,
 
 ## 14. Fase 12 - Dashboard administrativo
 
+### Objetivo
+
+Transformar o `apps/dashboard` atual em uma interface operacional completa para administrar tudo que a plataforma ja expoe na API e tudo que esta planejado como dominio principal.
+
 ### Tarefas
 
-- Criar login.
-- Criar layout administrativo.
-- Criar tela de dashboard.
-- Criar tela de clientes.
-- Criar tela de analytics.
-- Criar tela de conversas.
-- Criar tela de sessoes.
-- Criar tela de logs.
-- Criar tela de configuracoes.
-- Criar tela de planos.
-- Criar tela de usuarios e permissoes.
-- Criar formularios com validacao.
+- Criar a base de aplicacao administrativa com layout, rotas protegidas, navegação e estado global de sessao.
+- Implementar login com `POST /v1/auth/login` e renovacao com `POST /v1/auth/refresh`.
+- Persistir tokens com seguranca adequada e permitir logout local.
+- Criar dashboard inicial com visao geral de tenants, conversas, sessoes, mensagens e status da plataforma.
+- Criar lista de tenants com busca, filtro por status/plano e paginação.
+- Criar formulario de criar tenant usando `publicId`, nome, plano e locale.
+- Criar edicao de tenant com alteracao de nome, status, publicId, plano e locale.
+- Criar acao de suspender/excluir tenant com confirmacao clara.
+- Criar tela de dominios autorizados do tenant com adicionar, listar e remover dominio.
+- Criar tela de configuracao publica do widget com tema, cor primaria, mensagem inicial, placeholder e logo.
+- Criar tela de configuracao de agente com provider, modelo, timeout, retry policy, credenciais referenciadas e webhook.
+- Exibir o snippet pronto de instalacao do widget por tenant com copia para area de transferencia.
+- Criar tela de usuarios do tenant com lista, convite, status e vinculacao de roles.
+- Criar tela de roles e permissoes com visibilidade do que cada papel pode fazer.
+- Criar tela de API keys com criacao, revogacao e exibicao unica do segredo no momento da geracao.
+- Criar tela de conversas com lista, detalhe e historico de mensagens por tenant.
+- Criar tela de sessoes do widget com visitante, conversa, pagina atual e ultimo acesso.
+- Criar tela de analytics com metricas por periodo, origem, dominio, dispositivo e resolucao.
+- Criar tela de logs e auditoria com correlation id, tenant id, usuario e nivel.
+- Criar tela de planos com limites e preco, ligada ao que a API e o seed ja usam.
+- Criar tela de configuracoes gerais com dominio da plataforma, ambiente e parametros operacionais.
+- Criar estados de carregamento, vazio, erro e confirmacao em todas as telas criticas.
+- Criar componentes reutilizaveis de tabela, formulario, modal, toast, badge, tabs e pagina de detalhe.
+- Garantir que a interface use os contratos compartilhados de `packages/contracts` para evitar duplicacao de esquema.
+- Preparar a dashboard para crescer com rotas futuras como billing, billing history, rate limit policies e stored files.
 
 ### Testes
 
 - Unit tests para componentes criticos.
-- Integration tests para chamadas de API.
-- E2E tests para login e CRUD de tenant.
+- Unit tests para validacao de formularios.
+- Integration tests para login, refresh, listagem e CRUD de tenant.
+- Integration tests para dominios, config do widget e config de agente.
+- Integration tests para exibicao de snippet de instalacao.
+- E2E tests para login, navegação protegida e CRUD principal de tenant.
+- E2E tests para permissao negada e logout.
 - Accessibility tests.
+- Contract tests para garantir que os forms batem com os schemas da API.
 
 ### Criterios de aceite
 
-- Usuario admin consegue configurar tenant sem tocar no banco.
-- Permissoes restringem telas e acoes.
-- Dashboard nao exibe segredos.
+- Usuario admin consegue criar, editar, listar, suspender e consultar tenants sem tocar no banco.
+- Usuario admin consegue configurar dominio, widget, agente, users, roles e api keys pela interface.
+- Dashboard exibe conversas, sessoes, logs e analytics sem expor segredos.
+- Permissoes restringem telas, acoes e dados sensiveis.
+- O dashboard fica alinhado com o que a API ja suporta e com o backlog restante da plataforma.
 
 ## 15. Fase 13 - Storage e arquivos
 
@@ -560,4 +584,3 @@ Meta minima: 80% de cobertura global e cobertura alta nos dominios de seguranca,
 - Erros padronizados.
 - Cobertura igual ou maior que 80%.
 - Documentacao atualizada quando o comportamento publico mudar.
-
