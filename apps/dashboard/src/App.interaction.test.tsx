@@ -27,6 +27,16 @@ const tenant = {
   deletedAt: null
 };
 
+const tenantTwo = {
+  id: "tenant-2",
+  publicId: "bravo",
+  name: "Bravo",
+  status: "suspended" as const,
+  planId: "plan-growth",
+  defaultLocale: "pt-BR",
+  deletedAt: null
+};
+
 const domain = {
   id: "domain-1",
   tenantId: "tenant-1",
@@ -328,6 +338,68 @@ describe("App interactions", () => {
     );
   });
 
+  it("filters the tenant list by search, status and plan", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant, tenantTwo], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+    queueTenantDetails(fetchMock);
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    const [emailInput, passwordInput] = Array.from(
+      document.querySelectorAll('input[type="email"], input[type="password"]'),
+    ) as [HTMLInputElement, HTMLInputElement];
+
+    fillInput(emailInput, "admin@acme.test");
+    fillInput(passwordInput, "senha-super-secreta");
+
+    await act(async () => {
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("Lista de tenants");
+
+    const tenantsSection = document.querySelector("#tenants") as HTMLElement;
+    const [searchInput, statusSelect, planSelect] = Array.from(
+      tenantsSection.querySelectorAll("input, select"),
+    ) as [HTMLInputElement, HTMLSelectElement, HTMLSelectElement];
+
+    const visibleRows = () =>
+      Array.from(tenantsSection.querySelectorAll(".table-row:not(.table-head)")).filter(
+        (row) => row.textContent?.includes("Editar"),
+      );
+
+    expect(visibleRows()).toHaveLength(2);
+
+    fillInput(searchInput, "brav");
+    await waitForBodyText("1 de 2 tenant(s) visiveis.");
+    expect(visibleRows()).toHaveLength(1);
+    expect(visibleRows()[0]?.textContent).toContain("bravo");
+
+    fillInput(statusSelect, "suspended");
+    fillInput(planSelect, "plan-growth");
+    await waitForBodyText("1 de 2 tenant(s) visiveis.");
+    expect(visibleRows()).toHaveLength(1);
+    expect(visibleRows()[0]?.textContent).toContain("bravo");
+
+    await act(async () => {
+      (Array.from(tenantsSection.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Limpar filtros"),
+      ) as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("2 tenant(s) no total.");
+    expect(visibleRows()).toHaveLength(2);
+  });
+
   it("creates a tenant, refreshes the session and logs out", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
@@ -402,7 +474,7 @@ describe("App interactions", () => {
       HTMLInputElement,
       HTMLInputElement
     ];
-    const planSelect = document.querySelector("select") as HTMLSelectElement;
+    const planSelect = document.querySelector("#config select") as HTMLSelectElement;
     fillInput(publicIdInput, "beta");
     fillInput(nameInput, "Beta");
     fillInput(planSelect, "growth");

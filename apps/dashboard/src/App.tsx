@@ -83,6 +83,15 @@ type TenantAccessState = Readonly<{
   pendingSecret: string | null;
 }>;
 
+type TenantStatusFilter = "" | TenantRecord["status"];
+type TenantPlanFilter = "" | "plan-free" | "plan-starter" | "plan-growth" | "plan-enterprise";
+
+type TenantListFiltersState = Readonly<{
+  search: string;
+  status: TenantStatusFilter;
+  planId: TenantPlanFilter;
+}>;
+
 type ViewState = Readonly<{
   loading: boolean;
   error: string | null;
@@ -128,6 +137,12 @@ const defaultTenantAgentConfigState = (config?: TenantAgentConfigRecord | null):
   timeoutMs: String(config?.timeoutMs ?? 15000),
   retryPolicy: stringifyJson(config?.retryPolicy),
   isActive: config?.isActive ?? true
+});
+
+const defaultTenantListFiltersState = (): TenantListFiltersState => ({
+  search: "",
+  status: "",
+  planId: ""
 });
 
 const accessPermissionCatalog = [
@@ -256,6 +271,7 @@ export const App = () => {
   const [loginState, setLoginState] = useState<LoginState>(defaultLoginState);
   const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState);
   const [tenantEdit, setTenantEdit] = useState<TenantEditState>(defaultTenantEditState());
+  const [tenantFilters, setTenantFilters] = useState<TenantListFiltersState>(defaultTenantListFiltersState);
   const [domainForm, setDomainForm] = useState("");
   const [widgetConfig, setWidgetConfig] = useState<TenantWidgetConfigState>(
     defaultTenantWidgetConfigState(),
@@ -293,6 +309,7 @@ export const App = () => {
     if (!session) {
       setTenants([]);
       setSelectedTenantId(null);
+      setTenantFilters(defaultTenantListFiltersState());
       setTenantDomains([]);
       setDomainForm("");
       setWidgetConfig(defaultTenantWidgetConfigState());
@@ -925,6 +942,19 @@ export const App = () => {
   const canSubmitDomain = Boolean(session && selectedTenant && domainForm.trim());
   const safeTenantDomains = Array.isArray(tenantDomains) ? tenantDomains : [];
   const domainLabel = safeTenantDomains.length === 0 ? "Nenhum dominio cadastrado" : `${safeTenantDomains.length} dominio(s)`;
+  const filteredTenants = tenants.filter((tenant) => {
+    const search = tenantFilters.search.trim().toLowerCase();
+    const matchesSearch =
+      search.length === 0 ||
+      tenant.publicId.toLowerCase().includes(search) ||
+      tenant.name.toLowerCase().includes(search);
+    const matchesStatus = tenantFilters.status === "" || tenant.status === tenantFilters.status;
+    const matchesPlan = tenantFilters.planId === "" || tenant.planId === tenantFilters.planId;
+
+    return matchesSearch && matchesStatus && matchesPlan;
+  });
+  const hasTenantFilters =
+    tenantFilters.search.trim().length > 0 || tenantFilters.status !== "" || tenantFilters.planId !== "";
   const selectedTenantAccess = selectedTenant
     ? tenantAccessById[selectedTenant.id] ?? emptyTenantAccessState()
     : null;
@@ -1095,10 +1125,73 @@ export const App = () => {
                   <div>
                     <p className="eyebrow">Clientes</p>
                     <h2>Lista de tenants</h2>
+                    <p className="section-subtitle">
+                      {filteredTenants.length === tenants.length
+                        ? `${tenants.length} tenant(s) no total.`
+                        : `${filteredTenants.length} de ${tenants.length} tenant(s) visiveis.`}
+                    </p>
                   </div>
                   <button type="button" className="secondary" onClick={() => void loadTenants()} disabled={viewState.loading}>
                     Recarregar
                   </button>
+                </div>
+
+                <div className="filter-panel">
+                  <label>
+                    <span>Buscar</span>
+                    <input
+                      value={tenantFilters.search}
+                      onChange={(event) =>
+                        setTenantFilters((current) => ({ ...current, search: event.target.value }))
+                      }
+                      placeholder="Public ID ou nome"
+                    />
+                  </label>
+                  <label>
+                    <span>Status</span>
+                    <select
+                      value={tenantFilters.status}
+                      onChange={(event) =>
+                        setTenantFilters((current) => ({
+                          ...current,
+                          status: event.target.value as TenantStatusFilter
+                        }))
+                      }
+                    >
+                      <option value="">Todos</option>
+                      <option value="active">Ativo</option>
+                      <option value="inactive">Inativo</option>
+                      <option value="suspended">Suspenso</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Plano</span>
+                    <select
+                      value={tenantFilters.planId}
+                      onChange={(event) =>
+                        setTenantFilters((current) => ({
+                          ...current,
+                          planId: event.target.value as TenantPlanFilter
+                        }))
+                      }
+                    >
+                      <option value="">Todos</option>
+                      <option value="plan-free">Free</option>
+                      <option value="plan-starter">Starter</option>
+                      <option value="plan-growth">Growth</option>
+                      <option value="plan-enterprise">Enterprise</option>
+                    </select>
+                  </label>
+                  <div className="filter-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => setTenantFilters(defaultTenantListFiltersState())}
+                      disabled={!hasTenantFilters}
+                    >
+                      Limpar filtros
+                    </button>
+                  </div>
                 </div>
 
                 <div className="table">
@@ -1109,13 +1202,19 @@ export const App = () => {
                     <span>Status</span>
                   </div>
 
-                  {tenants.length === 0 ? (
+                  {filteredTenants.length === 0 ? (
                     <div className="empty-state">
-                      <strong>Nenhum tenant encontrado.</strong>
-                      <p>Crie o primeiro cliente para liberar o widget e os fluxos administrativos.</p>
+                      <strong>
+                        {tenants.length === 0 ? "Nenhum tenant encontrado." : "Nenhum tenant corresponde aos filtros."}
+                      </strong>
+                      <p>
+                        {tenants.length === 0
+                          ? "Crie o primeiro cliente para liberar o widget e os fluxos administrativos."
+                          : "Ajuste a busca, o status ou o plano para localizar o cliente desejado."}
+                      </p>
                     </div>
                   ) : (
-                    tenants.map((tenant) => (
+                    filteredTenants.map((tenant) => (
                       <div className="table-row" key={tenant.id}>
                         <span className="mono">{tenant.publicId}</span>
                         <span>{tenant.name}</span>
