@@ -1896,7 +1896,7 @@ export const App = () => {
                         }
                       >
                         {selectedTenantAccessRoles.map((role) => (
-                          <option key={role.slug} value={role.slug}>
+                          <option key={`invite-role-${role.slug}`} value={role.slug}>
                             {role.name}
                           </option>
                         ))}
@@ -1928,7 +1928,7 @@ export const App = () => {
                               onChange={(event) => void handleUpdateUserRoles(user.id, event.target.value)}
                             >
                               {selectedTenantAccessRoles.map((role) => (
-                                <option key={role.slug} value={role.slug}>
+                                <option key={`user-role-${user.id}-${role.slug}`} value={role.slug}>
                                   {role.name}
                                 </option>
                               ))}
