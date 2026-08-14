@@ -37,6 +37,46 @@ const tenantTwo = {
   deletedAt: null
 };
 
+const tenantThree = {
+  id: "tenant-3",
+  publicId: "charlie",
+  name: "Charlie",
+  status: "active" as const,
+  planId: "plan-free",
+  defaultLocale: "pt-BR",
+  deletedAt: null
+};
+
+const tenantFour = {
+  id: "tenant-4",
+  publicId: "delta",
+  name: "Delta",
+  status: "inactive" as const,
+  planId: "plan-starter",
+  defaultLocale: "pt-BR",
+  deletedAt: null
+};
+
+const tenantFive = {
+  id: "tenant-5",
+  publicId: "echo",
+  name: "Echo",
+  status: "active" as const,
+  planId: "plan-growth",
+  defaultLocale: "pt-BR",
+  deletedAt: null
+};
+
+const tenantSix = {
+  id: "tenant-6",
+  publicId: "foxtrot",
+  name: "Foxtrot",
+  status: "suspended" as const,
+  planId: "plan-enterprise",
+  defaultLocale: "pt-BR",
+  deletedAt: null
+};
+
 const domain = {
   id: "domain-1",
   tenantId: "tenant-1",
@@ -400,6 +440,55 @@ describe("App interactions", () => {
     expect(visibleRows()).toHaveLength(2);
   });
 
+  it("paginates the tenant list", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant, tenantTwo, tenantThree, tenantFour, tenantFive, tenantSix], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+    queueTenantDetails(fetchMock);
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    const [emailInput, passwordInput] = Array.from(
+      document.querySelectorAll('input[type="email"], input[type="password"]'),
+    ) as [HTMLInputElement, HTMLInputElement];
+
+    fillInput(emailInput, "admin@acme.test");
+    fillInput(passwordInput, "senha-super-secreta");
+
+    await act(async () => {
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("Lista de tenants");
+
+    const tenantsSection = document.querySelector("#tenants") as HTMLElement;
+    const visibleRows = () =>
+      Array.from(tenantsSection.querySelectorAll(".table-row:not(.table-head)")).filter((row) =>
+        row.textContent?.includes("Editar"),
+      );
+
+    expect(visibleRows()).toHaveLength(5);
+    expect(tenantsSection.textContent).toContain("Página 1 de 2");
+
+    await act(async () => {
+      (Array.from(tenantsSection.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Próximo"),
+      ) as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("Página 2 de 2");
+    expect(visibleRows()).toHaveLength(1);
+    expect(tenantsSection.textContent).toContain("foxtrot");
+  });
+
   it("creates a tenant, refreshes the session and logs out", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
@@ -517,7 +606,8 @@ describe("App interactions", () => {
   });
 
   it("edits and suspends the selected tenant", async () => {
-    vi.stubGlobal("confirm", vi.fn(() => true));
+    const confirmMock = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmMock);
     const fetchMock = vi.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
@@ -627,13 +717,16 @@ describe("App interactions", () => {
 
     await act(async () => {
       (Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("Suspender tenant"),
+        button.textContent?.includes("Excluir tenant"),
       ) as HTMLButtonElement).click();
     });
 
     await flush();
 
     expect(vi.mocked(fetch).mock.calls.some((call) => call[0] === "/v1/admin/tenants/tenant-1")).toBe(true);
+    expect(confirmMock).toHaveBeenCalledWith(
+      "Excluir Administrator? Esta acao nao pode ser desfeita.",
+    );
   });
 
   it("adds an authorized domain and saves the public widget config", async () => {

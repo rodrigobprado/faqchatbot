@@ -1,3 +1,5 @@
+import type { AgentProvider, TenantPlan, TenantStatus } from "@faqchatbot/contracts";
+
 export type AdminUser = Readonly<{
   id: string;
   tenantId: string;
@@ -16,7 +18,7 @@ export type TenantRecord = Readonly<{
   id: string;
   publicId: string;
   name: string;
-  status: "active" | "inactive" | "suspended";
+  status: TenantStatus;
   planId: string;
   defaultLocale: string;
   deletedAt: string | null;
@@ -50,7 +52,7 @@ export type TenantConfigPayload = Readonly<{
 export type TenantAgentConfigRecord = Readonly<{
   id?: string;
   tenantId: string;
-  provider: "n8n" | "openai_responses" | "langgraph" | "flowise" | "dify" | "crewai" | "mcp" | "custom";
+  provider: AgentProvider;
   model: string | null;
   webhookEndpointId: string | null;
   encryptedCredentialsRef: string | null;
@@ -127,16 +129,16 @@ export type LoginPayload = Readonly<{
 export type CreateTenantPayload = Readonly<{
   publicId: string;
   name: string;
-  planSlug: "free" | "starter" | "growth" | "enterprise";
+  planSlug: TenantPlan;
   defaultLocale: string;
 }>;
 
 export type UpdateTenantPayload = {
   publicId?: string;
   name?: string;
-  planSlug?: "free" | "starter" | "growth" | "enterprise";
+  planSlug?: TenantPlan;
   defaultLocale?: string;
-  status?: "active" | "inactive" | "suspended";
+  status?: TenantStatus;
 };
 
 export class ApiError extends Error {

@@ -272,6 +272,7 @@ export const App = () => {
   const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState);
   const [tenantEdit, setTenantEdit] = useState<TenantEditState>(defaultTenantEditState());
   const [tenantFilters, setTenantFilters] = useState<TenantListFiltersState>(defaultTenantListFiltersState);
+  const [tenantPage, setTenantPage] = useState(0);
   const [domainForm, setDomainForm] = useState("");
   const [widgetConfig, setWidgetConfig] = useState<TenantWidgetConfigState>(
     defaultTenantWidgetConfigState(),
@@ -310,6 +311,7 @@ export const App = () => {
       setTenants([]);
       setSelectedTenantId(null);
       setTenantFilters(defaultTenantListFiltersState());
+      setTenantPage(0);
       setTenantDomains([]);
       setDomainForm("");
       setWidgetConfig(defaultTenantWidgetConfigState());
@@ -343,6 +345,10 @@ export const App = () => {
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
     setTenantEdit(defaultTenantEditState(selectedTenant));
   }, [selectedTenantId, tenants]);
+
+  useEffect(() => {
+    setTenantPage(0);
+  }, [tenantFilters.search, tenantFilters.status, tenantFilters.planId]);
 
   useEffect(() => {
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
@@ -906,7 +912,7 @@ export const App = () => {
     try {
       if (typeof window.confirm === "function") {
         try {
-          if (!window.confirm(`Suspender ${selectedTenant.name}?`)) {
+          if (!window.confirm(`Excluir ${selectedTenant.name}? Esta acao nao pode ser desfeita.`)) {
             return;
           }
         } catch {
@@ -918,7 +924,7 @@ export const App = () => {
       await withSessionRetry((accessToken) => deleteTenant(accessToken, selectedTenant.id));
       setSelectedTenantId(null);
       await loadTenants();
-      updateNotice("Tenant suspenso com sucesso.");
+      updateNotice("Tenant excluido com sucesso.");
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
@@ -930,7 +936,7 @@ export const App = () => {
         return;
       }
 
-      updateError(error instanceof Error ? error.message : "Falha ao suspender tenant");
+      updateError(error instanceof Error ? error.message : "Falha ao excluir tenant");
     }
   };
 
@@ -953,6 +959,17 @@ export const App = () => {
 
     return matchesSearch && matchesStatus && matchesPlan;
   });
+  const tenantPageSize = 5;
+  const tenantPageCount = Math.max(1, Math.ceil(filteredTenants.length / tenantPageSize));
+  const tenantPageIndex = Math.min(tenantPage, tenantPageCount - 1);
+  const paginatedTenants = filteredTenants.slice(
+    tenantPageIndex * tenantPageSize,
+    tenantPageIndex * tenantPageSize + tenantPageSize,
+  );
+  const tenantPageStart = filteredTenants.length === 0 ? 0 : tenantPageIndex * tenantPageSize + 1;
+  const tenantPageEnd = filteredTenants.length === 0
+    ? 0
+    : Math.min(filteredTenants.length, tenantPageIndex * tenantPageSize + tenantPageSize);
   const hasTenantFilters =
     tenantFilters.search.trim().length > 0 || tenantFilters.status !== "" || tenantFilters.planId !== "";
   const selectedTenantAccess = selectedTenant
@@ -1129,6 +1146,7 @@ export const App = () => {
                       {filteredTenants.length === tenants.length
                         ? `${tenants.length} tenant(s) no total.`
                         : `${filteredTenants.length} de ${tenants.length} tenant(s) visiveis.`}
+                      {filteredTenants.length > 0 ? ` Mostrando ${tenantPageStart}-${tenantPageEnd} de ${filteredTenants.length}.` : ""}
                     </p>
                   </div>
                   <button type="button" className="secondary" onClick={() => void loadTenants()} disabled={viewState.loading}>
@@ -1214,7 +1232,7 @@ export const App = () => {
                       </p>
                     </div>
                   ) : (
-                    filteredTenants.map((tenant) => (
+                    paginatedTenants.map((tenant) => (
                       <div className="table-row" key={tenant.id}>
                         <span className="mono">{tenant.publicId}</span>
                         <span>{tenant.name}</span>
@@ -1233,6 +1251,32 @@ export const App = () => {
                     ))
                   )}
                 </div>
+
+                {filteredTenants.length > tenantPageSize ? (
+                  <div className="pagination-bar" aria-label="Paginação de tenants">
+                    <span>
+                      Página {tenantPageIndex + 1} de {tenantPageCount}
+                    </span>
+                    <div className="pagination-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => setTenantPage((current) => Math.max(0, current - 1))}
+                        disabled={tenantPageIndex === 0}
+                      >
+                        Anterior
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => setTenantPage((current) => Math.min(tenantPageCount - 1, current + 1))}
+                        disabled={tenantPageIndex >= tenantPageCount - 1}
+                      >
+                        Próximo
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </article>
 
               <article className="surface" id="config">
@@ -1314,7 +1358,7 @@ export const App = () => {
                   </div>
                   <div className="header-actions">
                     <button type="button" className="secondary danger" onClick={handleSuspendTenant}>
-                      Suspender tenant
+                      Excluir tenant
                     </button>
                   </div>
                 </div>
@@ -1785,7 +1829,10 @@ export const App = () => {
                           <div>
                             <strong>{user.email}</strong>
                             <p>{user.status === "active" ? "Ativo" : user.status === "invited" ? "Convidado" : "Suspenso"}</p>
-                            <small>Convidado em {new Date(user.invitedAt).toLocaleDateString("pt-BR")}</small>
+                            <small>
+                              Convidado em{" "}
+                              {new Date(user.invitedAt ?? user.createdAt ?? user.updatedAt ?? Date.now()).toLocaleDateString("pt-BR")}
+                            </small>
                           </div>
                           <div className="user-actions">
                             <select
