@@ -27,6 +27,22 @@ const tenant = {
   deletedAt: null
 };
 
+const domain = {
+  id: "domain-1",
+  tenantId: "tenant-1",
+  domain: "acme.com",
+  isVerified: false
+};
+
+const widgetConfig = {
+  tenantId: "tenant-1",
+  theme: "dark" as const,
+  primaryColor: "#111111",
+  iconUrl: "https://example.com/icon.png",
+  initialMessage: "Bem-vindo",
+  placeholder: "Escreva aqui"
+};
+
 const jsonResponse = (status: number, body: MockResponseBody) =>
   new Response(JSON.stringify(body), {
     status,
@@ -102,7 +118,10 @@ describe("App interactions", () => {
 
   it("authenticates and loads the tenant list", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }));
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }));
 
     await act(async () => {
       root!.render(<App />);
@@ -125,6 +144,7 @@ describe("App interactions", () => {
 
     expect(document.body.textContent).toContain("Lista de tenants");
     expect(document.body.textContent).toContain("acme");
+    expect(document.body.textContent).toContain("Dominios autorizados");
     expect(document.body.textContent).toContain(
       '<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=acme" data-agent="acme" async></script>',
     );
@@ -173,8 +193,27 @@ describe("App interactions", () => {
           meta: {}
         }),
       )
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }));
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: [
+            {
+              id: "tenant-2",
+              publicId: "beta",
+              name: "Beta",
+              status: "active",
+              planId: "plan-growth",
+              defaultLocale: "pt-BR",
+              deletedAt: null
+            }
+          ],
+          meta: {}
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }));
 
     await act(async () => {
       root!.render(<App />);
@@ -250,6 +289,8 @@ describe("App interactions", () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
       .mockResolvedValueOnce(
         jsonResponse(200, {
           data: {
@@ -274,6 +315,8 @@ describe("App interactions", () => {
           meta: {}
         }),
       )
+      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
       .mockResolvedValueOnce(
         jsonResponse(200, {
           data: {
@@ -350,5 +393,87 @@ describe("App interactions", () => {
 
     expect(vi.mocked(fetch).mock.calls.some((call) => call[0] === "/v1/admin/tenants/tenant-1")).toBe(true);
     expect(document.body.textContent).toContain("Tenant suspenso com sucesso.");
+  });
+
+  it("adds an authorized domain and saves the public widget config", async () => {
+    const createdDomain = {
+      id: "domain-2",
+      tenantId: "tenant-1",
+      domain: "example.com",
+      isVerified: false
+    };
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: createdDomain, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }));
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    const [emailInput, passwordInput] = Array.from(
+      document.querySelectorAll('input[type="email"], input[type="password"]'),
+    ) as [HTMLInputElement, HTMLInputElement];
+
+    fillInput(emailInput, "admin@acme.test");
+    fillInput(passwordInput, "senha-super-secreta");
+
+    await act(async () => {
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("Dominios autorizados");
+
+    const domainInput = document.querySelector('#domains input') as HTMLInputElement;
+    fillInput(domainInput, "example.com");
+
+    await act(async () => {
+      submitForm(document.querySelector("#domains form") as HTMLFormElement);
+    });
+
+    await waitForBodyText("Dominio autorizado com sucesso.");
+    expect(document.body.textContent).toContain("example.com");
+
+    const widgetForm = document.querySelector("#widget-config form") as HTMLFormElement;
+    const [themeSelect, primaryColorInput, iconUrlInput, initialMessageInput, placeholderInput] = Array.from(
+      widgetForm.querySelectorAll("input, select"),
+    ) as [HTMLSelectElement, HTMLInputElement, HTMLInputElement, HTMLInputElement, HTMLInputElement];
+
+    fillInput(themeSelect, "light");
+    fillInput(primaryColorInput, "#123456");
+    fillInput(iconUrlInput, "https://cdn.example.com/icon.png");
+    fillInput(initialMessageInput, "Olá, posso ajudar?");
+    fillInput(placeholderInput, "Digite sua dúvida");
+
+    await act(async () => {
+      submitForm(widgetForm);
+    });
+
+    await waitForBodyText("Configuracao do widget salva com sucesso.");
+
+    const configRequest = vi
+      .mocked(fetch)
+      .mock.calls.find(
+        ([path, init]) => path === "/v1/admin/tenants/tenant-1/config" && init?.method === "PUT",
+      );
+
+    expect(configRequest).toBeDefined();
+    expect(JSON.parse(configRequest?.[1]?.body as string)).toEqual({
+      theme: "light",
+      primaryColor: "#123456",
+      iconUrl: "https://cdn.example.com/icon.png",
+      initialMessage: "Olá, posso ajudar?",
+      placeholder: "Digite sua dúvida"
+    });
   });
 });

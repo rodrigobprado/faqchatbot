@@ -22,6 +22,31 @@ export type TenantRecord = Readonly<{
   deletedAt: string | null;
 }>;
 
+export type TenantDomainRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  domain: string;
+  isVerified: boolean;
+  createdAt?: string;
+}>;
+
+export type TenantConfigRecord = Readonly<{
+  tenantId: string;
+  theme: "light" | "dark" | "auto";
+  primaryColor: string;
+  iconUrl: string | null;
+  initialMessage: string;
+  placeholder: string;
+}>;
+
+export type TenantConfigPayload = Readonly<{
+  theme?: "light" | "dark" | "auto";
+  primaryColor?: string;
+  iconUrl?: string | null;
+  initialMessage?: string;
+  placeholder?: string;
+}>;
+
 export type LoginPayload = Readonly<{
   email: string;
   password: string;
@@ -133,6 +158,38 @@ export const updateTenant = (
 export const deleteTenant = (accessToken: string, tenantId: string): Promise<TenantRecord> =>
   requestJson<TenantRecord>(`/v1/admin/tenants/${tenantId}`, {
     method: "DELETE"
+  }, accessToken);
+
+export const listTenantDomains = (
+  accessToken: string,
+  tenantId: string,
+): Promise<TenantDomainRecord[]> =>
+  requestJson<TenantDomainRecord[]>(`/v1/admin/tenants/${tenantId}/domains`, {}, accessToken);
+
+export const createTenantDomain = (
+  accessToken: string,
+  tenantId: string,
+  domain: string,
+): Promise<TenantDomainRecord> =>
+  requestJson<TenantDomainRecord>(`/v1/admin/tenants/${tenantId}/domains`, {
+    method: "POST",
+    body: JSON.stringify({ domain })
+  }, accessToken);
+
+export const getTenantConfig = (
+  accessToken: string,
+  tenantId: string,
+): Promise<TenantConfigRecord | null> =>
+  requestJson<TenantConfigRecord | null>(`/v1/admin/tenants/${tenantId}/config`, {}, accessToken);
+
+export const upsertTenantConfig = (
+  accessToken: string,
+  tenantId: string,
+  payload: TenantConfigPayload,
+): Promise<TenantConfigRecord> =>
+  requestJson<TenantConfigRecord>(`/v1/admin/tenants/${tenantId}/config`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
   }, accessToken);
 
 const escapeAttribute = (value: string): string =>

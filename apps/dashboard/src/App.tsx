@@ -3,13 +3,20 @@ import {
   ApiError,
   buildWidgetSnippet,
   deleteTenant,
+  createTenantDomain,
   createTenant,
+  getTenantConfig,
   listTenants,
+  listTenantDomains,
   loginAdmin,
   refreshAdmin,
   updateTenant,
+  upsertTenantConfig,
   type AdminSession,
   type CreateTenantPayload,
+  type TenantConfigPayload,
+  type TenantConfigRecord,
+  type TenantDomainRecord,
   type UpdateTenantPayload,
   type TenantRecord
 } from "./api.js";
@@ -36,6 +43,14 @@ type TenantEditState = Readonly<{
   status: TenantRecord["status"];
 }>;
 
+type TenantWidgetConfigState = Readonly<{
+  theme: TenantConfigRecord["theme"];
+  primaryColor: string;
+  iconUrl: string;
+  initialMessage: string;
+  placeholder: string;
+}>;
+
 type ViewState = Readonly<{
   loading: boolean;
   error: string | null;
@@ -60,6 +75,14 @@ const defaultTenantEditState = (tenant?: TenantRecord | null): TenantEditState =
   planSlug: "",
   defaultLocale: tenant?.defaultLocale ?? "pt-BR",
   status: tenant?.status ?? "active"
+});
+
+const defaultTenantWidgetConfigState = (config?: TenantConfigRecord | null): TenantWidgetConfigState => ({
+  theme: config?.theme ?? "auto",
+  primaryColor: config?.primaryColor ?? "#2563eb",
+  iconUrl: config?.iconUrl ?? "",
+  initialMessage: config?.initialMessage ?? "Ola! Como posso ajudar?",
+  placeholder: config?.placeholder ?? "Digite sua mensagem"
 });
 
 const readStoredSession = (): AdminSession | null => {
@@ -107,9 +130,14 @@ export const App = () => {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [tenantDomains, setTenantDomains] = useState<TenantDomainRecord[]>([]);
   const [loginState, setLoginState] = useState<LoginState>(defaultLoginState);
   const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState);
   const [tenantEdit, setTenantEdit] = useState<TenantEditState>(defaultTenantEditState());
+  const [domainForm, setDomainForm] = useState("");
+  const [widgetConfig, setWidgetConfig] = useState<TenantWidgetConfigState>(
+    defaultTenantWidgetConfigState(),
+  );
   const [viewState, setViewState] = useState<ViewState>({
     loading: false,
     error: null,
@@ -137,6 +165,9 @@ export const App = () => {
     if (!session) {
       setTenants([]);
       setSelectedTenantId(null);
+      setTenantDomains([]);
+      setDomainForm("");
+      setWidgetConfig(defaultTenantWidgetConfigState());
       return;
     }
 
@@ -163,6 +194,19 @@ export const App = () => {
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
     setTenantEdit(defaultTenantEditState(selectedTenant));
   }, [selectedTenantId, tenants]);
+
+  useEffect(() => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
+
+    if (!session || !selectedTenant) {
+      setTenantDomains([]);
+      setDomainForm("");
+      setWidgetConfig(defaultTenantWidgetConfigState());
+      return;
+    }
+
+    void loadTenantDetails(selectedTenant.id);
+  }, [selectedTenantId, tenants, session]);
 
   const updateNotice = (notice: string | null) => {
     setViewState((current) => ({
@@ -224,6 +268,43 @@ export const App = () => {
       }
 
       updateError(error instanceof Error ? error.message : "Falha ao carregar tenants");
+    }
+  };
+
+  const loadTenantDetails = async (tenantId: string) => {
+    if (!session) {
+      return;
+    }
+
+    setViewState((current) => ({ ...current, loading: true, error: null }));
+
+    try {
+      const [domains, config] = await withSessionRetry(async (accessToken) => {
+        const nextDomains = await listTenantDomains(accessToken, tenantId);
+        const nextConfig = await getTenantConfig(accessToken, tenantId);
+        return [nextDomains, nextConfig] as const;
+      });
+
+      setTenantDomains(domains);
+      setDomainForm("");
+      setWidgetConfig(defaultTenantWidgetConfigState(config));
+      setViewState((current) => ({
+        ...current,
+        loading: false
+      }));
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        setTenants([]);
+        setTenantDomains([]);
+        setSelectedTenantId(null);
+        updateError("Sessao expirada. Entre novamente.");
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao carregar detalhes do tenant");
     }
   };
 
@@ -317,6 +398,76 @@ export const App = () => {
     setSelectedTenantId(tenant.id);
   };
 
+  const handleCreateDomainSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
+
+    try {
+      await withSessionRetry((accessToken) =>
+        createTenantDomain(accessToken, selectedTenant.id, domainForm.trim()),
+      );
+      await loadTenantDetails(selectedTenant.id);
+      updateNotice("Dominio autorizado com sucesso.");
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        setTenants([]);
+        setTenantDomains([]);
+        setSelectedTenantId(null);
+        updateError("Sessao expirada. Entre novamente.");
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao cadastrar dominio");
+    }
+  };
+
+  const handleSaveWidgetConfigSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
+
+    try {
+      const payload: TenantConfigPayload = {
+        theme: widgetConfig.theme,
+        primaryColor: widgetConfig.primaryColor,
+        iconUrl: widgetConfig.iconUrl.trim() || null,
+        initialMessage: widgetConfig.initialMessage,
+        placeholder: widgetConfig.placeholder
+      };
+
+      await withSessionRetry((accessToken) => upsertTenantConfig(accessToken, selectedTenant.id, payload));
+      await loadTenantDetails(selectedTenant.id);
+      updateNotice("Configuracao do widget salva com sucesso.");
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        setTenants([]);
+        setTenantDomains([]);
+        setSelectedTenantId(null);
+        updateError("Sessao expirada. Entre novamente.");
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao salvar configuracao do widget");
+    }
+  };
+
   const handleUpdateTenantSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -399,6 +550,8 @@ export const App = () => {
   const totalActiveTenants = tenants.filter((tenant) => tenant.status === "active").length;
   const totalSuspendedTenants = tenants.filter((tenant) => tenant.status === "suspended").length;
   const selectedTenantSnippet = selectedTenant ? buildWidgetSnippet(selectedTenant.publicId) : null;
+  const canSubmitDomain = Boolean(session && selectedTenant && domainForm.trim());
+  const domainLabel = tenantDomains.length === 0 ? "Nenhum dominio cadastrado" : `${tenantDomains.length} dominio(s)`;
 
   return (
     <main className="app-shell">
@@ -767,6 +920,140 @@ export const App = () => {
                 <p>Crie um tenant para gerar o snippet do widget.</p>
               )}
             </section>
+
+            {selectedTenant ? (
+              <section className="two-column">
+                <article className="surface domain-card" id="domains">
+                  <div className="section-heading">
+                    <div>
+                      <p className="eyebrow">Seguranca</p>
+                      <h2>Dominios autorizados</h2>
+                    </div>
+                    <strong>{domainLabel}</strong>
+                  </div>
+
+                  <form className="stack" onSubmit={handleCreateDomainSubmit}>
+                    <label>
+                      <span>Novo dominio</span>
+                      <input
+                        value={domainForm}
+                        onChange={(event) => setDomainForm(event.target.value)}
+                        placeholder="exemplo.com"
+                        required
+                      />
+                    </label>
+
+                    <button type="submit" className="primary" disabled={viewState.loading || !canSubmitDomain}>
+                      {viewState.loading ? "Salvando..." : "Adicionar dominio"}
+                    </button>
+                  </form>
+
+                  <div className="list-card">
+                    {tenantDomains.length === 0 ? (
+                      <p>Nenhum dominio autorizado ainda.</p>
+                    ) : (
+                      tenantDomains.map((domain) => (
+                        <div className="list-row" key={domain.id}>
+                          <span className="mono">{domain.domain}</span>
+                          <span>{domain.isVerified ? "Verificado" : "Pendente"}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </article>
+
+                <article className="surface widget-config-card" id="widget-config">
+                  <div className="section-heading">
+                    <div>
+                      <p className="eyebrow">Widget</p>
+                      <h2>Configuracao publica</h2>
+                    </div>
+                  </div>
+
+                  <form className="stack" onSubmit={handleSaveWidgetConfigSubmit}>
+                    <label>
+                      <span>Tema</span>
+                      <select
+                        value={widgetConfig.theme}
+                        onChange={(event) =>
+                          setWidgetConfig((current) => ({
+                            ...current,
+                            theme: event.target.value as TenantWidgetConfigState["theme"]
+                          }))
+                        }
+                      >
+                        <option value="auto">Auto</option>
+                        <option value="light">Claro</option>
+                        <option value="dark">Escuro</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Cor primaria</span>
+                      <input
+                        value={widgetConfig.primaryColor}
+                        onChange={(event) =>
+                          setWidgetConfig((current) => ({
+                            ...current,
+                            primaryColor: event.target.value
+                          }))
+                        }
+                        placeholder="#2563eb"
+                        required
+                      />
+                    </label>
+
+                    <label>
+                      <span>URL do icone</span>
+                      <input
+                        value={widgetConfig.iconUrl}
+                        onChange={(event) =>
+                          setWidgetConfig((current) => ({
+                            ...current,
+                            iconUrl: event.target.value
+                          }))
+                        }
+                        placeholder="https://cdn.exemplo.com/icon.png"
+                      />
+                    </label>
+
+                    <label>
+                      <span>Mensagem inicial</span>
+                      <input
+                        value={widgetConfig.initialMessage}
+                        onChange={(event) =>
+                          setWidgetConfig((current) => ({
+                            ...current,
+                            initialMessage: event.target.value
+                          }))
+                        }
+                        placeholder="Ola! Como posso ajudar?"
+                        required
+                      />
+                    </label>
+
+                    <label>
+                      <span>Placeholder</span>
+                      <input
+                        value={widgetConfig.placeholder}
+                        onChange={(event) =>
+                          setWidgetConfig((current) => ({
+                            ...current,
+                            placeholder: event.target.value
+                          }))
+                        }
+                        placeholder="Digite sua mensagem"
+                        required
+                      />
+                    </label>
+
+                    <button type="submit" className="primary" disabled={viewState.loading}>
+                      {viewState.loading ? "Salvando..." : "Salvar widget"}
+                    </button>
+                  </form>
+                </article>
+              </section>
+            ) : null}
 
             <section className="surface session-card">
               <div className="section-heading">

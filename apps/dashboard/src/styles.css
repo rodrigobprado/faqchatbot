@@ -326,6 +326,13 @@ h2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.domain-card,
+.widget-config-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.35rem;
+}
+
 .section-heading {
   display: flex;
   align-items: end;
@@ -401,6 +408,21 @@ h2 {
   background: rgb(248 250 252 / 0.9);
 }
 
+.list-card {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 1rem;
+  background: rgb(248 250 252 / 0.9);
+}
+
 .session-grid dt {
   font-size: 0.8rem;
   text-transform: uppercase;
@@ -449,7 +471,14 @@ h2 {
   }
 
   .two-column.compact,
-  .tenant-summary {
+  .tenant-summary,
+  .domain-card,
+  .widget-config-card {
     grid-template-columns: 1fr;
+  }
+
+  .list-row {
+    align-items: start;
+    flex-direction: column;
   }
 }
