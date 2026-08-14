@@ -6,6 +6,7 @@ import {
   deleteTenant,
   createTenantDomain,
   createTenant,
+  getPlatformHealth,
   getTenantAgentConfig,
   getTenantConfig,
   inviteTenantUser,
@@ -30,6 +31,7 @@ import {
   type TenantConfigRecord,
   type TenantDomainRecord,
   type TenantRoleRecord,
+  type PlatformHealthRecord,
   type TenantUserRecord,
   type UpdateTenantPayload,
   type TenantRecord
@@ -283,6 +285,8 @@ export const App = () => {
   const [tenantAccessById, setTenantAccessById] = useState<Record<string, TenantAccessState>>({});
   const [userInviteForm, setUserInviteForm] = useState({ email: "", roleSlug: "viewer" });
   const [keyForm, setKeyForm] = useState({ name: "" });
+  const [platformHealth, setPlatformHealth] = useState<PlatformHealthRecord | null>(null);
+  const [platformHealthStatus, setPlatformHealthStatus] = useState<"loading" | "ok" | "error">("loading");
   const [viewState, setViewState] = useState<ViewState>({
     loading: false,
     error: null,
@@ -291,6 +295,35 @@ export const App = () => {
 
   useEffect(() => {
     setSession(readStoredSession());
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+
+    const loadPlatformHealth = async () => {
+      try {
+        const health = await getPlatformHealth();
+        if (!alive) {
+          return;
+        }
+
+        setPlatformHealth(health);
+        setPlatformHealthStatus("ok");
+      } catch {
+        if (!alive) {
+          return;
+        }
+
+        setPlatformHealth(null);
+        setPlatformHealthStatus("error");
+      }
+    };
+
+    void loadPlatformHealth();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -1072,13 +1105,30 @@ export const App = () => {
 
         {!session ? (
           <section className="auth-grid" id="overview">
-            <article className="hero-card">
+          <article className="hero-card">
               <p className="eyebrow">Controle operacional</p>
               <h2>Entre no painel para administrar tenants, widgets e configuracoes.</h2>
               <p>
                 O dashboard consome a API atual da plataforma e permite iniciar a operacao sem tocar
                 diretamente no banco.
               </p>
+              <div className="health-panel">
+                <strong>Status da plataforma</strong>
+                <p>
+                  {platformHealthStatus === "loading"
+                    ? "Carregando status da API..."
+                    : platformHealthStatus === "ok" && platformHealth
+                      ? `API ${platformHealth.service} operacional em ${new Date(platformHealth.timestamp).toLocaleString("pt-BR")}.`
+                      : "API indisponivel no momento."}
+                </p>
+                <small>
+                  {platformHealth?.checks?.database === "ok"
+                    ? "Banco de dados respondendo normalmente."
+                    : platformHealthStatus === "ok"
+                      ? "Banco de dados sem detalhe."
+                      : "Sem verificacao de banco disponivel."}
+                </small>
+              </div>
               <ul>
                 <li>Login administrativo com refresh token.</li>
                 <li>Cadastro de tenants pronto para uso.</li>
@@ -1126,6 +1176,16 @@ export const App = () => {
         ) : (
           <>
             <section className="metric-grid" id="overview">
+              <article className="surface metric-card">
+                <span>Status da plataforma</span>
+                <strong>
+                  {platformHealthStatus === "loading"
+                    ? "..."
+                    : platformHealthStatus === "ok"
+                      ? "Operacional"
+                      : "Indisponivel"}
+                </strong>
+              </article>
               <article className="surface metric-card">
                 <span>Tenants ativos</span>
                 <strong>{totalActiveTenants}</strong>

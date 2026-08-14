@@ -14,6 +14,15 @@ export type AdminSession = Readonly<{
   user: AdminUser;
 }>;
 
+export type PlatformHealthRecord = Readonly<{
+  status: "ok";
+  service: "api";
+  timestamp: string;
+  checks: Readonly<{
+    database: "ok";
+  }>;
+}>;
+
 export type TenantRecord = Readonly<{
   id: string;
   publicId: string;
@@ -206,6 +215,9 @@ export const refreshAdmin = (refreshToken: string): Promise<AdminSession> =>
     method: "POST",
     body: JSON.stringify({ refreshToken })
   });
+
+export const getPlatformHealth = (): Promise<PlatformHealthRecord> =>
+  requestJson<PlatformHealthRecord>("/health");
 
 export const listTenants = (accessToken: string): Promise<TenantRecord[]> =>
   requestJson<TenantRecord[]>("/v1/admin/tenants", {}, accessToken);

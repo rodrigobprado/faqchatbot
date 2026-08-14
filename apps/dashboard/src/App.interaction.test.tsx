@@ -247,6 +247,15 @@ const jsonResponse = (status: number, body: MockResponseBody) =>
     }
   });
 
+const healthResponse = {
+  status: "ok" as const,
+  service: "api" as const,
+  timestamp: "2026-08-14T12:00:00.000Z",
+  checks: {
+    database: "ok" as const
+  }
+};
+
 const setupDom = () => {
   document.body.innerHTML = '<div id="root"></div>';
   const element = document.getElementById("root");
@@ -322,6 +331,7 @@ describe("App interactions", () => {
 
   it("authenticates and loads the tenant list", async () => {
     const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
@@ -368,7 +378,7 @@ describe("App interactions", () => {
       '<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=acme" data-agent="acme" async></script>',
     );
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
-      2,
+      3,
       "/v1/admin/tenants",
       expect.objectContaining({
         headers: expect.objectContaining({
@@ -380,6 +390,7 @@ describe("App interactions", () => {
 
   it("filters the tenant list by search, status and plan", async () => {
     const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant, tenantTwo], meta: {} }))
@@ -442,6 +453,7 @@ describe("App interactions", () => {
 
   it("paginates the tenant list", async () => {
     const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant, tenantTwo, tenantThree, tenantFour, tenantFive, tenantSix], meta: {} }))
@@ -491,6 +503,7 @@ describe("App interactions", () => {
 
   it("creates a tenant, refreshes the session and logs out", async () => {
     const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
@@ -609,6 +622,7 @@ describe("App interactions", () => {
     const confirmMock = vi.fn(() => true);
     vi.stubGlobal("confirm", confirmMock);
     const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
@@ -738,6 +752,7 @@ describe("App interactions", () => {
     };
 
     const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
@@ -901,6 +916,7 @@ describe("App interactions", () => {
 
   it("manages tenant users, roles and api keys through the API", async () => {
     const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))

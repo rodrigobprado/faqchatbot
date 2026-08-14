@@ -5,6 +5,7 @@ import {
   createTenant,
   createTenantDomain,
   createTenantApiKey,
+  getPlatformHealth,
   getTenantAgentConfig,
   getTenantConfig,
   inviteTenantUser,
@@ -219,6 +220,18 @@ describe("API helpers", () => {
       }),
     ).resolves.toEqual(createdApiKey);
     await expect(revokeTenantApiKey("access-token-1", "tenant-1", "key-1")).resolves.toEqual(apiKey);
+
+    const health = {
+      status: "ok" as const,
+      service: "api" as const,
+      timestamp: "2026-08-14T12:00:00.000Z",
+      checks: {
+        database: "ok" as const
+      }
+    };
+
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, health));
+    await expect(getPlatformHealth()).resolves.toEqual(health);
 
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       "/v1/admin/tenants",
