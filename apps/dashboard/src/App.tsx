@@ -2,12 +2,15 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   ApiError,
   buildWidgetSnippet,
+  deleteTenant,
   createTenant,
   listTenants,
   loginAdmin,
   refreshAdmin,
+  updateTenant,
   type AdminSession,
   type CreateTenantPayload,
+  type UpdateTenantPayload,
   type TenantRecord
 } from "./api.js";
 
@@ -23,6 +26,14 @@ type TenantFormState = Readonly<{
   name: string;
   planSlug: CreateTenantPayload["planSlug"];
   defaultLocale: string;
+}>;
+
+type TenantEditState = Readonly<{
+  publicId: string;
+  name: string;
+  planSlug: "" | UpdateTenantPayload["planSlug"];
+  defaultLocale: string;
+  status: TenantRecord["status"];
 }>;
 
 type ViewState = Readonly<{
@@ -41,6 +52,14 @@ const defaultTenantFormState = (): TenantFormState => ({
   name: "",
   planSlug: "starter",
   defaultLocale: "pt-BR"
+});
+
+const defaultTenantEditState = (tenant?: TenantRecord | null): TenantEditState => ({
+  publicId: tenant?.publicId ?? "",
+  name: tenant?.name ?? "",
+  planSlug: "",
+  defaultLocale: tenant?.defaultLocale ?? "pt-BR",
+  status: tenant?.status ?? "active"
 });
 
 const readStoredSession = (): AdminSession | null => {
@@ -87,8 +106,10 @@ const getPlanLabel = (planId: string) => {
 export const App = () => {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [loginState, setLoginState] = useState<LoginState>(defaultLoginState);
   const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState);
+  const [tenantEdit, setTenantEdit] = useState<TenantEditState>(defaultTenantEditState());
   const [viewState, setViewState] = useState<ViewState>({
     loading: false,
     error: null,
@@ -115,11 +136,33 @@ export const App = () => {
   useEffect(() => {
     if (!session) {
       setTenants([]);
+      setSelectedTenantId(null);
       return;
     }
 
     void loadTenants(session);
   }, [session]);
+
+  useEffect(() => {
+    if (tenants.length === 0) {
+      setSelectedTenantId(null);
+      setTenantEdit(defaultTenantEditState());
+      return;
+    }
+
+    setSelectedTenantId((current) => {
+      if (current && tenants.some((tenant) => tenant.id === current)) {
+        return current;
+      }
+
+      return tenants[0]?.id ?? null;
+    });
+  }, [tenants]);
+
+  useEffect(() => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
+    setTenantEdit(defaultTenantEditState(selectedTenant));
+  }, [selectedTenantId, tenants]);
 
   const updateNotice = (notice: string | null) => {
     setViewState((current) => ({
@@ -252,6 +295,7 @@ export const App = () => {
         }),
       );
 
+      setSelectedTenantId(null);
       setTenantForm(defaultTenantFormState());
       await loadTenants();
       updateNotice("Tenant criado com sucesso.");
@@ -269,10 +313,92 @@ export const App = () => {
     }
   };
 
+  const handleSelectTenant = (tenant: TenantRecord) => {
+    setSelectedTenantId(tenant.id);
+  };
+
+  const handleUpdateTenantSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
+
+    try {
+      const payload: UpdateTenantPayload = {
+        publicId: tenantEdit.publicId,
+        name: tenantEdit.name,
+        defaultLocale: tenantEdit.defaultLocale,
+        status: tenantEdit.status
+      };
+
+      if (tenantEdit.planSlug) {
+        payload.planSlug = tenantEdit.planSlug;
+      }
+
+      await withSessionRetry((accessToken) => updateTenant(accessToken, selectedTenant.id, payload));
+      await loadTenants();
+      updateNotice("Tenant atualizado com sucesso.");
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        setTenants([]);
+        setSelectedTenantId(null);
+        updateError("Sessao expirada. Entre novamente.");
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao atualizar tenant");
+    }
+  };
+
+  const handleSuspendTenant = async () => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    try {
+      if (typeof window.confirm === "function") {
+        try {
+          if (!window.confirm(`Suspender ${selectedTenant.name}?`)) {
+            return;
+          }
+        } catch {
+          // Fallback for test environments that do not implement confirm.
+        }
+      }
+
+      setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
+      await withSessionRetry((accessToken) => deleteTenant(accessToken, selectedTenant.id));
+      setSelectedTenantId(null);
+      await loadTenants();
+      updateNotice("Tenant suspenso com sucesso.");
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        setTenants([]);
+        setSelectedTenantId(null);
+        updateError("Sessao expirada. Entre novamente.");
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao suspender tenant");
+    }
+  };
+
   const canSubmitTenant = Boolean(tenantForm.publicId.trim() && tenantForm.name.trim() && session);
+  const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? tenants[0] ?? null;
   const totalActiveTenants = tenants.filter((tenant) => tenant.status === "active").length;
   const totalSuspendedTenants = tenants.filter((tenant) => tenant.status === "suspended").length;
-  const firstTenantSnippet = tenants[0] ? buildWidgetSnippet(tenants[0].publicId) : null;
+  const selectedTenantSnippet = selectedTenant ? buildWidgetSnippet(selectedTenant.publicId) : null;
 
   return (
     <main className="app-shell">
@@ -426,6 +552,15 @@ export const App = () => {
                         <span>{tenant.name}</span>
                         <span>{getPlanLabel(tenant.planId)}</span>
                         <span>{formatTenantStatus(tenant.status)}</span>
+                        <span>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => handleSelectTenant(tenant)}
+                          >
+                            Editar
+                          </button>
+                        </span>
                       </div>
                     ))
                   )}
@@ -502,6 +637,119 @@ export const App = () => {
               </article>
             </section>
 
+            {selectedTenant ? (
+              <section className="surface tenant-detail" id="tenant-detail">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Tenant selecionado</p>
+                    <h2>{selectedTenant.name}</h2>
+                  </div>
+                  <div className="header-actions">
+                    <button type="button" className="secondary danger" onClick={handleSuspendTenant}>
+                      Suspender tenant
+                    </button>
+                  </div>
+                </div>
+
+                <dl className="session-grid tenant-summary">
+                  <div>
+                    <dt>Public ID</dt>
+                    <dd className="mono">{selectedTenant.publicId}</dd>
+                  </div>
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{formatTenantStatus(selectedTenant.status)}</dd>
+                  </div>
+                  <div>
+                    <dt>Plano</dt>
+                    <dd>{getPlanLabel(selectedTenant.planId)}</dd>
+                  </div>
+                </dl>
+
+                <form className="stack" onSubmit={handleUpdateTenantSubmit}>
+                  <div className="two-column compact">
+                    <label>
+                      <span>Public ID</span>
+                      <input
+                        value={tenantEdit.publicId}
+                        onChange={(event) =>
+                          setTenantEdit((current) => ({ ...current, publicId: event.target.value }))
+                        }
+                        placeholder="acme"
+                        required
+                      />
+                    </label>
+
+                    <label>
+                      <span>Nome</span>
+                      <input
+                        value={tenantEdit.name}
+                        onChange={(event) =>
+                          setTenantEdit((current) => ({ ...current, name: event.target.value }))
+                        }
+                        placeholder="Acme Ltda"
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  <div className="two-column compact">
+                    <label>
+                      <span>Plano</span>
+                      <select
+                        value={tenantEdit.planSlug}
+                        onChange={(event) =>
+                          setTenantEdit((current) => ({
+                            ...current,
+                            planSlug: event.target.value as TenantEditState["planSlug"]
+                          }))
+                        }
+                      >
+                        <option value="">Manter plano atual</option>
+                        <option value="free">Free</option>
+                        <option value="starter">Starter</option>
+                        <option value="growth">Growth</option>
+                        <option value="enterprise">Enterprise</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Status</span>
+                      <select
+                        value={tenantEdit.status}
+                        onChange={(event) =>
+                          setTenantEdit((current) => ({
+                            ...current,
+                            status: event.target.value as TenantRecord["status"]
+                          }))
+                        }
+                      >
+                        <option value="active">Ativo</option>
+                        <option value="inactive">Inativo</option>
+                        <option value="suspended">Suspenso</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label>
+                    <span>Locale padrao</span>
+                    <input
+                      value={tenantEdit.defaultLocale}
+                      onChange={(event) =>
+                        setTenantEdit((current) => ({ ...current, defaultLocale: event.target.value }))
+                      }
+                      placeholder="pt-BR"
+                      required
+                    />
+                  </label>
+
+                  <button type="submit" className="primary" disabled={viewState.loading}>
+                    {viewState.loading ? "Salvando..." : "Salvar alteracoes"}
+                  </button>
+                </form>
+              </section>
+            ) : null}
+
             <section className="surface widget-card" id="widget">
               <div className="section-heading">
                 <div>
@@ -510,10 +758,10 @@ export const App = () => {
                 </div>
               </div>
 
-              {firstTenantSnippet ? (
+              {selectedTenantSnippet ? (
                 <>
-                  <p>Snippet gerado para o primeiro tenant carregado.</p>
-                  <pre>{firstTenantSnippet}</pre>
+                  <p>Snippet gerado para o tenant selecionado.</p>
+                  <pre>{selectedTenantSnippet}</pre>
                 </>
               ) : (
                 <p>Crie um tenant para gerar o snippet do widget.</p>

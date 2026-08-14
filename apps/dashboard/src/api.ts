@@ -34,6 +34,14 @@ export type CreateTenantPayload = Readonly<{
   defaultLocale: string;
 }>;
 
+export type UpdateTenantPayload = {
+  publicId?: string;
+  name?: string;
+  planSlug?: "free" | "starter" | "growth" | "enterprise";
+  defaultLocale?: string;
+  status?: "active" | "inactive" | "suspended";
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -110,6 +118,21 @@ export const createTenant = (
   requestJson<TenantRecord>("/v1/admin/tenants", {
     method: "POST",
     body: JSON.stringify(payload)
+  }, accessToken);
+
+export const updateTenant = (
+  accessToken: string,
+  tenantId: string,
+  payload: UpdateTenantPayload,
+): Promise<TenantRecord> =>
+  requestJson<TenantRecord>(`/v1/admin/tenants/${tenantId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  }, accessToken);
+
+export const deleteTenant = (accessToken: string, tenantId: string): Promise<TenantRecord> =>
+  requestJson<TenantRecord>(`/v1/admin/tenants/${tenantId}`, {
+    method: "DELETE"
   }, accessToken);
 
 const escapeAttribute = (value: string): string =>

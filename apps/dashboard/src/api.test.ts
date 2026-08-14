@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWidgetSnippet,
+  deleteTenant,
   createTenant,
   listTenants,
   loginAdmin,
-  refreshAdmin
+  refreshAdmin,
+  updateTenant
 } from "./api.js";
 
 const session = {
@@ -59,6 +61,8 @@ describe("API helpers", () => {
       .mockResolvedValueOnce(jsonResponse(200, session))
       .mockResolvedValueOnce(jsonResponse(200, session))
       .mockResolvedValueOnce(jsonResponse(200, [tenant]))
+      .mockResolvedValueOnce(jsonResponse(200, tenant))
+      .mockResolvedValueOnce(jsonResponse(200, tenant))
       .mockResolvedValueOnce(jsonResponse(200, tenant));
 
     await expect(loginAdmin({ email: "admin@acme.test", password: "senha-super-secreta" })).resolves.toEqual(
@@ -74,6 +78,15 @@ describe("API helpers", () => {
         defaultLocale: "pt-BR"
       }),
     ).resolves.toEqual(tenant);
+    await expect(
+      updateTenant("access-token-1", "tenant-1", {
+        publicId: "acme-2",
+        name: "Acme 2",
+        defaultLocale: "en-US",
+        status: "inactive"
+      }),
+    ).resolves.toEqual(tenant);
+    await expect(deleteTenant("access-token-1", "tenant-1")).resolves.toEqual(tenant);
 
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       "/v1/admin/tenants",

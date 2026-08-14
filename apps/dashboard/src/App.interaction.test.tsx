@@ -244,4 +244,111 @@ describe("App interactions", () => {
     expect(document.body.textContent).toContain("Acesso administrativo");
     expect(document.body.textContent).toContain("Sessao encerrada.");
   });
+
+  it("edits and suspends the selected tenant", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: {
+            ...tenant,
+            name: "Acme Atualizada",
+            status: "inactive",
+            defaultLocale: "en-US"
+          },
+          meta: {}
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: [
+            {
+              ...tenant,
+              name: "Acme Atualizada",
+              status: "inactive",
+              defaultLocale: "en-US"
+            }
+          ],
+          meta: {}
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: {
+            ...tenant,
+            name: "Acme Atualizada",
+            status: "suspended",
+            defaultLocale: "en-US"
+          },
+          meta: {}
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    const [emailInput, passwordInput] = Array.from(
+      document.querySelectorAll('input[type="email"], input[type="password"]'),
+    ) as [HTMLInputElement, HTMLInputElement];
+
+    fillInput(emailInput, "admin@acme.test");
+    fillInput(passwordInput, "senha-super-secreta");
+
+    await act(async () => {
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("Lista de tenants");
+
+    await act(async () => {
+      (Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Editar"),
+      ) as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("Tenant selecionado");
+
+    const editForms = document.querySelectorAll("form");
+    const editForm = editForms[1] as HTMLFormElement;
+    const editInputs = Array.from(editForm.querySelectorAll("input"));
+    const editSelects = Array.from(editForm.querySelectorAll("select"));
+    const [editPublicIdInput, editNameInput, editLocaleInput] = editInputs as [
+      HTMLInputElement,
+      HTMLInputElement,
+      HTMLInputElement
+    ];
+    const [planSelect, statusSelect] = editSelects as [HTMLSelectElement, HTMLSelectElement];
+
+    fillInput(editPublicIdInput, "acme");
+    fillInput(editNameInput, "Acme Atualizada");
+    fillInput(planSelect, "growth");
+    fillInput(statusSelect, "inactive");
+    fillInput(editLocaleInput, "en-US");
+
+    await flush();
+
+    await act(async () => {
+      submitForm(editForm);
+    });
+
+    await waitForBodyText("Acme Atualizada");
+    expect(document.body.textContent).toContain("Tenant atualizado com sucesso.");
+
+    await act(async () => {
+      (Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Suspender tenant"),
+      ) as HTMLButtonElement).click();
+    });
+
+    await flush();
+
+    expect(vi.mocked(fetch).mock.calls.some((call) => call[0] === "/v1/admin/tenants/tenant-1")).toBe(true);
+    expect(document.body.textContent).toContain("Tenant suspenso com sucesso.");
+  });
 });
