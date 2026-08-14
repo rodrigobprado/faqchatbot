@@ -51,6 +51,7 @@ describe("VisitorSessionsRepository", () => {
       tenant.id,
       session.visitorId
     );
+    const foundByTenant = await visitorSessions.listByTenantId(tenant.id);
     const touched = await visitorSessions.touch(session.id, {
       url: "https://example.com/pricing",
       viewport: { width: 1280, height: 720 },
@@ -60,6 +61,7 @@ describe("VisitorSessionsRepository", () => {
 
     expect(foundById?.id).toBe(session.id);
     expect(foundByTenantAndVisitor?.id).toBe(session.id);
+    expect(foundByTenant).toHaveLength(1);
     expect(touched?.pageContext.url).toBe("https://example.com/pricing");
   });
 });

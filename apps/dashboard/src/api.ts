@@ -145,6 +145,20 @@ export type TenantConversationDetailRecord = TenantConversationRecord & Readonly
   messages: TenantConversationMessageRecord[];
 }>;
 
+export type TenantSessionRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  visitorId: string;
+  startedAt: string | null;
+  lastSeenAt: string | null;
+  currentPage: string | null;
+  pageTitle: string | null;
+  pageUrl: string | null;
+  referrer: string | null;
+  conversationId: string | null;
+  conversationStatus: "open" | "closed" | null;
+}>;
+
 export type InviteTenantUserPayload = Readonly<{
   email: string;
   roleSlug: string;
@@ -273,6 +287,12 @@ export const listTenantConversations = (
   tenantId: string,
 ): Promise<TenantConversationRecord[]> =>
   requestJson<TenantConversationRecord[]>(`/v1/admin/tenants/${tenantId}/conversations`, {}, accessToken);
+
+export const listTenantSessions = (
+  accessToken: string,
+  tenantId: string,
+): Promise<TenantSessionRecord[]> =>
+  requestJson<TenantSessionRecord[]>(`/v1/admin/tenants/${tenantId}/sessions`, {}, accessToken);
 
 export const getTenantConversation = (
   accessToken: string,

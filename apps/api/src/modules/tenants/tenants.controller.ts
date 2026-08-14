@@ -28,6 +28,12 @@ export class AdminTenantsController {
     return this.tenantsService.listConversations(request.adminUser!, tenantId);
   }
 
+  @Get(":tenantId/sessions")
+  @ApiOkResponse({ description: "Lists tenant widget sessions" })
+  listSessions(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.listSessions(request.adminUser!, tenantId);
+  }
+
   @Get(":tenantId/conversations/:conversationId")
   @ApiOkResponse({ description: "Gets a tenant conversation with messages" })
   getConversation(

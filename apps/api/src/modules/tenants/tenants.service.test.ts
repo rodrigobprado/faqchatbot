@@ -67,11 +67,13 @@ const createService = () => {
       revoke: vi.fn()
     },
     visitorSessions: {
-      findById: vi.fn()
+      findById: vi.fn(),
+      listByTenantId: vi.fn()
     },
     conversations: {
       findById: vi.fn(),
-      listByTenantId: vi.fn()
+      listByTenantId: vi.fn(),
+      findLatestBySessionId: vi.fn()
     },
     messages: {
       listByConversationId: vi.fn()
@@ -212,6 +214,79 @@ describe("TenantsService", () => {
         currentPage: "/pricing",
         messageCount: 2,
         lastMessageAt: "2026-08-14T12:02:00.000Z"
+      })
+    ]);
+  });
+
+  it("lists widget sessions with conversation context for tenant admins", async () => {
+    const { service, dependencies } = createService();
+    const actor = tenantAdmin("tenant-a");
+    const sessionId = randomUUID();
+    const conversationId = randomUUID();
+
+    dependencies.visitorSessions.listByTenantId.mockResolvedValue([
+      {
+        id: sessionId,
+        tenantId: "tenant-a",
+        visitorId: "visitor-1",
+        pageContext: {
+          currentPage: "/pricing",
+          title: "Pricing",
+          url: "https://example.com/pricing",
+          referrer: "https://google.com"
+        },
+        startedAt: new Date("2026-08-14T12:00:00.000Z"),
+        lastSeenAt: new Date("2026-08-14T12:05:00.000Z")
+      }
+    ]);
+    dependencies.conversations.findLatestBySessionId.mockResolvedValue({
+      id: conversationId,
+      tenantId: "tenant-a",
+      sessionId,
+      status: "open",
+      startedAt: new Date("2026-08-14T12:00:00.000Z"),
+      endedAt: null
+    });
+
+    await expect(service.listSessions(actor, "tenant-a")).resolves.toEqual([
+      expect.objectContaining({
+        id: sessionId,
+        visitorId: "visitor-1",
+        currentPage: "/pricing",
+        referrer: "https://google.com",
+        conversationId,
+        conversationStatus: "open"
+      })
+    ]);
+  });
+
+  it("lists widget sessions even when no conversation exists yet", async () => {
+    const { service, dependencies } = createService();
+    const actor = tenantAdmin("tenant-a");
+    const sessionId = randomUUID();
+
+    dependencies.visitorSessions.listByTenantId.mockResolvedValue([
+      {
+        id: sessionId,
+        tenantId: "tenant-a",
+        visitorId: "visitor-2",
+        pageContext: {
+          currentPage: "/pricing",
+          title: "Pricing",
+          url: "https://example.com/pricing"
+        },
+        startedAt: new Date("2026-08-14T12:00:00.000Z"),
+        lastSeenAt: null
+      }
+    ]);
+    dependencies.conversations.findLatestBySessionId.mockResolvedValue(null);
+
+    await expect(service.listSessions(actor, "tenant-a")).resolves.toEqual([
+      expect.objectContaining({
+        id: sessionId,
+        conversationId: null,
+        conversationStatus: null,
+        lastSeenAt: null
       })
     ]);
   });

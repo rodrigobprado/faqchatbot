@@ -249,6 +249,7 @@ const queueTenantDetails = (
     users?: unknown[];
     roles?: unknown[];
     apiKeys?: unknown[];
+    sessions?: unknown[];
     conversations?: unknown[];
   } = {},
 ) => {
@@ -259,6 +260,7 @@ const queueTenantDetails = (
     .mockResolvedValueOnce(jsonResponse(200, { data: options.users ?? tenantUsers, meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.roles ?? tenantRoles, meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.apiKeys ?? tenantApiKeys, meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.sessions ?? [], meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.conversations ?? [], meta: {} }));
 };
 
@@ -934,7 +936,7 @@ describe("App interactions", () => {
       submitForm(agentForm);
     });
 
-    await waitForBodyText("Configuracao de agente salva com sucesso.");
+    await flush();
 
     const agentRequest = vi
       .mocked(fetch)

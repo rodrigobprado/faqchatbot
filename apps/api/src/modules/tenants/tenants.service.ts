@@ -111,6 +111,15 @@ type VisitorSessionRecord = Readonly<{
   startedAt?: Date;
 }>;
 
+type VisitorSessionSummaryRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  visitorId: string;
+  pageContext: unknown;
+  lastSeenAt?: Date;
+  startedAt?: Date;
+}>;
+
 type ConversationRecord = Readonly<{
   id: string;
   tenantId: string;
@@ -213,10 +222,12 @@ export type TenantsServiceDependencies = Readonly<{
   };
   visitorSessions: {
     findById(id: string): Promise<VisitorSessionRecord | null>;
+    listByTenantId(tenantId: string): Promise<VisitorSessionSummaryRecord[]>;
   };
   conversations: {
     findById(id: string): Promise<ConversationRecord | null>;
     listByTenantId(tenantId: string): Promise<ConversationRecord[]>;
+    findLatestBySessionId(sessionId: string): Promise<ConversationRecord | null>;
   };
   messages: {
     listByConversationId(conversationId: string): Promise<MessageRecord[]>;
@@ -356,6 +367,34 @@ export class TenantsService {
         ]);
 
         return this.serializeConversationSummary(conversation, session, messages);
+      }),
+    );
+  }
+
+  async listSessions(actor: AdminAccessTokenPayload, tenantId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const sessions = await this.dependencies.visitorSessions.listByTenantId(tenantId);
+
+    return Promise.all(
+      sessions.map(async (session) => {
+        const conversation = await this.dependencies.conversations.findLatestBySessionId(session.id);
+        const pageContext = typeof session.pageContext === "object" && session.pageContext !== null
+          ? (session.pageContext as Record<string, unknown>)
+          : {};
+
+        return {
+          id: session.id,
+          tenantId: session.tenantId,
+          visitorId: session.visitorId,
+          startedAt: session.startedAt?.toISOString?.() ?? null,
+          lastSeenAt: session.lastSeenAt?.toISOString?.() ?? null,
+          currentPage: typeof pageContext.currentPage === "string" ? pageContext.currentPage : null,
+          pageTitle: typeof pageContext.title === "string" ? pageContext.title : null,
+          pageUrl: typeof pageContext.url === "string" ? pageContext.url : null,
+          referrer: typeof pageContext.referrer === "string" ? pageContext.referrer : null,
+          conversationId: conversation?.id ?? null,
+          conversationStatus: conversation?.status ?? null
+        };
       }),
     );
   }

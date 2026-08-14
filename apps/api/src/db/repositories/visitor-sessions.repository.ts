@@ -46,6 +46,12 @@ export const createVisitorSessionsRepository = (db: Database) => ({
     const [session] = await db.select().from(visitorSessions).where(eq(visitorSessions.id, id));
     return session ?? null;
   },
+  listByTenantId: async (tenantId: string) =>
+    db
+      .select()
+      .from(visitorSessions)
+      .where(eq(visitorSessions.tenantId, tenantId))
+      .orderBy(desc(visitorSessions.lastSeenAt), desc(visitorSessions.startedAt)),
   findLatestByTenantAndVisitor: async (tenantId: string, visitorId: string) => {
     const [session] = await db
       .select()
