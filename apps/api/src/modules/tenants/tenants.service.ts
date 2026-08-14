@@ -184,6 +184,7 @@ export type TenantsServiceDependencies = Readonly<{
   plans: {
     findBySlug(slug: string): Promise<PlanRecord | null>;
     findById(id: string): Promise<PlanRecord | null>;
+    list(): Promise<PlanRecord[]>;
   };
 }>;
 
@@ -296,6 +297,11 @@ export class TenantsService {
 
     const tenant = await this.dependencies.tenants.findById(actor.tenantId);
     return tenant ? [tenant] : [];
+  }
+
+  async listPlans(actor: AdminAccessTokenPayload) {
+    this.assertPlatformAdmin(actor);
+    return this.dependencies.plans.list();
   }
 
   async createTenant(actor: AdminAccessTokenPayload, rawInput: unknown) {

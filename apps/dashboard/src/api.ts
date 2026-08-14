@@ -130,6 +130,17 @@ export type CreateTenantApiKeyResponse = TenantApiKeyRecord & Readonly<{
   secret: string;
 }>;
 
+export type PlanRecord = Readonly<{
+  id: string;
+  slug: string;
+  name: string;
+  limits: Record<string, unknown>;
+  priceCents: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}>;
+
 export type LoginPayload = Readonly<{
   email: string;
   password: string;
@@ -221,6 +232,9 @@ export const getPlatformHealth = (): Promise<PlatformHealthRecord> =>
 
 export const listTenants = (accessToken: string): Promise<TenantRecord[]> =>
   requestJson<TenantRecord[]>("/v1/admin/tenants", {}, accessToken);
+
+export const listPlans = (accessToken: string): Promise<PlanRecord[]> =>
+  requestJson<PlanRecord[]>("/v1/admin/tenants/plans", {}, accessToken);
 
 export const createTenant = (
   accessToken: string,

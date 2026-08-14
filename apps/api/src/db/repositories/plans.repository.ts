@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { plans } from "../schema.js";
 
@@ -34,5 +34,10 @@ export const createPlansRepository = (db: Database) => ({
   findById: async (id: string) => {
     const [plan] = await db.select().from(plans).where(eq(plans.id, id));
     return plan ?? null;
-  }
+  },
+  list: async () =>
+    db
+      .select()
+      .from(plans)
+      .orderBy(asc(plans.slug))
 });

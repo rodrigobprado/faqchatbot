@@ -68,7 +68,8 @@ const createService = () => {
     },
     plans: {
       findBySlug: vi.fn(),
-      findById: vi.fn()
+      findById: vi.fn(),
+      list: vi.fn()
     }
   } as const;
 
@@ -137,6 +138,29 @@ describe("TenantsService", () => {
 
     await expect(service.listTenants(platformAdmin())).resolves.toEqual(tenants);
     expect(dependencies.tenants.list).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists available plans for admins", async () => {
+    const { service, dependencies } = createService();
+    const plans = [
+      {
+        id: "plan-1",
+        slug: "starter",
+        name: "Starter",
+        limits: { messagesPerMinute: 30, conversationsPerDay: 200 }
+      },
+      {
+        id: "plan-2",
+        slug: "growth",
+        name: "Growth",
+        limits: { messagesPerMinute: 60, conversationsPerDay: 500 }
+      }
+    ];
+
+    dependencies.plans.list.mockResolvedValue(plans);
+
+    await expect(service.listPlans(platformAdmin())).resolves.toEqual(plans);
+    expect(dependencies.plans.list).toHaveBeenCalledTimes(1);
   });
 
   it("lists only the current tenant for non-platform admins", async () => {

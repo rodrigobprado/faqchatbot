@@ -77,6 +77,49 @@ const tenantSix = {
   deletedAt: null
 };
 
+const plans = [
+  {
+    id: "plan-free",
+    slug: "free",
+    name: "Free",
+    limits: { messagesPerMinute: 10, conversationsPerDay: 40 },
+    priceCents: 0,
+    isActive: true,
+    createdAt: "2026-08-14T12:00:00.000Z",
+    updatedAt: "2026-08-14T12:00:00.000Z"
+  },
+  {
+    id: "plan-starter",
+    slug: "starter",
+    name: "Starter",
+    limits: { messagesPerMinute: 30, conversationsPerDay: 200 },
+    priceCents: 4900,
+    isActive: true,
+    createdAt: "2026-08-14T12:00:00.000Z",
+    updatedAt: "2026-08-14T12:00:00.000Z"
+  },
+  {
+    id: "plan-growth",
+    slug: "growth",
+    name: "Growth",
+    limits: { messagesPerMinute: 60, conversationsPerDay: 500 },
+    priceCents: 9900,
+    isActive: true,
+    createdAt: "2026-08-14T12:00:00.000Z",
+    updatedAt: "2026-08-14T12:00:00.000Z"
+  },
+  {
+    id: "plan-enterprise",
+    slug: "enterprise",
+    name: "Enterprise",
+    limits: { messagesPerMinute: 120, conversationsPerDay: 2000 },
+    priceCents: 19900,
+    isActive: false,
+    createdAt: "2026-08-14T12:00:00.000Z",
+    updatedAt: "2026-08-14T12:00:00.000Z"
+  }
+];
+
 const domain = {
   id: "domain-1",
   tenantId: "tenant-1",
@@ -335,9 +378,7 @@ describe("App interactions", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
     queueTenantDetails(fetchMock);
 
     await act(async () => {
@@ -360,6 +401,7 @@ describe("App interactions", () => {
     await flush();
 
     expect(document.body.textContent).toContain("Lista de tenants");
+    expect(document.body.textContent).toContain("Planos disponíveis");
     expect(document.body.textContent).toContain("acme");
     expect(document.body.textContent).toContain("Dominios autorizados");
     expect(document.body.textContent).toContain(
@@ -394,9 +436,7 @@ describe("App interactions", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant, tenantTwo], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
     queueTenantDetails(fetchMock);
 
     await act(async () => {
@@ -456,10 +496,10 @@ describe("App interactions", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant, tenantTwo, tenantThree, tenantFour, tenantFive, tenantSix], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+      .mockResolvedValueOnce(
+        jsonResponse(200, { data: [tenant, tenantTwo, tenantThree, tenantFour, tenantFive, tenantSix], meta: {} }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
     queueTenantDetails(fetchMock);
 
     await act(async () => {
@@ -507,6 +547,30 @@ describe("App interactions", () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    const [emailInput, passwordInput] = Array.from(
+      document.querySelectorAll('input[type="email"], input[type="password"]'),
+    ) as [HTMLInputElement, HTMLInputElement];
+
+    fillInput(emailInput, "admin@acme.test");
+    fillInput(passwordInput, "senha-super-secreta");
+
+    await act(async () => {
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    await flush();
+
+    await waitForBodyText("Lista de tenants");
+
+    fetchMock
       .mockResolvedValueOnce(
         jsonResponse(200, {
           data: {
@@ -536,7 +600,7 @@ describe("App interactions", () => {
           ],
           meta: {}
         }),
-      )
+      );
     queueTenantDetails(fetchMock, {
       domains: [],
       config: null,
@@ -545,30 +609,6 @@ describe("App interactions", () => {
       roles: [],
       apiKeys: []
     });
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
-
-    await act(async () => {
-      root!.render(<App />);
-    });
-
-    await flush();
-
-    const [emailInput, passwordInput] = Array.from(
-      document.querySelectorAll('input[type="email"], input[type="password"]'),
-    ) as [HTMLInputElement, HTMLInputElement];
-
-    fillInput(emailInput, "admin@acme.test");
-    fillInput(passwordInput, "senha-super-secreta");
-
-    await act(async () => {
-      (document.querySelector('button[type="submit"]') as HTMLButtonElement).click();
-    });
-
-    await flush();
-
-    await waitForBodyText("Lista de tenants");
 
     const inputs = Array.from(document.querySelectorAll("input"));
     const [publicIdInput, nameInput, localeInput] = inputs as [
@@ -592,6 +632,8 @@ describe("App interactions", () => {
 
     expect(document.body.textContent).toContain("Beta");
     expect(document.body.textContent).toContain("Tenant criado com sucesso.");
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
 
     const refreshButton = Array.from(document.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Renovar sessao"),
@@ -626,9 +668,7 @@ describe("App interactions", () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }))
     queueTenantDetails(fetchMock);
     fetchMock
       .mockResolvedValueOnce(
@@ -738,9 +778,7 @@ describe("App interactions", () => {
     await flush();
 
     expect(vi.mocked(fetch).mock.calls.some((call) => call[0] === "/v1/admin/tenants/tenant-1")).toBe(true);
-    expect(confirmMock).toHaveBeenCalledWith(
-      "Excluir Administrator? Esta acao nao pode ser desfeita.",
-    );
+    expect(confirmMock).toHaveBeenCalledWith("Excluir Acme Atualizada? Esta acao nao pode ser desfeita.");
   });
 
   it("adds an authorized domain and saves the public widget config", async () => {
@@ -756,9 +794,7 @@ describe("App interactions", () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
     queueTenantDetails(fetchMock, {
       domains: [domain],
       config: widgetConfig,
@@ -920,9 +956,7 @@ describe("App interactions", () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
     queueTenantDetails(fetchMock, {
       domains: [domain],
       config: widgetConfig,

@@ -9,6 +9,7 @@ import {
   getTenantAgentConfig,
   getTenantConfig,
   inviteTenantUser,
+  listPlans,
   listTenants,
   listTenantApiKeys,
   listTenantRoles,
@@ -91,6 +92,20 @@ const role = {
   permissions: ["Visualizar conversas"]
 };
 
+const plan = {
+  id: "plan-1",
+  slug: "starter",
+  name: "Starter",
+  limits: {
+    messagesPerMinute: 30,
+    conversationsPerDay: 200
+  },
+  priceCents: 0,
+  isActive: true,
+  createdAt: "2026-08-14T12:00:00.000Z",
+  updatedAt: "2026-08-14T12:00:00.000Z"
+};
+
 const apiKey = {
   id: "key-1",
   name: "Dashboard key",
@@ -149,6 +164,7 @@ describe("API helpers", () => {
       .mockResolvedValueOnce(jsonResponse(200, user))
       .mockResolvedValueOnce(jsonResponse(200, user))
       .mockResolvedValueOnce(jsonResponse(200, [role]))
+      .mockResolvedValueOnce(jsonResponse(200, [plan]))
       .mockResolvedValueOnce(jsonResponse(200, [apiKey]))
       .mockResolvedValueOnce(jsonResponse(200, createdApiKey))
       .mockResolvedValueOnce(jsonResponse(200, apiKey));
@@ -213,6 +229,7 @@ describe("API helpers", () => {
       }),
     ).resolves.toEqual(user);
     await expect(listTenantRoles("access-token-1", "tenant-1")).resolves.toEqual([role]);
+    await expect(listPlans("access-token-1")).resolves.toEqual([plan]);
     await expect(listTenantApiKeys("access-token-1", "tenant-1")).resolves.toEqual([apiKey]);
     await expect(
       createTenantApiKey("access-token-1", "tenant-1", {

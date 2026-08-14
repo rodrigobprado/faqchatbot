@@ -10,6 +10,7 @@ import {
   getTenantAgentConfig,
   getTenantConfig,
   inviteTenantUser,
+  listPlans,
   listTenants,
   listTenantApiKeys,
   listTenantRoles,
@@ -30,6 +31,7 @@ import {
   type TenantConfigPayload,
   type TenantConfigRecord,
   type TenantDomainRecord,
+  type PlanRecord,
   type TenantRoleRecord,
   type PlatformHealthRecord,
   type TenantUserRecord,
@@ -86,7 +88,7 @@ type TenantAccessState = Readonly<{
 }>;
 
 type TenantStatusFilter = "" | TenantRecord["status"];
-type TenantPlanFilter = "" | "plan-free" | "plan-starter" | "plan-growth" | "plan-enterprise";
+type TenantPlanFilter = string;
 
 type TenantListFiltersState = Readonly<{
   search: string;
@@ -105,17 +107,31 @@ const defaultLoginState = (): LoginState => ({
   password: ""
 });
 
-const defaultTenantFormState = (): TenantFormState => ({
+const getDefaultPlanSlug = (plans: PlanRecord[]): TenantFormState["planSlug"] => {
+  const starter = plans.find((plan) => plan.slug === "starter" && plan.isActive);
+  if (starter) {
+    return starter.slug as TenantFormState["planSlug"];
+  }
+
+  const activePlan = plans.find((plan) => plan.isActive);
+  if (activePlan) {
+    return activePlan.slug as TenantFormState["planSlug"];
+  }
+
+  return (plans[0]?.slug ?? "starter") as TenantFormState["planSlug"];
+};
+
+const defaultTenantFormState = (plans: PlanRecord[] = []): TenantFormState => ({
   publicId: "",
   name: "",
-  planSlug: "starter",
+  planSlug: getDefaultPlanSlug(plans),
   defaultLocale: "pt-BR"
 });
 
-const defaultTenantEditState = (tenant?: TenantRecord | null): TenantEditState => ({
+const defaultTenantEditState = (tenant?: TenantRecord | null, plans: PlanRecord[] = []): TenantEditState => ({
   publicId: tenant?.publicId ?? "",
   name: tenant?.name ?? "",
-  planSlug: "",
+  planSlug: (tenant?.planId ? plans.find((plan) => plan.id === tenant.planId)?.slug ?? "" : "") as TenantEditState["planSlug"],
   defaultLocale: tenant?.defaultLocale ?? "pt-BR",
   status: tenant?.status ?? "active"
 });
@@ -145,6 +161,11 @@ const defaultTenantListFiltersState = (): TenantListFiltersState => ({
   search: "",
   status: "",
   planId: ""
+});
+
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL"
 });
 
 const accessPermissionCatalog = [
@@ -210,15 +231,19 @@ const formatTenantStatus = (status: TenantRecord["status"]) => {
   }
 };
 
-const getPlanLabel = (planId: string) => {
-  const labels: Record<string, string> = {
-    "plan-free": "Free",
-    "plan-starter": "Starter",
-    "plan-growth": "Growth",
-    "plan-enterprise": "Enterprise"
-  };
+const getPlanDisplayName = (plans: PlanRecord[], planId: string) =>
+  plans.find((plan) => plan.id === planId)?.name ?? planId;
 
-  return labels[planId] ?? planId;
+const getPlanLabel = (plans: PlanRecord[], planId: string) => getPlanDisplayName(plans, planId);
+
+const formatPlanPrice = (priceCents: number) => (priceCents <= 0 ? "Gratuito" : currencyFormatter.format(priceCents / 100));
+
+const formatPlanLimits = (limits: PlanRecord["limits"]) => {
+  const record = limits && typeof limits === "object" ? (limits as Record<string, unknown>) : {};
+  const messagesPerMinute = typeof record.messagesPerMinute === "number" ? record.messagesPerMinute : null;
+  const conversationsPerDay = typeof record.conversationsPerDay === "number" ? record.conversationsPerDay : null;
+
+  return { messagesPerMinute, conversationsPerDay };
 };
 
 const normalizeTenantUser = (user: TenantUserRecord): TenantUserRecord =>
@@ -268,11 +293,12 @@ const agentProviderOptions = [
 export const App = () => {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
+  const [plans, setPlans] = useState<PlanRecord[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [tenantDomains, setTenantDomains] = useState<TenantDomainRecord[]>([]);
   const [loginState, setLoginState] = useState<LoginState>(defaultLoginState);
-  const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState);
-  const [tenantEdit, setTenantEdit] = useState<TenantEditState>(defaultTenantEditState());
+  const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState());
+  const [tenantEdit, setTenantEdit] = useState<TenantEditState>(defaultTenantEditState(undefined, []));
   const [tenantFilters, setTenantFilters] = useState<TenantListFiltersState>(defaultTenantListFiltersState);
   const [tenantPage, setTenantPage] = useState(0);
   const [domainForm, setDomainForm] = useState("");
@@ -342,6 +368,7 @@ export const App = () => {
   useEffect(() => {
     if (!session) {
       setTenants([]);
+      setPlans([]);
       setSelectedTenantId(null);
       setTenantFilters(defaultTenantListFiltersState());
       setTenantPage(0);
@@ -361,7 +388,7 @@ export const App = () => {
   useEffect(() => {
     if (tenants.length === 0) {
       setSelectedTenantId(null);
-      setTenantEdit(defaultTenantEditState());
+      setTenantEdit(defaultTenantEditState(undefined, plans));
       return;
     }
 
@@ -372,12 +399,23 @@ export const App = () => {
 
       return tenants[0]?.id ?? null;
     });
-  }, [tenants]);
+  }, [tenants, plans]);
 
   useEffect(() => {
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
-    setTenantEdit(defaultTenantEditState(selectedTenant));
-  }, [selectedTenantId, tenants]);
+    setTenantEdit(defaultTenantEditState(selectedTenant, plans));
+  }, [selectedTenantId, tenants, plans]);
+
+  useEffect(() => {
+    if (plans.length === 0) {
+      return;
+    }
+
+    setTenantForm((current) => {
+      const hasSelectedPlan = plans.some((plan) => plan.slug === current.planSlug);
+      return hasSelectedPlan ? current : { ...current, planSlug: getDefaultPlanSlug(plans) };
+    });
+  }, [plans]);
 
   useEffect(() => {
     setTenantPage(0);
@@ -460,8 +498,17 @@ export const App = () => {
     setViewState((current) => ({ ...current, loading: true, error: null }));
 
     try {
-      const items = await withSessionRetry((accessToken) => listTenants(accessToken));
+      const shouldRefreshPlans = plans.length === 0;
+      const [items, nextPlans] = await withSessionRetry(async (accessToken) =>
+        Promise.all([
+          listTenants(accessToken),
+          shouldRefreshPlans ? listPlans(accessToken) : Promise.resolve(plans)
+        ]),
+      );
       setTenants(items);
+      if (shouldRefreshPlans) {
+        setPlans(nextPlans);
+      }
       setViewState((current) => ({
         ...current,
         loading: false,
@@ -473,6 +520,7 @@ export const App = () => {
       if (error instanceof ApiError && error.status === 401) {
         setSession(null);
         setTenants([]);
+        setPlans([]);
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -585,8 +633,10 @@ export const App = () => {
   const handleLogout = () => {
     setSession(null);
     setTenants([]);
+    setPlans([]);
     setLoginState(defaultLoginState);
-    setTenantForm(defaultTenantFormState);
+    setTenantForm(defaultTenantFormState());
+    setTenantEdit(defaultTenantEditState(undefined, []));
     setTenantAgentConfig(defaultTenantAgentConfigState());
     setTenantAccessById({});
     setViewState({
@@ -611,7 +661,7 @@ export const App = () => {
       );
 
       setSelectedTenantId(null);
-      setTenantForm(defaultTenantFormState());
+      setTenantForm(defaultTenantFormState(plans));
       await loadTenants();
       updateNotice("Tenant criado com sucesso.");
     } catch (error) {
@@ -975,8 +1025,10 @@ export const App = () => {
 
   const canSubmitTenant = Boolean(tenantForm.publicId.trim() && tenantForm.name.trim() && session);
   const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? tenants[0] ?? null;
+  const selectedTenantPlan = selectedTenant ? plans.find((plan) => plan.id === selectedTenant.planId) ?? null : null;
   const totalActiveTenants = tenants.filter((tenant) => tenant.status === "active").length;
   const totalSuspendedTenants = tenants.filter((tenant) => tenant.status === "suspended").length;
+  const activePlanCount = plans.filter((plan) => plan.isActive).length;
   const selectedTenantSnippet = selectedTenant?.publicId ? buildWidgetSnippet(selectedTenant.publicId) : null;
   const canSubmitDomain = Boolean(session && selectedTenant && domainForm.trim());
   const safeTenantDomains = Array.isArray(tenantDomains) ? tenantDomains : [];
@@ -1062,6 +1114,7 @@ export const App = () => {
 
         <nav>
           <a href="#overview">Visao geral</a>
+          <a href="#plans">Planos</a>
           <a href="#tenants">Tenants</a>
           <a href="#widget">Widget</a>
           <a href="#config">Configuracao</a>
@@ -1199,6 +1252,10 @@ export const App = () => {
                 <strong>{tenants.length}</strong>
               </article>
               <article className="surface metric-card">
+                <span>Planos ativos</span>
+                <strong>{activePlanCount}</strong>
+              </article>
+              <article className="surface metric-card">
                 <span>Dominios do tenant</span>
                 <strong>{selectedTenantDomainCount}</strong>
               </article>
@@ -1210,6 +1267,62 @@ export const App = () => {
                 <span>API keys do tenant</span>
                 <strong>{selectedTenantApiKeyCount}</strong>
               </article>
+            </section>
+
+            <section className="surface plan-section" id="plans">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Catálogo</p>
+                  <h2>Planos disponíveis</h2>
+                  <p className="section-subtitle">
+                    {plans.length === 0
+                      ? "Nenhum plano foi carregado."
+                      : `${plans.length} plano(s) sincronizado(s) com a API.`}
+                  </p>
+                </div>
+                <button type="button" className="secondary" onClick={() => void loadTenants()} disabled={viewState.loading}>
+                  Recarregar
+                </button>
+              </div>
+
+              <div className="plan-grid">
+                {plans.length === 0 ? (
+                  <div className="empty-state">
+                    <strong>Nenhum plano carregado.</strong>
+                    <p>Verifique a API administrativa ou recarregue a sessão para buscar o catálogo.</p>
+                  </div>
+                ) : (
+                  plans.map((plan) => {
+                    const limits = formatPlanLimits(plan.limits);
+
+                    return (
+                      <article className="surface plan-card" key={plan.id}>
+                        <div className="plan-card-header">
+                          <div>
+                            <p className="eyebrow">{plan.slug}</p>
+                            <h3>{plan.name}</h3>
+                          </div>
+                          <span className={plan.isActive ? "status-pill success" : "status-pill"}>
+                            {plan.isActive ? "Ativo" : "Inativo"}
+                          </span>
+                        </div>
+                        <strong>{formatPlanPrice(plan.priceCents)}</strong>
+                        <dl className="plan-limits">
+                          <div>
+                            <dt>Mensagens/min</dt>
+                            <dd>{limits.messagesPerMinute ?? "Sem limite"}</dd>
+                          </div>
+                          <div>
+                            <dt>Conversas/dia</dt>
+                            <dd>{limits.conversationsPerDay ?? "Sem limite"}</dd>
+                          </div>
+                        </dl>
+                        <small>ID {plan.id}</small>
+                      </article>
+                    );
+                  })
+                )}
+              </div>
             </section>
 
             <section className="two-column">
@@ -1268,12 +1381,13 @@ export const App = () => {
                           planId: event.target.value as TenantPlanFilter
                         }))
                       }
-                    >
-                      <option value="">Todos</option>
-                      <option value="plan-free">Free</option>
-                      <option value="plan-starter">Starter</option>
-                      <option value="plan-growth">Growth</option>
-                      <option value="plan-enterprise">Enterprise</option>
+                      >
+                        <option value="">Todos</option>
+                      {plans.map((plan) => (
+                        <option key={`filter-plan-${plan.id}`} value={plan.id}>
+                          {plan.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <div className="filter-actions">
@@ -1312,7 +1426,7 @@ export const App = () => {
                       <div className="table-row" key={tenant.id}>
                         <span className="mono">{tenant.publicId}</span>
                         <span>{tenant.name}</span>
-                        <span>{getPlanLabel(tenant.planId)}</span>
+                        <span>{getPlanLabel(plans, tenant.planId)}</span>
                         <span>{formatTenantStatus(tenant.status)}</span>
                         <span>
                           <button
@@ -1398,11 +1512,12 @@ export const App = () => {
                           planSlug: event.target.value as CreateTenantPayload["planSlug"]
                         }))
                       }
-                    >
-                      <option value="free">Free</option>
-                      <option value="starter">Starter</option>
-                      <option value="growth">Growth</option>
-                      <option value="enterprise">Enterprise</option>
+                      >
+                      {plans.map((plan) => (
+                        <option key={`create-plan-${plan.slug}`} value={plan.slug}>
+                          {plan.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
 
@@ -1450,7 +1565,7 @@ export const App = () => {
                   </div>
                   <div>
                     <dt>Plano</dt>
-                    <dd>{getPlanLabel(selectedTenant.planId)}</dd>
+                    <dd>{selectedTenantPlan ? `${selectedTenantPlan.name} (${selectedTenantPlan.slug})` : selectedTenant.planId}</dd>
                   </div>
                   <div>
                     <dt>Dominios</dt>
@@ -1505,11 +1620,12 @@ export const App = () => {
                           }))
                         }
                       >
-                        <option value="">Manter plano atual</option>
-                        <option value="free">Free</option>
-                        <option value="starter">Starter</option>
-                        <option value="growth">Growth</option>
-                        <option value="enterprise">Enterprise</option>
+                          <option value="">Manter plano atual</option>
+                        {plans.map((plan) => (
+                          <option key={`edit-plan-${plan.slug}`} value={plan.slug}>
+                            {plan.name}
+                          </option>
+                        ))}
                       </select>
                     </label>
 

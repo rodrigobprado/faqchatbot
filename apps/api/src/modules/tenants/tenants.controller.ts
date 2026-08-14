@@ -16,6 +16,12 @@ export class AdminTenantsController {
     return this.tenantsService.listTenants(request.adminUser!);
   }
 
+  @Get("plans")
+  @ApiOkResponse({ description: "Lists available plans" })
+  listPlans(@Req() request: AdminRequest) {
+    return this.tenantsService.listPlans(request.adminUser!);
+  }
+
   @Post()
   @ApiOkResponse({ description: "Creates a tenant" })
   create(@Req() request: AdminRequest, @Body() body: unknown) {
