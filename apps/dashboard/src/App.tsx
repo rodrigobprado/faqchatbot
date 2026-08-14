@@ -984,6 +984,10 @@ export const App = () => {
   const selectedTenantAccessApiKeys = selectedTenantAccess && Array.isArray(selectedTenantAccess.apiKeys)
     ? selectedTenantAccess.apiKeys
     : [];
+  const selectedTenantDomainCount = safeTenantDomains.length;
+  const selectedTenantUserCount = selectedTenantAccessUsers.length;
+  const selectedTenantRoleCount = selectedTenantAccessRoles.length;
+  const selectedTenantApiKeyCount = selectedTenantAccessApiKeys.length;
 
   const handleCopyWidgetSnippet = async () => {
     if (!selectedTenantSnippet) {
@@ -1133,6 +1137,18 @@ export const App = () => {
               <article className="surface metric-card">
                 <span>Tenants totais</span>
                 <strong>{tenants.length}</strong>
+              </article>
+              <article className="surface metric-card">
+                <span>Dominios do tenant</span>
+                <strong>{selectedTenantDomainCount}</strong>
+              </article>
+              <article className="surface metric-card">
+                <span>Usuarios do tenant</span>
+                <strong>{selectedTenantUserCount}</strong>
+              </article>
+              <article className="surface metric-card">
+                <span>API keys do tenant</span>
+                <strong>{selectedTenantApiKeyCount}</strong>
               </article>
             </section>
 
@@ -1375,6 +1391,18 @@ export const App = () => {
                   <div>
                     <dt>Plano</dt>
                     <dd>{getPlanLabel(selectedTenant.planId)}</dd>
+                  </div>
+                  <div>
+                    <dt>Dominios</dt>
+                    <dd>{selectedTenantDomainCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Usuarios</dt>
+                    <dd>{selectedTenantUserCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Roles</dt>
+                    <dd>{selectedTenantRoleCount}</dd>
                   </div>
                 </dl>
 
@@ -1846,8 +1874,8 @@ export const App = () => {
                               ))}
                             </select>
                             <div className="chip-row">
-                              {userRoles.map((roleSlug) => (
-                                <span className="chip" key={roleSlug}>
+                              {userRoles.map((roleSlug, index) => (
+                                <span className="chip" key={`${user.id}-${roleSlug}-${index}`}>
                                   {roleSlug}
                                 </span>
                               ))}
@@ -1879,8 +1907,8 @@ export const App = () => {
                             <small>{role.description}</small>
                           </div>
                           <div className="chip-grid">
-                            {rolePermissions.map((permission) => (
-                              <span className="chip" key={permission}>
+                            {rolePermissions.map((permission, index) => (
+                              <span className="chip" key={`${role.id}-${permission}-${index}`}>
                                 {permission}
                               </span>
                             ))}
@@ -1893,8 +1921,8 @@ export const App = () => {
                   <div className="list-card permission-card">
                     <strong>Catálogo principal</strong>
                     <div className="chip-grid">
-                      {accessPermissionCatalog.map((permission) => (
-                        <span className="chip" key={permission}>
+                      {accessPermissionCatalog.map((permission, index) => (
+                        <span className="chip" key={`${permission}-${index}`}>
                           {permission}
                         </span>
                       ))}
