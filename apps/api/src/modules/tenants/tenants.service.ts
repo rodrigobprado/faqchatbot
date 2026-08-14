@@ -102,6 +102,36 @@ type TenantApiKeyRecord = Readonly<{
   createdAt?: Date;
 }>;
 
+type VisitorSessionRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  visitorId: string;
+  pageContext: unknown;
+  lastSeenAt?: Date;
+  startedAt?: Date;
+}>;
+
+type ConversationRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  sessionId: string;
+  status: "open" | "closed";
+  startedAt?: Date;
+  endedAt?: Date | null;
+}>;
+
+type MessageRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  conversationId: string;
+  role: "user" | "assistant" | "system";
+  type: string;
+  content: unknown;
+  metadata: Record<string, unknown> | null;
+  providerMessageId: string | null;
+  createdAt: Date;
+}>;
+
 type PlanRecord = Readonly<{
   id: string;
   slug: string;
@@ -180,6 +210,16 @@ export type TenantsServiceDependencies = Readonly<{
     findById(id: string): Promise<TenantApiKeyRecord | null>;
     listByTenantId(tenantId: string): Promise<TenantApiKeyRecord[]>;
     revoke(id: string): Promise<TenantApiKeyRecord | null>;
+  };
+  visitorSessions: {
+    findById(id: string): Promise<VisitorSessionRecord | null>;
+  };
+  conversations: {
+    findById(id: string): Promise<ConversationRecord | null>;
+    listByTenantId(tenantId: string): Promise<ConversationRecord[]>;
+  };
+  messages: {
+    listByConversationId(conversationId: string): Promise<MessageRecord[]>;
   };
   plans: {
     findBySlug(slug: string): Promise<PlanRecord | null>;
@@ -302,6 +342,40 @@ export class TenantsService {
   async listPlans(actor: AdminAccessTokenPayload) {
     this.assertPlatformAdmin(actor);
     return this.dependencies.plans.list();
+  }
+
+  async listConversations(actor: AdminAccessTokenPayload, tenantId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const conversations = await this.dependencies.conversations.listByTenantId(tenantId);
+
+    return Promise.all(
+      conversations.map(async (conversation) => {
+        const [session, messages] = await Promise.all([
+          this.dependencies.visitorSessions.findById(conversation.sessionId),
+          this.dependencies.messages.listByConversationId(conversation.id)
+        ]);
+
+        return this.serializeConversationSummary(conversation, session, messages);
+      }),
+    );
+  }
+
+  async getConversation(actor: AdminAccessTokenPayload, tenantId: string, conversationId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const conversation = await this.dependencies.conversations.findById(conversationId);
+    if (!conversation || conversation.tenantId !== tenantId) {
+      throw new NotFoundException(`Conversation ${conversationId} was not found`);
+    }
+
+    const [session, messages] = await Promise.all([
+      this.dependencies.visitorSessions.findById(conversation.sessionId),
+      this.dependencies.messages.listByConversationId(conversation.id)
+    ]);
+
+    return {
+      ...this.serializeConversationSummary(conversation, session, messages),
+      messages: messages.map((message) => this.serializeMessage(message))
+    };
   }
 
   async createTenant(actor: AdminAccessTokenPayload, rawInput: unknown) {
@@ -588,6 +662,46 @@ export class TenantsService {
     return {
       messagesPerMinute: this.readPositiveInteger(record.messagesPerMinute, 30),
       conversationsPerDay: this.readPositiveInteger(record.conversationsPerDay, 200)
+    };
+  }
+
+  private serializeConversationSummary(
+    conversation: ConversationRecord,
+    session: VisitorSessionRecord | null,
+    messages: MessageRecord[],
+  ) {
+    const pageContext = typeof session?.pageContext === "object" && session.pageContext !== null
+      ? (session.pageContext as Record<string, unknown>)
+      : {};
+
+    return {
+      id: conversation.id,
+      tenantId: conversation.tenantId,
+      sessionId: conversation.sessionId,
+      status: conversation.status,
+      startedAt: conversation.startedAt?.toISOString?.() ?? new Date().toISOString(),
+      endedAt: conversation.endedAt?.toISOString?.() ?? null,
+      visitorId: session?.visitorId ?? null,
+      lastSeenAt: session?.lastSeenAt?.toISOString?.() ?? null,
+      currentPage: typeof pageContext.currentPage === "string" ? pageContext.currentPage : null,
+      pageTitle: typeof pageContext.title === "string" ? pageContext.title : null,
+      pageUrl: typeof pageContext.url === "string" ? pageContext.url : null,
+      messageCount: messages.length,
+      lastMessageAt: messages.at(-1)?.createdAt?.toISOString?.() ?? null
+    };
+  }
+
+  private serializeMessage(message: MessageRecord) {
+    return {
+      id: message.id,
+      tenantId: message.tenantId,
+      conversationId: message.conversationId,
+      role: message.role,
+      type: message.type,
+      content: message.content,
+      metadata: message.metadata ?? {},
+      providerMessageId: message.providerMessageId,
+      createdAt: message.createdAt.toISOString()
     };
   }
 

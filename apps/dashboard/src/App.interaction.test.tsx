@@ -249,6 +249,7 @@ const queueTenantDetails = (
     users?: unknown[];
     roles?: unknown[];
     apiKeys?: unknown[];
+    conversations?: unknown[];
   } = {},
 ) => {
   mockFetch
@@ -257,7 +258,8 @@ const queueTenantDetails = (
     .mockResolvedValueOnce(jsonResponse(200, { data: options.agentConfig ?? agentConfig, meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.users ?? tenantUsers, meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.roles ?? tenantRoles, meta: {} }))
-    .mockResolvedValueOnce(jsonResponse(200, { data: options.apiKeys ?? tenantApiKeys, meta: {} }));
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.apiKeys ?? tenantApiKeys, meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.conversations ?? [], meta: {} }));
 };
 
 const updatedWidgetConfig = {
@@ -807,7 +809,8 @@ describe("App interactions", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: createdDomain, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
     queueTenantDetails(fetchMock, {
       domains: [createdDomain],
       config: widgetConfig,
@@ -820,7 +823,8 @@ describe("App interactions", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
     queueTenantDetails(fetchMock, {
       domains: [createdDomain],
       config: updatedWidgetConfig,
@@ -833,7 +837,8 @@ describe("App interactions", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedAgentConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: updatedAgentConfig, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: updatedAgentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
     queueTenantDetails(fetchMock, {
       domains: [createdDomain],
       config: updatedWidgetConfig,

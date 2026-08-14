@@ -113,6 +113,38 @@ export type TenantApiKeyRecord = Readonly<{
   createdAt: string;
 }>;
 
+export type TenantConversationMessageRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  conversationId: string;
+  role: "user" | "assistant" | "system";
+  type: string;
+  content: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  providerMessageId: string | null;
+  createdAt: string;
+}>;
+
+export type TenantConversationRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  sessionId: string;
+  status: "open" | "closed";
+  startedAt: string;
+  endedAt: string | null;
+  visitorId: string | null;
+  lastSeenAt: string | null;
+  currentPage: string | null;
+  pageTitle: string | null;
+  pageUrl: string | null;
+  messageCount: number;
+  lastMessageAt: string | null;
+}>;
+
+export type TenantConversationDetailRecord = TenantConversationRecord & Readonly<{
+  messages: TenantConversationMessageRecord[];
+}>;
+
 export type InviteTenantUserPayload = Readonly<{
   email: string;
   roleSlug: string;
@@ -235,6 +267,23 @@ export const listTenants = (accessToken: string): Promise<TenantRecord[]> =>
 
 export const listPlans = (accessToken: string): Promise<PlanRecord[]> =>
   requestJson<PlanRecord[]>("/v1/admin/tenants/plans", {}, accessToken);
+
+export const listTenantConversations = (
+  accessToken: string,
+  tenantId: string,
+): Promise<TenantConversationRecord[]> =>
+  requestJson<TenantConversationRecord[]>(`/v1/admin/tenants/${tenantId}/conversations`, {}, accessToken);
+
+export const getTenantConversation = (
+  accessToken: string,
+  tenantId: string,
+  conversationId: string,
+): Promise<TenantConversationDetailRecord> =>
+  requestJson<TenantConversationDetailRecord>(
+    `/v1/admin/tenants/${tenantId}/conversations/${conversationId}`,
+    {},
+    accessToken,
+  );
 
 export const createTenant = (
   accessToken: string,

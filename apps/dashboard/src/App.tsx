@@ -9,9 +9,11 @@ import {
   getPlatformHealth,
   getTenantAgentConfig,
   getTenantConfig,
+  getTenantConversation,
   inviteTenantUser,
   listPlans,
   listTenants,
+  listTenantConversations,
   listTenantApiKeys,
   listTenantRoles,
   listTenantUsers,
@@ -31,6 +33,8 @@ import {
   type TenantConfigPayload,
   type TenantConfigRecord,
   type TenantDomainRecord,
+  type TenantConversationDetailRecord,
+  type TenantConversationRecord,
   type PlanRecord,
   type TenantRoleRecord,
   type PlatformHealthRecord,
@@ -85,6 +89,12 @@ type TenantAccessState = Readonly<{
   roles: TenantRoleRecord[];
   apiKeys: TenantApiKeyRecord[];
   pendingSecret: string | null;
+}>;
+
+type TenantConversationState = Readonly<{
+  conversations: TenantConversationRecord[];
+  selectedConversationId: string | null;
+  selectedConversation: TenantConversationDetailRecord | null;
 }>;
 
 type TenantStatusFilter = "" | TenantRecord["status"];
@@ -182,6 +192,12 @@ const emptyTenantAccessState = (): TenantAccessState => ({
   roles: [],
   apiKeys: [],
   pendingSecret: null
+});
+
+const emptyTenantConversationState = (): TenantConversationState => ({
+  conversations: [],
+  selectedConversationId: null,
+  selectedConversation: null
 });
 
 const parseJsonObject = (input: string, label: string): Record<string, unknown> => {
@@ -309,6 +325,7 @@ export const App = () => {
     defaultTenantAgentConfigState(),
   );
   const [tenantAccessById, setTenantAccessById] = useState<Record<string, TenantAccessState>>({});
+  const [tenantConversationsById, setTenantConversationsById] = useState<Record<string, TenantConversationState>>({});
   const [userInviteForm, setUserInviteForm] = useState({ email: "", roleSlug: "viewer" });
   const [keyForm, setKeyForm] = useState({ name: "" });
   const [platformHealth, setPlatformHealth] = useState<PlatformHealthRecord | null>(null);
@@ -377,6 +394,7 @@ export const App = () => {
       setWidgetConfig(defaultTenantWidgetConfigState());
       setTenantAgentConfig(defaultTenantAgentConfigState());
       setTenantAccessById({});
+      setTenantConversationsById({});
       setUserInviteForm({ email: "", roleSlug: "viewer" });
       setKeyForm({ name: "" });
       return;
@@ -456,6 +474,43 @@ export const App = () => {
     });
   }, [selectedTenantId, tenants, session]);
 
+  useEffect(() => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setTenantConversationsById((current) => {
+      if (current[selectedTenant.id]) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [selectedTenant.id]: emptyTenantConversationState()
+      };
+    });
+  }, [selectedTenantId, tenants, session]);
+
+  useEffect(() => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    const currentState = tenantConversationsById[selectedTenant.id];
+    if (!currentState) {
+      return;
+    }
+
+    const selectedConversationId = currentState.selectedConversationId ?? currentState.conversations[0]?.id ?? null;
+    if (!selectedConversationId || currentState.selectedConversation?.id === selectedConversationId) {
+      return;
+    }
+
+    void loadTenantConversationDetails(selectedTenant.id, selectedConversationId);
+  }, [selectedTenantId, tenants, session, tenantConversationsById]);
+
   const updateNotice = (notice: string | null) => {
     setViewState((current) => ({
       ...current,
@@ -521,6 +576,7 @@ export const App = () => {
         setSession(null);
         setTenants([]);
         setPlans([]);
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -537,7 +593,7 @@ export const App = () => {
     setViewState((current) => ({ ...current, loading: true, error: null }));
 
     try {
-      const [domains, config, agentConfig, users, roles, apiKeys] = await withSessionRetry(async (accessToken) => {
+      const [domains, config, agentConfig, users, roles, apiKeys, conversations] = await withSessionRetry(async (accessToken) => {
         const [nextDomains, nextConfig, nextAgentConfig] = await Promise.all([
           listTenantDomains(accessToken, tenantId),
           getTenantConfig(accessToken, tenantId),
@@ -550,7 +606,9 @@ export const App = () => {
           listTenantApiKeys(accessToken, tenantId)
         ]);
 
-        return [nextDomains, nextConfig, nextAgentConfig, nextUsers, nextRoles, nextApiKeys] as const;
+        const nextConversations = await listTenantConversations(accessToken, tenantId);
+
+        return [nextDomains, nextConfig, nextAgentConfig, nextUsers, nextRoles, nextApiKeys, nextConversations] as const;
       });
 
       setTenantDomains(domains);
@@ -566,6 +624,22 @@ export const App = () => {
           pendingSecret: null
         }
       }));
+      setTenantConversationsById((current) => {
+        const previous = current[tenantId] ?? emptyTenantConversationState();
+        const nextConversations = Array.isArray(conversations) ? conversations : [];
+        const selectedConversationId = nextConversations.some((conversation) => conversation.id === previous.selectedConversationId)
+          ? previous.selectedConversationId
+          : nextConversations[0]?.id ?? null;
+
+        return {
+          ...current,
+          [tenantId]: {
+            conversations: nextConversations,
+            selectedConversationId,
+            selectedConversation: previous.selectedConversation ?? null
+          }
+        };
+      });
       setViewState((current) => ({
         ...current,
         loading: false
@@ -579,12 +653,49 @@ export const App = () => {
         setTenantDomains([]);
         setTenantAgentConfig(defaultTenantAgentConfigState());
         setTenantAccessById({});
+        setTenantConversationsById({});
         setSelectedTenantId(null);
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
 
       updateError(error instanceof Error ? error.message : "Falha ao carregar detalhes do tenant");
+    }
+  };
+
+  const loadTenantConversationDetails = async (tenantId: string, conversationId: string) => {
+    if (!session) {
+      return;
+    }
+
+    setViewState((current) => ({ ...current, loading: true, error: null }));
+
+    try {
+      const conversation = await withSessionRetry((accessToken) =>
+        getTenantConversation(accessToken, tenantId, conversationId),
+      );
+
+      setTenantConversationsById((current) => ({
+        ...current,
+        [tenantId]: {
+          ...(current[tenantId] ?? emptyTenantConversationState()),
+          selectedConversationId: conversation.id,
+          selectedConversation: conversation
+        }
+      }));
+      setViewState((current) => ({ ...current, loading: false }));
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        setTenants([]);
+        setTenantConversationsById({});
+        updateError("Sessao expirada. Entre novamente.");
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao carregar conversa");
     }
   };
 
@@ -625,6 +736,7 @@ export const App = () => {
     } catch (error) {
       setSession(null);
       setTenants([]);
+      setTenantConversationsById({});
       setViewState((current) => ({ ...current, loading: false }));
       updateError(error instanceof Error ? error.message : "Falha ao renovar sessao");
     }
@@ -639,6 +751,7 @@ export const App = () => {
     setTenantEdit(defaultTenantEditState(undefined, []));
     setTenantAgentConfig(defaultTenantAgentConfigState());
     setTenantAccessById({});
+    setTenantConversationsById({});
     setViewState({
       loading: false,
       error: null,
@@ -670,6 +783,7 @@ export const App = () => {
       if (error instanceof ApiError && error.status === 401) {
         setSession(null);
         setTenants([]);
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -706,6 +820,7 @@ export const App = () => {
         setTenants([]);
         setTenantDomains([]);
         setSelectedTenantId(null);
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -744,6 +859,7 @@ export const App = () => {
         setTenants([]);
         setTenantDomains([]);
         setSelectedTenantId(null);
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -793,6 +909,7 @@ export const App = () => {
         setTenantDomains([]);
         setTenantAgentConfig(defaultTenantAgentConfigState());
         setSelectedTenantId(null);
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -834,6 +951,7 @@ export const App = () => {
         setSession(null);
         setTenants([]);
         setTenantAccessById({});
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -865,6 +983,7 @@ export const App = () => {
         setSession(null);
         setTenants([]);
         setTenantAccessById({});
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -910,6 +1029,7 @@ export const App = () => {
         setSession(null);
         setTenants([]);
         setTenantAccessById({});
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -937,6 +1057,7 @@ export const App = () => {
         setSession(null);
         setTenants([]);
         setTenantAccessById({});
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -978,6 +1099,7 @@ export const App = () => {
         setTenants([]);
         setSelectedTenantId(null);
         setTenantAgentConfig(defaultTenantAgentConfigState());
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -1015,6 +1137,7 @@ export const App = () => {
         setSession(null);
         setTenants([]);
         setSelectedTenantId(null);
+        setTenantConversationsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -1069,10 +1192,35 @@ export const App = () => {
   const selectedTenantAccessApiKeys = selectedTenantAccess && Array.isArray(selectedTenantAccess.apiKeys)
     ? selectedTenantAccess.apiKeys
     : [];
+  const selectedTenantConversations = selectedTenant ? tenantConversationsById[selectedTenant.id] ?? emptyTenantConversationState() : null;
+  const selectedTenantConversationList = selectedTenantConversations?.conversations ?? [];
+  const selectedConversationDetail = selectedTenantConversations?.selectedConversation ?? null;
+  const selectedConversationId = selectedTenantConversations?.selectedConversationId ?? null;
+  const selectedConversationMessages = selectedConversationDetail && Array.isArray(selectedConversationDetail.messages)
+    ? selectedConversationDetail.messages
+    : [];
   const selectedTenantDomainCount = safeTenantDomains.length;
   const selectedTenantUserCount = selectedTenantAccessUsers.length;
   const selectedTenantRoleCount = selectedTenantAccessRoles.length;
   const selectedTenantApiKeyCount = selectedTenantAccessApiKeys.length;
+
+  const handleSelectConversation = (conversationId: string) => {
+    if (!selectedTenant) {
+      return;
+    }
+
+    setTenantConversationsById((current) => {
+      const currentState = current[selectedTenant.id] ?? emptyTenantConversationState();
+      return {
+        ...current,
+        [selectedTenant.id]: {
+          ...currentState,
+          selectedConversationId: conversationId,
+          selectedConversation: currentState.selectedConversation?.id === conversationId ? currentState.selectedConversation : null
+        }
+      };
+    });
+  };
 
   const handleCopyWidgetSnippet = async () => {
     if (!selectedTenantSnippet) {
@@ -1977,6 +2125,117 @@ export const App = () => {
                     {viewState.loading ? "Salvando..." : "Salvar agente"}
                   </button>
                 </form>
+              </section>
+            ) : null}
+
+            {selectedTenant ? (
+              <section className="surface" id="conversations">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Atendimento</p>
+                    <h2>Conversas</h2>
+                    <p className="section-subtitle">
+                      {selectedTenantConversationList.length === 0
+                        ? "Nenhuma conversa encontrada para este tenant."
+                        : `${selectedTenantConversationList.length} conversa(s) carregada(s).`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="two-column compact">
+                  <div className="list-card">
+                    {selectedTenantConversationList.length === 0 ? (
+                      <p>Sem histórico disponível.</p>
+                    ) : (
+                      selectedTenantConversationList.map((conversation) => (
+                        <button
+                          key={conversation.id}
+                          type="button"
+                          className={`list-row ${conversation.id === selectedConversationId ? "is-selected" : ""}`}
+                          onClick={() => handleSelectConversation(conversation.id)}
+                        >
+                          <div>
+                            <strong>{conversation.visitorId ?? conversation.sessionId}</strong>
+                            <p className="mono">{conversation.currentPage ?? conversation.pageUrl ?? "Pagina nao informada"}</p>
+                            <small>
+                              {conversation.status === "open" ? "Aberta" : "Fechada"} - {conversation.messageCount} mensagem(s)
+                            </small>
+                          </div>
+                          <div>
+                            <small>
+                              {conversation.lastMessageAt
+                                ? new Date(conversation.lastMessageAt).toLocaleString("pt-BR")
+                                : new Date(conversation.startedAt).toLocaleString("pt-BR")}
+                            </small>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="surface">
+                    {selectedConversationDetail ? (
+                      <div className="stack">
+                        <div className="section-heading">
+                          <div>
+                            <p className="eyebrow">Detalhe</p>
+                            <h3>{selectedConversationDetail.visitorId ?? selectedConversationDetail.sessionId}</h3>
+                            <p className="section-subtitle">
+                              {selectedConversationDetail.currentPage ?? selectedConversationDetail.pageUrl ?? "Pagina nao informada"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <dl className="session-grid">
+                          <div>
+                            <dt>Status</dt>
+                            <dd>{selectedConversationDetail.status === "open" ? "Aberta" : "Fechada"}</dd>
+                          </div>
+                          <div>
+                            <dt>Mensagens</dt>
+                            <dd>{selectedConversationDetail.messageCount}</dd>
+                          </div>
+                          <div>
+                            <dt>Inicio</dt>
+                            <dd>{new Date(selectedConversationDetail.startedAt).toLocaleString("pt-BR")}</dd>
+                          </div>
+                          <div>
+                            <dt>Ultima atividade</dt>
+                            <dd>{selectedConversationDetail.lastMessageAt ? new Date(selectedConversationDetail.lastMessageAt).toLocaleString("pt-BR") : "-"}</dd>
+                          </div>
+                        </dl>
+
+                        <div className="list-card">
+                          {selectedConversationMessages.length === 0 ? (
+                            <p>Sem mensagens carregadas.</p>
+                          ) : (
+                            selectedConversationMessages.map((message) => (
+                              <div className="message-row" key={message.id}>
+                                <div>
+                                  <strong>{message.role}</strong>
+                                  <p className="mono">{message.type}</p>
+                                </div>
+                                <div>
+                                  <p>
+                                    {typeof message.content === "string"
+                                      ? message.content
+                                      : JSON.stringify(message.content)}
+                                  </p>
+                                  <small>{new Date(message.createdAt).toLocaleString("pt-BR")}</small>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        <strong>Selecione uma conversa.</strong>
+                        <p>Escolha um item da lista ao lado para abrir o histórico e os metadados.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </section>
             ) : null}
 

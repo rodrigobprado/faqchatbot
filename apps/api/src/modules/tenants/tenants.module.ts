@@ -2,7 +2,9 @@ import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../../db/database.module.js";
 import { DatabaseService } from "../../db/database.service.js";
 import { createApiKeysRepository } from "../../db/repositories/api-keys.repository.js";
+import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
 import { createPlansRepository } from "../../db/repositories/plans.repository.js";
+import { createMessagesRepository } from "../../db/repositories/messages.repository.js";
 import { createTenantAgentConfigsRepository } from "../../db/repositories/tenant-agent-configs.repository.js";
 import { createTenantConfigsRepository } from "../../db/repositories/tenant-configs.repository.js";
 import { createTenantDomainsRepository } from "../../db/repositories/tenant-domains.repository.js";
@@ -10,6 +12,7 @@ import { createTenantsRepository } from "../../db/repositories/tenants.repositor
 import { createRolesRepository } from "../../db/repositories/roles.repository.js";
 import { createUserRolesRepository } from "../../db/repositories/user-roles.repository.js";
 import { createUsersRepository } from "../../db/repositories/users.repository.js";
+import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
 import { AdminAuthGuard } from "../auth/admin-auth.guard.js";
 import { AdminTenantsController, PublicTenantsController } from "./tenants.controller.js";
 import { TenantsService } from "./tenants.service.js";
@@ -34,6 +37,9 @@ import { TenantsService } from "./tenants.service.js";
           userRoles: createUserRolesRepository(db),
           roles: createRolesRepository(db),
           apiKeys: createApiKeysRepository(db),
+          visitorSessions: createVisitorSessionsRepository(db),
+          conversations: createConversationsRepository(db),
+          messages: createMessagesRepository(db),
           plans: createPlansRepository(db)
         });
       }

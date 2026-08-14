@@ -66,6 +66,16 @@ const createService = () => {
       listByTenantId: vi.fn(),
       revoke: vi.fn()
     },
+    visitorSessions: {
+      findById: vi.fn()
+    },
+    conversations: {
+      findById: vi.fn(),
+      listByTenantId: vi.fn()
+    },
+    messages: {
+      listByConversationId: vi.fn()
+    },
     plans: {
       findBySlug: vi.fn(),
       findById: vi.fn(),
@@ -138,6 +148,102 @@ describe("TenantsService", () => {
 
     await expect(service.listTenants(platformAdmin())).resolves.toEqual(tenants);
     expect(dependencies.tenants.list).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists conversations with visitor context for tenant admins", async () => {
+    const { service, dependencies } = createService();
+    const actor = tenantAdmin("tenant-a");
+    const conversationId = randomUUID();
+    const sessionId = randomUUID();
+    const startedAt = new Date("2026-08-14T12:00:00.000Z");
+    const lastSeenAt = new Date("2026-08-14T12:05:00.000Z");
+
+    dependencies.conversations.listByTenantId.mockResolvedValue([
+      {
+        id: conversationId,
+        tenantId: "tenant-a",
+        sessionId,
+        status: "open",
+        startedAt,
+        endedAt: null
+      }
+    ]);
+    dependencies.visitorSessions.findById.mockResolvedValue({
+      id: sessionId,
+      tenantId: "tenant-a",
+      visitorId: "visitor-1",
+      pageContext: {
+        currentPage: "/pricing",
+        title: "Pricing",
+        url: "https://example.com/pricing"
+      },
+      lastSeenAt
+    });
+    dependencies.messages.listByConversationId.mockResolvedValue([
+      {
+        id: randomUUID(),
+        tenantId: "tenant-a",
+        conversationId,
+        role: "user",
+        type: "text",
+        content: { type: "text", text: "Oi" },
+        metadata: null,
+        providerMessageId: null,
+        createdAt: new Date("2026-08-14T12:01:00.000Z")
+      },
+      {
+        id: randomUUID(),
+        tenantId: "tenant-a",
+        conversationId,
+        role: "assistant",
+        type: "text",
+        content: { type: "text", text: "Olá" },
+        metadata: null,
+        providerMessageId: null,
+        createdAt: new Date("2026-08-14T12:02:00.000Z")
+      }
+    ]);
+
+    await expect(service.listConversations(actor, "tenant-a")).resolves.toEqual([
+      expect.objectContaining({
+        id: conversationId,
+        sessionId,
+        visitorId: "visitor-1",
+        currentPage: "/pricing",
+        messageCount: 2,
+        lastMessageAt: "2026-08-14T12:02:00.000Z"
+      })
+    ]);
+  });
+
+  it("lists conversations without visitor session data when the session is missing", async () => {
+    const { service, dependencies } = createService();
+    const actor = tenantAdmin("tenant-a");
+    const conversationId = randomUUID();
+    const sessionId = randomUUID();
+
+    dependencies.conversations.listByTenantId.mockResolvedValue([
+      {
+        id: conversationId,
+        tenantId: "tenant-a",
+        sessionId,
+        status: "closed",
+        startedAt: new Date("2026-08-14T12:00:00.000Z"),
+        endedAt: new Date("2026-08-14T12:10:00.000Z")
+      }
+    ]);
+    dependencies.visitorSessions.findById.mockResolvedValue(null);
+    dependencies.messages.listByConversationId.mockResolvedValue([]);
+
+    await expect(service.listConversations(actor, "tenant-a")).resolves.toEqual([
+      expect.objectContaining({
+        id: conversationId,
+        visitorId: null,
+        currentPage: null,
+        pageTitle: null,
+        pageUrl: null
+      })
+    ]);
   });
 
   it("lists available plans for admins", async () => {
@@ -270,6 +376,59 @@ describe("TenantsService", () => {
     expect(config.limits.messagesPerMinute).toBe(50);
   });
 
+  it("returns conversation details with messages", async () => {
+    const { service, dependencies } = createService();
+    const actor = tenantAdmin("tenant-a");
+    const conversationId = randomUUID();
+    const sessionId = randomUUID();
+
+    dependencies.conversations.findById.mockResolvedValue({
+      id: conversationId,
+      tenantId: "tenant-a",
+      sessionId,
+      status: "open",
+      startedAt: new Date("2026-08-14T12:00:00.000Z"),
+      endedAt: null
+    });
+    dependencies.visitorSessions.findById.mockResolvedValue({
+      id: sessionId,
+      tenantId: "tenant-a",
+      visitorId: "visitor-1",
+      pageContext: {
+        currentPage: "/pricing",
+        title: "Pricing",
+        url: "https://example.com/pricing"
+      },
+      lastSeenAt: new Date("2026-08-14T12:05:00.000Z")
+    });
+    dependencies.messages.listByConversationId.mockResolvedValue([
+      {
+        id: randomUUID(),
+        tenantId: "tenant-a",
+        conversationId,
+        role: "user",
+        type: "text",
+        content: { type: "text", text: "Oi" },
+        metadata: null,
+        providerMessageId: null,
+        createdAt: new Date("2026-08-14T12:01:00.000Z")
+      }
+    ]);
+
+    await expect(service.getConversation(actor, "tenant-a", conversationId)).resolves.toEqual(
+      expect.objectContaining({
+        id: conversationId,
+        visitorId: "visitor-1",
+        messages: [
+          expect.objectContaining({
+            id: expect.any(String),
+            createdAt: "2026-08-14T12:01:00.000Z"
+          })
+        ]
+      }),
+    );
+  });
+
   it("falls back to defaults when public config data is incomplete", async () => {
     const { service, dependencies } = createService();
     const tenantId = "11111111-1111-4111-8111-111111111111";
@@ -350,6 +509,12 @@ describe("TenantsService", () => {
     );
     await expect(service.upsertTenantAgentConfig(actor, "tenant-a", { provider: "invalid" })).rejects.toThrow(
       "Invalid tenant agent config payload",
+    );
+    await expect(service.updateTenant(actor, "tenant-a", { planSlug: "starter", status: "invalid" as never })).rejects.toThrow(
+      "Invalid tenant payload",
+    );
+    await expect(service.inviteUser(actor, "tenant-a", { email: "not-an-email", roleSlug: "viewer" })).rejects.toThrow(
+      "Invalid user payload",
     );
 
     dependencies.tenants.findById.mockResolvedValueOnce({
@@ -538,6 +703,32 @@ describe("TenantsService", () => {
         id: apiKeyId,
         revokedAt: "2026-08-14T12:10:00.000Z"
       }),
+    );
+  });
+
+  it("rejects api key revocations when the key is missing or cannot be revoked", async () => {
+    const { service, dependencies } = createService();
+    const actor = tenantAdmin("tenant-a");
+    const apiKeyId = randomUUID();
+
+    dependencies.apiKeys.findById.mockResolvedValueOnce(null);
+    await expect(service.revokeApiKey(actor, "tenant-a", apiKeyId)).rejects.toThrow(
+      `Api key ${apiKeyId} was not found`,
+    );
+
+    dependencies.apiKeys.findById.mockResolvedValueOnce({
+      id: apiKeyId,
+      tenantId: "tenant-a",
+      name: "Dashboard",
+      hashedKey: "hash",
+      prefix: "fqc_dash",
+      lastUsedAt: null,
+      revokedAt: null,
+      createdAt: new Date()
+    });
+    dependencies.apiKeys.revoke.mockResolvedValueOnce(null);
+    await expect(service.revokeApiKey(actor, "tenant-a", apiKeyId)).rejects.toThrow(
+      `Api key ${apiKeyId} was not found`,
     );
   });
 

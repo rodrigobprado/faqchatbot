@@ -42,5 +42,11 @@ export const createConversationsRepository = (db: Database) => ({
       .limit(1);
 
     return conversation ?? null;
-  }
+  },
+  listByTenantId: async (tenantId: string) =>
+    db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.tenantId, tenantId))
+      .orderBy(desc(conversations.startedAt))
 });

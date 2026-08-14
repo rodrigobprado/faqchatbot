@@ -22,6 +22,22 @@ export class AdminTenantsController {
     return this.tenantsService.listPlans(request.adminUser!);
   }
 
+  @Get(":tenantId/conversations")
+  @ApiOkResponse({ description: "Lists tenant conversations" })
+  listConversations(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.listConversations(request.adminUser!, tenantId);
+  }
+
+  @Get(":tenantId/conversations/:conversationId")
+  @ApiOkResponse({ description: "Gets a tenant conversation with messages" })
+  getConversation(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Param("conversationId") conversationId: string,
+  ) {
+    return this.tenantsService.getConversation(request.adminUser!, tenantId, conversationId);
+  }
+
   @Post()
   @ApiOkResponse({ description: "Creates a tenant" })
   create(@Req() request: AdminRequest, @Body() body: unknown) {

@@ -8,9 +8,11 @@ import {
   getPlatformHealth,
   getTenantAgentConfig,
   getTenantConfig,
+  getTenantConversation,
   inviteTenantUser,
   listPlans,
   listTenants,
+  listTenantConversations,
   listTenantApiKeys,
   listTenantRoles,
   listTenantUsers,
@@ -92,6 +94,39 @@ const role = {
   permissions: ["Visualizar conversas"]
 };
 
+const conversation = {
+  id: "conversation-1",
+  tenantId: "tenant-1",
+  sessionId: "session-1",
+  status: "open" as const,
+  startedAt: "2026-08-14T12:00:00.000Z",
+  endedAt: null,
+  visitorId: "visitor-1",
+  lastSeenAt: "2026-08-14T12:05:00.000Z",
+  currentPage: "/pricing",
+  pageTitle: "Pricing",
+  pageUrl: "https://example.com/pricing",
+  messageCount: 2,
+  lastMessageAt: "2026-08-14T12:02:00.000Z"
+};
+
+const conversationDetail = {
+  ...conversation,
+  messages: [
+    {
+      id: "message-1",
+      tenantId: "tenant-1",
+      conversationId: "conversation-1",
+      role: "user" as const,
+      type: "text",
+      content: { type: "text", text: "Oi" },
+      metadata: {},
+      providerMessageId: null,
+      createdAt: "2026-08-14T12:01:00.000Z"
+    }
+  ]
+};
+
 const plan = {
   id: "plan-1",
   slug: "starter",
@@ -165,6 +200,8 @@ describe("API helpers", () => {
       .mockResolvedValueOnce(jsonResponse(200, user))
       .mockResolvedValueOnce(jsonResponse(200, [role]))
       .mockResolvedValueOnce(jsonResponse(200, [plan]))
+      .mockResolvedValueOnce(jsonResponse(200, [conversation]))
+      .mockResolvedValueOnce(jsonResponse(200, conversationDetail))
       .mockResolvedValueOnce(jsonResponse(200, [apiKey]))
       .mockResolvedValueOnce(jsonResponse(200, createdApiKey))
       .mockResolvedValueOnce(jsonResponse(200, apiKey));
@@ -230,6 +267,10 @@ describe("API helpers", () => {
     ).resolves.toEqual(user);
     await expect(listTenantRoles("access-token-1", "tenant-1")).resolves.toEqual([role]);
     await expect(listPlans("access-token-1")).resolves.toEqual([plan]);
+    await expect(listTenantConversations("access-token-1", "tenant-1")).resolves.toEqual([conversation]);
+    await expect(getTenantConversation("access-token-1", "tenant-1", "conversation-1")).resolves.toEqual(
+      conversationDetail,
+    );
     await expect(listTenantApiKeys("access-token-1", "tenant-1")).resolves.toEqual([apiKey]);
     await expect(
       createTenantApiKey("access-token-1", "tenant-1", {
