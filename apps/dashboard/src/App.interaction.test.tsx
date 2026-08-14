@@ -1,6 +1,6 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi, type MockedFunction } from "vitest";
 import { App } from "./App.js";
 
 type MockResponseBody = Record<string, unknown>;
@@ -241,7 +241,7 @@ const revokedTenantApiKeys = [
 ];
 
 const queueTenantDetails = (
-  mockFetch: any,
+  mockFetch: MockedFunction<typeof fetch>,
   options: {
     domains?: unknown[];
     config?: unknown;
