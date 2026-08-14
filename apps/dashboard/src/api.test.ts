@@ -4,12 +4,14 @@ import {
   deleteTenant,
   createTenant,
   createTenantDomain,
+  getTenantAgentConfig,
   getTenantConfig,
   listTenants,
   listTenantDomains,
   loginAdmin,
   refreshAdmin,
   upsertTenantConfig,
+  upsertTenantAgentConfig,
   updateTenant
 } from "./api.js";
 
@@ -51,6 +53,19 @@ const config = {
   placeholder: "Escreva aqui"
 };
 
+const agentConfig = {
+  id: "agent-config-1",
+  tenantId: "tenant-1",
+  provider: "openai_responses" as const,
+  model: "gpt-4.1-mini",
+  webhookEndpointId: "11111111-1111-4111-8111-111111111111",
+  encryptedCredentialsRef: "vault://tenant-1/agent",
+  routingRules: { fallback: "n8n" },
+  timeoutMs: 20000,
+  retryPolicy: { attempts: 2 },
+  isActive: true
+};
+
 const jsonResponse = (status: number, data: unknown) =>
   new Response(JSON.stringify({ data, meta: { correlationId: "corr-1" } }), {
     status,
@@ -87,7 +102,9 @@ describe("API helpers", () => {
       .mockResolvedValueOnce(jsonResponse(200, [domain]))
       .mockResolvedValueOnce(jsonResponse(200, domain))
       .mockResolvedValueOnce(jsonResponse(200, config))
-      .mockResolvedValueOnce(jsonResponse(200, config));
+      .mockResolvedValueOnce(jsonResponse(200, config))
+      .mockResolvedValueOnce(jsonResponse(200, agentConfig))
+      .mockResolvedValueOnce(jsonResponse(200, agentConfig));
 
     await expect(loginAdmin({ email: "admin@acme.test", password: "senha-super-secreta" })).resolves.toEqual(
       session,
@@ -123,6 +140,19 @@ describe("API helpers", () => {
         placeholder: "Escreva aqui"
       }),
     ).resolves.toEqual(config);
+    await expect(getTenantAgentConfig("access-token-1", "tenant-1")).resolves.toEqual(agentConfig);
+    await expect(
+      upsertTenantAgentConfig("access-token-1", "tenant-1", {
+        provider: "openai_responses",
+        model: "gpt-4.1-mini",
+        webhookEndpointId: "11111111-1111-4111-8111-111111111111",
+        encryptedCredentialsRef: "vault://tenant-1/agent",
+        routingRules: { fallback: "n8n" },
+        timeoutMs: 20000,
+        retryPolicy: { attempts: 2 },
+        isActive: true
+      }),
+    ).resolves.toEqual(agentConfig);
 
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       "/v1/admin/tenants",

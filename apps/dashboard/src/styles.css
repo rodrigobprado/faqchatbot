@@ -20,7 +20,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -29,7 +30,8 @@ button {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   border: 1px solid rgb(148 163 184 / 0.38);
   border-radius: 14px;
@@ -40,6 +42,7 @@ select {
 
 input:focus,
 select:focus,
+textarea:focus,
 button:focus {
   outline: 2px solid rgb(59 130 246 / 0.35);
   outline-offset: 2px;
@@ -327,7 +330,8 @@ h2 {
 }
 
 .domain-card,
-.widget-config-card {
+.widget-config-card,
+.agent-config-card {
   display: grid;
   gap: 1rem;
   padding: 1.35rem;
@@ -423,6 +427,25 @@ h2 {
   background: rgb(248 250 252 / 0.9);
 }
 
+.checkbox-field {
+  align-content: start;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: auto;
+  justify-self: start;
+  margin-top: 0.15rem;
+  accent-color: #2563eb;
+}
+
+textarea {
+  min-height: 8.5rem;
+  resize: vertical;
+  line-height: 1.5;
+  font-family:
+    "SFMono-Regular", ui-monospace, "Cascadia Code", "Segoe UI Mono", Consolas, monospace;
+}
+
 .session-grid dt {
   font-size: 0.8rem;
   text-transform: uppercase;
@@ -473,7 +496,8 @@ h2 {
   .two-column.compact,
   .tenant-summary,
   .domain-card,
-  .widget-config-card {
+  .widget-config-card,
+  .agent-config-card {
     grid-template-columns: 1fr;
   }
 

@@ -5,15 +5,19 @@ import {
   deleteTenant,
   createTenantDomain,
   createTenant,
+  getTenantAgentConfig,
   getTenantConfig,
   listTenants,
   listTenantDomains,
   loginAdmin,
   refreshAdmin,
   updateTenant,
+  upsertTenantAgentConfig,
   upsertTenantConfig,
   type AdminSession,
   type CreateTenantPayload,
+  type TenantAgentConfigPayload,
+  type TenantAgentConfigRecord,
   type TenantConfigPayload,
   type TenantConfigRecord,
   type TenantDomainRecord,
@@ -51,6 +55,17 @@ type TenantWidgetConfigState = Readonly<{
   placeholder: string;
 }>;
 
+type TenantAgentConfigState = Readonly<{
+  provider: TenantAgentConfigRecord["provider"];
+  model: string;
+  webhookEndpointId: string;
+  encryptedCredentialsRef: string;
+  routingRules: string;
+  timeoutMs: string;
+  retryPolicy: string;
+  isActive: boolean;
+}>;
+
 type ViewState = Readonly<{
   loading: boolean;
   error: string | null;
@@ -84,6 +99,36 @@ const defaultTenantWidgetConfigState = (config?: TenantConfigRecord | null): Ten
   initialMessage: config?.initialMessage ?? "Ola! Como posso ajudar?",
   placeholder: config?.placeholder ?? "Digite sua mensagem"
 });
+
+const stringifyJson = (value: unknown) => JSON.stringify(value ?? {}, null, 2);
+
+const defaultTenantAgentConfigState = (config?: TenantAgentConfigRecord | null): TenantAgentConfigState => ({
+  provider: config?.provider ?? "n8n",
+  model: config?.model ?? "",
+  webhookEndpointId: config?.webhookEndpointId ?? "",
+  encryptedCredentialsRef: config?.encryptedCredentialsRef ?? "",
+  routingRules: stringifyJson(config?.routingRules),
+  timeoutMs: String(config?.timeoutMs ?? 15000),
+  retryPolicy: stringifyJson(config?.retryPolicy),
+  isActive: config?.isActive ?? true
+});
+
+const parseJsonObject = (input: string, label: string): Record<string, unknown> => {
+  if (!input.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(input);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("Invalid JSON object");
+    }
+
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new Error(`${label} deve conter um JSON valido.`);
+  }
+};
 
 const readStoredSession = (): AdminSession | null => {
   if (typeof window === "undefined") {
@@ -126,6 +171,17 @@ const getPlanLabel = (planId: string) => {
   return labels[planId] ?? planId;
 };
 
+const agentProviderOptions = [
+  { value: "n8n", label: "n8n" },
+  { value: "openai_responses", label: "OpenAI Responses" },
+  { value: "langgraph", label: "LangGraph" },
+  { value: "flowise", label: "Flowise" },
+  { value: "dify", label: "Dify" },
+  { value: "crewai", label: "CrewAI" },
+  { value: "mcp", label: "MCP" },
+  { value: "custom", label: "Custom" }
+] as const;
+
 export const App = () => {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
@@ -137,6 +193,9 @@ export const App = () => {
   const [domainForm, setDomainForm] = useState("");
   const [widgetConfig, setWidgetConfig] = useState<TenantWidgetConfigState>(
     defaultTenantWidgetConfigState(),
+  );
+  const [tenantAgentConfig, setTenantAgentConfig] = useState<TenantAgentConfigState>(
+    defaultTenantAgentConfigState(),
   );
   const [viewState, setViewState] = useState<ViewState>({
     loading: false,
@@ -168,6 +227,7 @@ export const App = () => {
       setTenantDomains([]);
       setDomainForm("");
       setWidgetConfig(defaultTenantWidgetConfigState());
+      setTenantAgentConfig(defaultTenantAgentConfigState());
       return;
     }
 
@@ -202,6 +262,7 @@ export const App = () => {
       setTenantDomains([]);
       setDomainForm("");
       setWidgetConfig(defaultTenantWidgetConfigState());
+      setTenantAgentConfig(defaultTenantAgentConfigState());
       return;
     }
 
@@ -279,15 +340,20 @@ export const App = () => {
     setViewState((current) => ({ ...current, loading: true, error: null }));
 
     try {
-      const [domains, config] = await withSessionRetry(async (accessToken) => {
-        const nextDomains = await listTenantDomains(accessToken, tenantId);
-        const nextConfig = await getTenantConfig(accessToken, tenantId);
-        return [nextDomains, nextConfig] as const;
+      const [domains, config, agentConfig] = await withSessionRetry(async (accessToken) => {
+        const [nextDomains, nextConfig, nextAgentConfig] = await Promise.all([
+          listTenantDomains(accessToken, tenantId),
+          getTenantConfig(accessToken, tenantId),
+          getTenantAgentConfig(accessToken, tenantId)
+        ]);
+
+        return [nextDomains, nextConfig, nextAgentConfig] as const;
       });
 
       setTenantDomains(domains);
       setDomainForm("");
       setWidgetConfig(defaultTenantWidgetConfigState(config));
+      setTenantAgentConfig(defaultTenantAgentConfigState(agentConfig));
       setViewState((current) => ({
         ...current,
         loading: false
@@ -299,6 +365,7 @@ export const App = () => {
         setSession(null);
         setTenants([]);
         setTenantDomains([]);
+        setTenantAgentConfig(defaultTenantAgentConfigState());
         setSelectedTenantId(null);
         updateError("Sessao expirada. Entre novamente.");
         return;
@@ -355,6 +422,7 @@ export const App = () => {
     setTenants([]);
     setLoginState(defaultLoginState);
     setTenantForm(defaultTenantFormState);
+    setTenantAgentConfig(defaultTenantAgentConfigState());
     setViewState({
       loading: false,
       error: null,
@@ -468,6 +536,55 @@ export const App = () => {
     }
   };
 
+  const handleSaveAgentConfigSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
+
+    try {
+      const timeoutMs = Number.parseInt(tenantAgentConfig.timeoutMs, 10);
+      if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+        throw new Error("Timeout deve ser um numero inteiro positivo.");
+      }
+
+      const payload: TenantAgentConfigPayload = {
+        provider: tenantAgentConfig.provider,
+        model: tenantAgentConfig.model.trim() || null,
+        webhookEndpointId: tenantAgentConfig.webhookEndpointId.trim() || null,
+        encryptedCredentialsRef: tenantAgentConfig.encryptedCredentialsRef.trim() || null,
+        routingRules: parseJsonObject(tenantAgentConfig.routingRules, "Routing rules"),
+        timeoutMs,
+        retryPolicy: parseJsonObject(tenantAgentConfig.retryPolicy, "Retry policy"),
+        isActive: tenantAgentConfig.isActive
+      };
+
+      await withSessionRetry((accessToken) =>
+        upsertTenantAgentConfig(accessToken, selectedTenant.id, payload),
+      );
+      await loadTenantDetails(selectedTenant.id);
+      updateNotice("Configuracao de agente salva com sucesso.");
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        setTenants([]);
+        setTenantDomains([]);
+        setTenantAgentConfig(defaultTenantAgentConfigState());
+        setSelectedTenantId(null);
+        updateError("Sessao expirada. Entre novamente.");
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao salvar configuracao de agente");
+    }
+  };
+
   const handleUpdateTenantSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -500,6 +617,7 @@ export const App = () => {
         setSession(null);
         setTenants([]);
         setSelectedTenantId(null);
+        setTenantAgentConfig(defaultTenantAgentConfigState());
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -569,6 +687,7 @@ export const App = () => {
           <a href="#tenants">Tenants</a>
           <a href="#widget">Widget</a>
           <a href="#config">Configuracao</a>
+          <a href="#agent-config">Agente</a>
         </nav>
 
         <section className="sidebar-panel">
@@ -1052,6 +1171,161 @@ export const App = () => {
                     </button>
                   </form>
                 </article>
+              </section>
+            ) : null}
+
+            {selectedTenant ? (
+              <section className="surface agent-config-card" id="agent-config">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Agente</p>
+                    <h2>Configuracao de agente</h2>
+                  </div>
+                </div>
+
+                <dl className="session-grid agent-summary">
+                  <div>
+                    <dt>Provider</dt>
+                    <dd>{tenantAgentConfig.provider}</dd>
+                  </div>
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{tenantAgentConfig.isActive ? "Ativo" : "Inativo"}</dd>
+                  </div>
+                  <div>
+                    <dt>Timeout</dt>
+                    <dd>{tenantAgentConfig.timeoutMs} ms</dd>
+                  </div>
+                </dl>
+
+                <form className="stack" onSubmit={handleSaveAgentConfigSubmit}>
+                  <div className="two-column compact">
+                    <label>
+                      <span>Provider</span>
+                      <select
+                        value={tenantAgentConfig.provider}
+                        onChange={(event) =>
+                          setTenantAgentConfig((current) => ({
+                            ...current,
+                            provider: event.target.value as TenantAgentConfigState["provider"]
+                          }))
+                        }
+                      >
+                        {agentProviderOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Modelo</span>
+                      <input
+                        value={tenantAgentConfig.model}
+                        onChange={(event) =>
+                          setTenantAgentConfig((current) => ({ ...current, model: event.target.value }))
+                        }
+                        placeholder="gpt-4.1-mini"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="two-column compact">
+                    <label>
+                      <span>Webhook endpoint ID</span>
+                      <input
+                        value={tenantAgentConfig.webhookEndpointId}
+                        onChange={(event) =>
+                          setTenantAgentConfig((current) => ({
+                            ...current,
+                            webhookEndpointId: event.target.value
+                          }))
+                        }
+                        placeholder="UUID do webhook"
+                      />
+                    </label>
+
+                    <label>
+                      <span>Credenciais referenciadas</span>
+                      <input
+                        value={tenantAgentConfig.encryptedCredentialsRef}
+                        onChange={(event) =>
+                          setTenantAgentConfig((current) => ({
+                            ...current,
+                            encryptedCredentialsRef: event.target.value
+                          }))
+                        }
+                        placeholder="vault://tenant-agent-secret"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="two-column compact">
+                    <label>
+                      <span>Timeout em ms</span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={tenantAgentConfig.timeoutMs}
+                        onChange={(event) =>
+                          setTenantAgentConfig((current) => ({ ...current, timeoutMs: event.target.value }))
+                        }
+                        placeholder="15000"
+                        required
+                      />
+                    </label>
+
+                    <label className="checkbox-field">
+                      <span>Ativo</span>
+                      <input
+                        type="checkbox"
+                        checked={tenantAgentConfig.isActive}
+                        onChange={(event) =>
+                          setTenantAgentConfig((current) => ({
+                            ...current,
+                            isActive: event.target.checked
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  <label>
+                    <span>Routing rules (JSON)</span>
+                    <textarea
+                      rows={5}
+                      value={tenantAgentConfig.routingRules}
+                      onChange={(event) =>
+                        setTenantAgentConfig((current) => ({
+                          ...current,
+                          routingRules: event.target.value
+                        }))
+                      }
+                      placeholder='{"fallback":"n8n"}'
+                    />
+                  </label>
+
+                  <label>
+                    <span>Retry policy (JSON)</span>
+                    <textarea
+                      rows={5}
+                      value={tenantAgentConfig.retryPolicy}
+                      onChange={(event) =>
+                        setTenantAgentConfig((current) => ({
+                          ...current,
+                          retryPolicy: event.target.value
+                        }))
+                      }
+                      placeholder='{"attempts":2}'
+                    />
+                  </label>
+
+                  <button type="submit" className="primary" disabled={viewState.loading}>
+                    {viewState.loading ? "Salvando..." : "Salvar agente"}
+                  </button>
+                </form>
               </section>
             ) : null}
 

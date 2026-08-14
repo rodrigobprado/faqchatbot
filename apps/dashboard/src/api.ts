@@ -47,6 +47,32 @@ export type TenantConfigPayload = Readonly<{
   placeholder?: string;
 }>;
 
+export type TenantAgentConfigRecord = Readonly<{
+  id?: string;
+  tenantId: string;
+  provider: "n8n" | "openai_responses" | "langgraph" | "flowise" | "dify" | "crewai" | "mcp" | "custom";
+  model: string | null;
+  webhookEndpointId: string | null;
+  encryptedCredentialsRef: string | null;
+  routingRules: Record<string, unknown>;
+  timeoutMs: number;
+  retryPolicy: Record<string, unknown>;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}>;
+
+export type TenantAgentConfigPayload = Readonly<{
+  provider: TenantAgentConfigRecord["provider"];
+  model?: string | null;
+  webhookEndpointId?: string | null;
+  encryptedCredentialsRef?: string | null;
+  routingRules?: Record<string, unknown>;
+  timeoutMs?: number;
+  retryPolicy?: Record<string, unknown>;
+  isActive?: boolean;
+}>;
+
 export type LoginPayload = Readonly<{
   email: string;
   password: string;
@@ -188,6 +214,22 @@ export const upsertTenantConfig = (
   payload: TenantConfigPayload,
 ): Promise<TenantConfigRecord> =>
   requestJson<TenantConfigRecord>(`/v1/admin/tenants/${tenantId}/config`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  }, accessToken);
+
+export const getTenantAgentConfig = (
+  accessToken: string,
+  tenantId: string,
+): Promise<TenantAgentConfigRecord | null> =>
+  requestJson<TenantAgentConfigRecord | null>(`/v1/admin/tenants/${tenantId}/agent-config`, {}, accessToken);
+
+export const upsertTenantAgentConfig = (
+  accessToken: string,
+  tenantId: string,
+  payload: TenantAgentConfigPayload,
+): Promise<TenantAgentConfigRecord> =>
+  requestJson<TenantAgentConfigRecord>(`/v1/admin/tenants/${tenantId}/agent-config`, {
     method: "PUT",
     body: JSON.stringify(payload)
   }, accessToken);

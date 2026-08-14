@@ -43,6 +43,41 @@ const widgetConfig = {
   placeholder: "Escreva aqui"
 };
 
+const agentConfig = {
+  id: "agent-config-1",
+  tenantId: "tenant-1",
+  provider: "n8n" as const,
+  model: "gpt-4.1-mini",
+  webhookEndpointId: "11111111-1111-4111-8111-111111111111",
+  encryptedCredentialsRef: "vault://tenant-1/agent",
+  routingRules: { fallback: "n8n" },
+  timeoutMs: 15000,
+  retryPolicy: { attempts: 2 },
+  isActive: true
+};
+
+const updatedWidgetConfig = {
+  tenantId: "tenant-1",
+  theme: "light" as const,
+  primaryColor: "#123456",
+  iconUrl: "https://cdn.example.com/icon.png",
+  initialMessage: "Olá, posso ajudar?",
+  placeholder: "Digite sua dúvida"
+};
+
+const updatedAgentConfig = {
+  id: "agent-config-2",
+  tenantId: "tenant-1",
+  provider: "custom" as const,
+  model: "custom-model",
+  webhookEndpointId: "22222222-2222-4222-8222-222222222222",
+  encryptedCredentialsRef: "vault://tenant-1/agent-v2",
+  routingRules: { fallback: "n8n", priority: 1 },
+  timeoutMs: 25000,
+  retryPolicy: { attempts: 3, backoffMs: 500 },
+  isActive: false
+};
+
 const jsonResponse = (status: number, body: MockResponseBody) =>
   new Response(JSON.stringify(body), {
     status,
@@ -61,7 +96,7 @@ const setupDom = () => {
   return createRoot(element);
 };
 
-const fillInput = (input: HTMLInputElement | HTMLSelectElement, value: string) => {
+const fillInput = (input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) => {
   const descriptor = Object.getOwnPropertyDescriptor(
     Object.getPrototypeOf(input),
     "value",
@@ -121,7 +156,8 @@ describe("App interactions", () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
 
     await act(async () => {
       root!.render(<App />);
@@ -195,25 +231,9 @@ describe("App interactions", () => {
       )
       .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
-      .mockResolvedValueOnce(
-        jsonResponse(200, {
-          data: [
-            {
-              id: "tenant-2",
-              publicId: "beta",
-              name: "Beta",
-              status: "active",
-              planId: "plan-growth",
-              defaultLocale: "pt-BR",
-              deletedAt: null
-            }
-          ],
-          meta: {}
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
 
     await act(async () => {
       root!.render(<App />);
@@ -291,6 +311,7 @@ describe("App interactions", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
       .mockResolvedValueOnce(
         jsonResponse(200, {
           data: {
@@ -317,6 +338,7 @@ describe("App interactions", () => {
       )
       .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
       .mockResolvedValueOnce(
         jsonResponse(200, {
           data: {
@@ -406,14 +428,21 @@ describe("App interactions", () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: createdDomain, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: updatedAgentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: updatedAgentConfig, meta: {} }));
 
     await act(async () => {
       root!.render(<App />);
@@ -474,6 +503,52 @@ describe("App interactions", () => {
       iconUrl: "https://cdn.example.com/icon.png",
       initialMessage: "Olá, posso ajudar?",
       placeholder: "Digite sua dúvida"
+    });
+
+    const agentForm = document.querySelector("#agent-config form") as HTMLFormElement;
+    const providerSelect = agentForm.querySelector("select") as HTMLSelectElement;
+    const agentInputs = Array.from(
+      agentForm.querySelectorAll('input:not([type="checkbox"])'),
+    ) as [HTMLInputElement, HTMLInputElement, HTMLInputElement, HTMLInputElement];
+    const [modelInput, webhookInput, credentialsInput, timeoutInput] = agentInputs;
+    const agentTextareas = Array.from(agentForm.querySelectorAll("textarea")) as [
+      HTMLTextAreaElement,
+      HTMLTextAreaElement
+    ];
+    const [routingRulesInput, retryPolicyInput] = agentTextareas;
+    const activeInput = agentForm.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    fillInput(providerSelect, "custom");
+    fillInput(modelInput, "custom-model");
+    fillInput(webhookInput, "22222222-2222-4222-8222-222222222222");
+    fillInput(credentialsInput, "vault://tenant-1/agent-v2");
+    fillInput(timeoutInput, "25000");
+    fillInput(routingRulesInput, '{\n  "fallback": "n8n",\n  "priority": 1\n}');
+    fillInput(retryPolicyInput, '{\n  "attempts": 3,\n  "backoffMs": 500\n}');
+    activeInput.click();
+
+    await act(async () => {
+      submitForm(agentForm);
+    });
+
+    await waitForBodyText("Configuracao de agente salva com sucesso.");
+
+    const agentRequest = vi
+      .mocked(fetch)
+      .mock.calls.find(
+        ([path, init]) => path === "/v1/admin/tenants/tenant-1/agent-config" && init?.method === "PUT",
+      );
+
+    expect(agentRequest).toBeDefined();
+    expect(JSON.parse(agentRequest?.[1]?.body as string)).toEqual({
+      provider: "custom",
+      model: "custom-model",
+      webhookEndpointId: "22222222-2222-4222-8222-222222222222",
+      encryptedCredentialsRef: "vault://tenant-1/agent-v2",
+      routingRules: { fallback: "n8n", priority: 1 },
+      timeoutMs: 25000,
+      retryPolicy: { attempts: 3, backoffMs: 500 },
+      isActive: false
     });
   });
 });
