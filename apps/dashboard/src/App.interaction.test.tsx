@@ -551,4 +551,76 @@ describe("App interactions", () => {
       isActive: false
     });
   });
+
+  it("manages tenant users, roles and api keys locally in the dashboard", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    const [emailInput, passwordInput] = Array.from(
+      document.querySelectorAll('input[type="email"], input[type="password"]'),
+    ) as [HTMLInputElement, HTMLInputElement];
+
+    fillInput(emailInput, "admin@acme.test");
+    fillInput(passwordInput, "senha-super-secreta");
+
+    await act(async () => {
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("Usuarios do tenant");
+
+    const usersForm = document.querySelector("#users form") as HTMLFormElement;
+    const [inviteEmailInput] = Array.from(usersForm.querySelectorAll("input")) as [HTMLInputElement];
+    const inviteRoleSelect = usersForm.querySelector("select") as HTMLSelectElement;
+
+    fillInput(inviteEmailInput, "novo.usuario@acme.test");
+    fillInput(inviteRoleSelect, "editor");
+
+    await act(async () => {
+      submitForm(usersForm);
+    });
+
+    await waitForBodyText("Convite de usuario preparado localmente.");
+    expect(document.body.textContent).toContain("novo.usuario@acme.test");
+
+    const createdUserRoleSelect = Array.from(document.querySelectorAll("#users .user-row select"))[0] as HTMLSelectElement;
+    fillInput(createdUserRoleSelect, "operator");
+    await flush();
+    expect(document.body.textContent).toContain("Roles do usuario atualizados localmente.");
+
+    const apiKeysForm = document.querySelector("#api-keys form") as HTMLFormElement;
+    const apiKeyNameInput = apiKeysForm.querySelector("input") as HTMLInputElement;
+    fillInput(apiKeyNameInput, "Key do painel");
+
+    await act(async () => {
+      submitForm(apiKeysForm);
+    });
+
+    await waitForBodyText("Chave criada. O segredo fica visivel apenas agora.");
+    expect(document.body.textContent).toContain("Key do painel");
+    expect(document.body.textContent).toContain("Segredo gerado uma unica vez");
+
+    const createdKeyRow = Array.from(document.querySelectorAll("#api-keys .api-key-row")).find((row) =>
+      row.textContent?.includes("Key do painel"),
+    ) as HTMLDivElement;
+    expect(createdKeyRow).toBeDefined();
+
+    await act(async () => {
+      (createdKeyRow.querySelector("button") as HTMLButtonElement).click();
+    });
+
+    await flush();
+    expect(document.body.textContent).toContain("Chave revogada localmente.");
+    expect(createdKeyRow.textContent).toContain("Revogada em");
+  });
 });

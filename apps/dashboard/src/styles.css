@@ -331,7 +331,8 @@ h2 {
 
 .domain-card,
 .widget-config-card,
-.agent-config-card {
+.agent-config-card,
+.access-card {
   display: grid;
   gap: 1rem;
   padding: 1.35rem;
@@ -427,6 +428,84 @@ h2 {
   background: rgb(248 250 252 / 0.9);
 }
 
+.three-column {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.access-grid {
+  align-items: start;
+}
+
+.user-row,
+.role-row,
+.api-key-row {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  background: rgb(248 250 252 / 0.9);
+}
+
+.user-row,
+.api-key-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.user-row p,
+.role-row p,
+.api-key-row p,
+.user-row small,
+.role-row small,
+.api-key-row small {
+  color: #536171;
+}
+
+.user-actions {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 11rem;
+}
+
+.chip-grid,
+.chip-row {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  background: rgb(37 99 235 / 0.1);
+  color: #1e3a8a;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.permission-card {
+  padding-top: 0;
+}
+
+.secret-banner {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.secret-banner code {
+  display: block;
+  overflow-x: auto;
+  padding: 0.75rem;
+  border-radius: 0.9rem;
+  background: rgb(15 23 42 / 0.08);
+  color: #102033;
+  word-break: break-all;
+}
+
 .checkbox-field {
   align-content: start;
 }
@@ -497,7 +576,8 @@ textarea {
   .tenant-summary,
   .domain-card,
   .widget-config-card,
-  .agent-config-card {
+  .agent-config-card,
+  .three-column {
     grid-template-columns: 1fr;
   }
 

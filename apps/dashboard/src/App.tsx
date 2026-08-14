@@ -66,6 +66,40 @@ type TenantAgentConfigState = Readonly<{
   isActive: boolean;
 }>;
 
+type TenantUserStatus = "active" | "invited" | "suspended";
+
+type TenantUserRecord = Readonly<{
+  id: string;
+  email: string;
+  status: TenantUserStatus;
+  roles: string[];
+  invitedAt: string;
+}>;
+
+type TenantRoleRecord = Readonly<{
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  permissions: string[];
+}>;
+
+type TenantApiKeyRecord = Readonly<{
+  id: string;
+  name: string;
+  prefix: string;
+  last4: string;
+  createdAt: string;
+  revokedAt: string | null;
+}>;
+
+type TenantAccessState = Readonly<{
+  users: TenantUserRecord[];
+  roles: TenantRoleRecord[];
+  apiKeys: TenantApiKeyRecord[];
+  pendingSecret: string | null;
+}>;
+
 type ViewState = Readonly<{
   loading: boolean;
   error: string | null;
@@ -112,6 +146,95 @@ const defaultTenantAgentConfigState = (config?: TenantAgentConfigRecord | null):
   retryPolicy: stringifyJson(config?.retryPolicy),
   isActive: config?.isActive ?? true
 });
+
+const accessPermissionCatalog = [
+  "Visualizar conversas",
+  "Responder conversas",
+  "Invitar usuarios",
+  "Gerenciar roles",
+  "Criar api keys",
+  "Revogar api keys"
+];
+
+const defaultTenantAccessState = (session: AdminSession | null, tenant?: TenantRecord | null): TenantAccessState => {
+  const baseEmail = session?.user.email ?? "admin@empresa.com";
+  const suffix = tenant?.publicId ?? "tenant";
+
+  return {
+    users: [
+      {
+        id: `${suffix}-user-admin`,
+        email: baseEmail,
+        status: "active",
+        roles: ["admin", "platform_admin"],
+        invitedAt: new Date().toISOString()
+      },
+      {
+        id: `${suffix}-user-support`,
+        email: `support@${tenant?.publicId ?? "exemplo"}.com`,
+        status: "invited",
+        roles: ["viewer"],
+        invitedAt: new Date().toISOString()
+      }
+    ],
+    roles: [
+      {
+        id: `${suffix}-role-admin`,
+        slug: "admin",
+        name: "Administrator",
+        description: "Acesso total ao tenant, exceto configuracoes da plataforma.",
+        permissions: [
+          "Visualizar conversas",
+          "Responder conversas",
+          "Invitar usuarios",
+          "Gerenciar roles",
+          "Criar api keys",
+          "Revogar api keys"
+        ]
+      },
+      {
+        id: `${suffix}-role-editor`,
+        slug: "editor",
+        name: "Editor",
+        description: "Atua no atendimento e na operacao cotidiana.",
+        permissions: ["Visualizar conversas", "Responder conversas"]
+      },
+      {
+        id: `${suffix}-role-viewer`,
+        slug: "viewer",
+        name: "Viewer",
+        description: "Acompanha a operacao sem modificar dados sensiveis.",
+        permissions: ["Visualizar conversas"]
+      },
+      {
+        id: `${suffix}-role-operator`,
+        slug: "operator",
+        name: "Operator",
+        description: "Gerencia integracoes e chaves de API do tenant.",
+        permissions: ["Visualizar conversas", "Criar api keys", "Revogar api keys"]
+      }
+    ],
+    apiKeys: [
+      {
+        id: `${suffix}-key-1`,
+        name: "Dashboard service key",
+        prefix: "fqc_dash",
+        last4: "19ab",
+        createdAt: new Date().toISOString(),
+        revokedAt: null
+      }
+    ],
+    pendingSecret: null
+  };
+};
+
+const makeLocalId = (prefix: string) => {
+  const randomPart = Math.random().toString(36).slice(2, 8);
+  const timePart = Date.now().toString(36);
+  return `${prefix}-${randomPart}-${timePart}`;
+};
+
+const makeApiKeySecret = () => `fqc_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 6)}`;
 
 const parseJsonObject = (input: string, label: string): Record<string, unknown> => {
   if (!input.trim()) {
@@ -197,6 +320,9 @@ export const App = () => {
   const [tenantAgentConfig, setTenantAgentConfig] = useState<TenantAgentConfigState>(
     defaultTenantAgentConfigState(),
   );
+  const [tenantAccessById, setTenantAccessById] = useState<Record<string, TenantAccessState>>({});
+  const [userInviteForm, setUserInviteForm] = useState({ email: "", roleSlug: "viewer" });
+  const [keyForm, setKeyForm] = useState({ name: "" });
   const [viewState, setViewState] = useState<ViewState>({
     loading: false,
     error: null,
@@ -228,6 +354,9 @@ export const App = () => {
       setDomainForm("");
       setWidgetConfig(defaultTenantWidgetConfigState());
       setTenantAgentConfig(defaultTenantAgentConfigState());
+      setTenantAccessById({});
+      setUserInviteForm({ email: "", roleSlug: "viewer" });
+      setKeyForm({ name: "" });
       return;
     }
 
@@ -263,10 +392,30 @@ export const App = () => {
       setDomainForm("");
       setWidgetConfig(defaultTenantWidgetConfigState());
       setTenantAgentConfig(defaultTenantAgentConfigState());
+      setUserInviteForm({ email: "", roleSlug: "viewer" });
+      setKeyForm({ name: "" });
       return;
     }
 
     void loadTenantDetails(selectedTenant.id);
+  }, [selectedTenantId, tenants, session]);
+
+  useEffect(() => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setTenantAccessById((current) => {
+      if (current[selectedTenant.id]) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [selectedTenant.id]: defaultTenantAccessState(session, selectedTenant)
+      };
+    });
   }, [selectedTenantId, tenants, session]);
 
   const updateNotice = (notice: string | null) => {
@@ -585,6 +734,127 @@ export const App = () => {
     }
   };
 
+  const handleInviteUserSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    const email = userInviteForm.email.trim();
+    if (!email) {
+      updateError("E-mail do usuario e obrigatorio.");
+      return;
+    }
+
+    const invitedUser: TenantUserRecord = {
+      id: makeLocalId("user"),
+      email,
+      status: "invited",
+      roles: [userInviteForm.roleSlug],
+      invitedAt: new Date().toISOString()
+    };
+
+    setTenantAccessById((current) => ({
+      ...current,
+      [selectedTenant.id]: {
+        ...(current[selectedTenant.id] ?? defaultTenantAccessState(session, selectedTenant)),
+        users: [invitedUser, ...(current[selectedTenant.id]?.users ?? defaultTenantAccessState(session, selectedTenant).users)]
+      }
+    }));
+    setUserInviteForm({ email: "", roleSlug: "viewer" });
+    updateNotice("Convite de usuario preparado localmente.");
+  };
+
+  const handleUpdateUserRoles = (userId: string, roleSlug: string) => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setTenantAccessById((current) => {
+      const currentAccess = current[selectedTenant.id] ?? defaultTenantAccessState(session, selectedTenant);
+      return {
+        ...current,
+        [selectedTenant.id]: {
+          ...currentAccess,
+          users: currentAccess.users.map((user) =>
+            user.id === userId
+              ? {
+                  ...user,
+                  roles: Array.from(new Set([...user.roles.filter((slug) => slug !== roleSlug), roleSlug]))
+                }
+              : user,
+          )
+        }
+      };
+    });
+
+    updateNotice("Roles do usuario atualizados localmente.");
+  };
+
+  const handleCreateApiKeySubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    const name = keyForm.name.trim();
+    if (!name) {
+      updateError("Nome da chave e obrigatorio.");
+      return;
+    }
+
+    const secret = makeApiKeySecret();
+    const nextKey: TenantApiKeyRecord = {
+      id: makeLocalId("api-key"),
+      name,
+      prefix: secret.slice(0, 8),
+      last4: secret.slice(-4),
+      createdAt: new Date().toISOString(),
+      revokedAt: null
+    };
+
+    setTenantAccessById((current) => {
+      const currentAccess = current[selectedTenant.id] ?? defaultTenantAccessState(session, selectedTenant);
+      return {
+        ...current,
+        [selectedTenant.id]: {
+          ...currentAccess,
+          apiKeys: [nextKey, ...currentAccess.apiKeys],
+          pendingSecret: secret
+        }
+      };
+    });
+    setKeyForm({ name: "" });
+    updateNotice("Chave criada. O segredo fica visivel apenas agora.");
+  };
+
+  const handleRevokeApiKey = (keyId: string) => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setTenantAccessById((current) => {
+      const currentAccess = current[selectedTenant.id] ?? defaultTenantAccessState(session, selectedTenant);
+      return {
+        ...current,
+        [selectedTenant.id]: {
+          ...currentAccess,
+          apiKeys: currentAccess.apiKeys.map((key) =>
+            key.id === keyId ? { ...key, revokedAt: new Date().toISOString() } : key,
+          )
+        }
+      };
+    });
+
+    updateNotice("Chave revogada localmente.");
+  };
+
   const handleUpdateTenantSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -670,6 +940,9 @@ export const App = () => {
   const selectedTenantSnippet = selectedTenant ? buildWidgetSnippet(selectedTenant.publicId) : null;
   const canSubmitDomain = Boolean(session && selectedTenant && domainForm.trim());
   const domainLabel = tenantDomains.length === 0 ? "Nenhum dominio cadastrado" : `${tenantDomains.length} dominio(s)`;
+  const selectedTenantAccess = selectedTenant
+    ? tenantAccessById[selectedTenant.id] ?? defaultTenantAccessState(session, selectedTenant)
+    : null;
 
   return (
     <main className="app-shell">
@@ -688,6 +961,9 @@ export const App = () => {
           <a href="#widget">Widget</a>
           <a href="#config">Configuracao</a>
           <a href="#agent-config">Agente</a>
+          <a href="#users">Usuarios</a>
+          <a href="#roles">Roles</a>
+          <a href="#api-keys">API keys</a>
         </nav>
 
         <section className="sidebar-panel">
@@ -1326,6 +1602,179 @@ export const App = () => {
                     {viewState.loading ? "Salvando..." : "Salvar agente"}
                   </button>
                 </form>
+              </section>
+            ) : null}
+
+            {selectedTenant && selectedTenantAccess ? (
+              <section className="three-column access-grid">
+                <article className="surface access-card" id="users">
+                  <div className="section-heading">
+                    <div>
+                      <p className="eyebrow">Equipe</p>
+                      <h2>Usuarios do tenant</h2>
+                    </div>
+                  </div>
+
+                  <form className="stack" onSubmit={handleInviteUserSubmit}>
+                    <label>
+                      <span>E-mail</span>
+                      <input
+                        value={userInviteForm.email}
+                        onChange={(event) =>
+                          setUserInviteForm((current) => ({ ...current, email: event.target.value }))
+                        }
+                        placeholder="usuario@empresa.com"
+                        required
+                      />
+                    </label>
+
+                    <label>
+                      <span>Role inicial</span>
+                      <select
+                        value={userInviteForm.roleSlug}
+                        onChange={(event) =>
+                          setUserInviteForm((current) => ({ ...current, roleSlug: event.target.value }))
+                        }
+                      >
+                        {selectedTenantAccess.roles.map((role) => (
+                          <option key={role.slug} value={role.slug}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <button type="submit" className="primary">
+                      Preparar convite
+                    </button>
+                  </form>
+
+                  <div className="list-card">
+                    {selectedTenantAccess.users.map((user) => (
+                      <div className="user-row" key={user.id}>
+                        <div>
+                          <strong>{user.email}</strong>
+                          <p>{user.status === "active" ? "Ativo" : user.status === "invited" ? "Convidado" : "Suspenso"}</p>
+                          <small>Convidado em {new Date(user.invitedAt).toLocaleDateString("pt-BR")}</small>
+                        </div>
+                        <div className="user-actions">
+                          <select
+                            value={user.roles[0] ?? "viewer"}
+                            onChange={(event) => handleUpdateUserRoles(user.id, event.target.value)}
+                          >
+                            {selectedTenantAccess.roles.map((role) => (
+                              <option key={role.slug} value={role.slug}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="chip-row">
+                            {user.roles.map((roleSlug) => (
+                              <span className="chip" key={roleSlug}>
+                                {roleSlug}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="surface access-card" id="roles">
+                  <div className="section-heading">
+                    <div>
+                      <p className="eyebrow">Acesso</p>
+                      <h2>Roles e permissoes</h2>
+                    </div>
+                  </div>
+
+                  <div className="list-card">
+                    {selectedTenantAccess.roles.map((role) => (
+                      <div className="role-row" key={role.id}>
+                        <div>
+                          <strong>{role.name}</strong>
+                          <p className="mono">{role.slug}</p>
+                          <small>{role.description}</small>
+                        </div>
+                        <div className="chip-grid">
+                          {role.permissions.map((permission) => (
+                            <span className="chip" key={permission}>
+                              {permission}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="list-card permission-card">
+                    <strong>Catálogo principal</strong>
+                    <div className="chip-grid">
+                      {accessPermissionCatalog.map((permission) => (
+                        <span className="chip" key={permission}>
+                          {permission}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+
+                <article className="surface access-card" id="api-keys">
+                  <div className="section-heading">
+                    <div>
+                      <p className="eyebrow">Credenciais</p>
+                      <h2>API keys</h2>
+                    </div>
+                  </div>
+
+                  {selectedTenantAccess.pendingSecret ? (
+                    <div className="banner success secret-banner">
+                      <strong>Segredo gerado uma unica vez</strong>
+                      <code>{selectedTenantAccess.pendingSecret}</code>
+                    </div>
+                  ) : null}
+
+                  <form className="stack" onSubmit={handleCreateApiKeySubmit}>
+                    <label>
+                      <span>Nome da chave</span>
+                      <input
+                        value={keyForm.name}
+                        onChange={(event) => setKeyForm((current) => ({ ...current, name: event.target.value }))}
+                        placeholder="Key do painel"
+                        required
+                      />
+                    </label>
+
+                    <button type="submit" className="primary">
+                      Criar chave
+                    </button>
+                  </form>
+
+                  <div className="list-card">
+                    {selectedTenantAccess.apiKeys.map((key) => (
+                      <div className="api-key-row" key={key.id}>
+                        <div>
+                          <strong>{key.name}</strong>
+                          <p>
+                            {key.prefix}...{key.last4}
+                          </p>
+                          <small>
+                            {key.revokedAt ? `Revogada em ${new Date(key.revokedAt).toLocaleDateString("pt-BR")}` : "Ativa"}
+                          </small>
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary danger"
+                          onClick={() => handleRevokeApiKey(key.id)}
+                          disabled={Boolean(key.revokedAt)}
+                        >
+                          Revogar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </article>
               </section>
             ) : null}
 
