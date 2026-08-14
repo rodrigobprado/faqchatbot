@@ -210,6 +210,33 @@ const normalizeTenantUser = (user: TenantUserRecord): TenantUserRecord =>
     invitedAt: user.invitedAt ?? user.createdAt ?? user.updatedAt ?? new Date().toISOString()
   }) as TenantUserRecord;
 
+const copyTextToClipboard = async (text: string) => {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  if (typeof document === "undefined") {
+    throw new Error("Clipboard indisponivel");
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  const copied = document.execCommand?.("copy") ?? false;
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error("Falha ao copiar para a area de transferencia");
+  }
+};
+
 const agentProviderOptions = [
   { value: "n8n", label: "n8n" },
   { value: "openai_responses", label: "OpenAI Responses" },
@@ -911,6 +938,33 @@ export const App = () => {
     ? selectedTenantAccess.apiKeys
     : [];
 
+  const handleCopyWidgetSnippet = async () => {
+    if (!selectedTenantSnippet) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(selectedTenantSnippet);
+      updateNotice("Snippet copiado para a area de transferencia.");
+    } catch (error) {
+      updateError(error instanceof Error ? error.message : "Falha ao copiar snippet");
+    }
+  };
+
+  const handleCopyApiKeySecret = async () => {
+    const secret = selectedTenantAccess?.pendingSecret;
+    if (!secret) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(secret);
+      updateNotice("Segredo da chave copiado para a area de transferencia.");
+    } catch (error) {
+      updateError(error instanceof Error ? error.message : "Falha ao copiar segredo");
+    }
+  };
+
   return (
     <main className="app-shell">
       <aside className="sidebar" aria-label="Navegacao principal">
@@ -1271,6 +1325,13 @@ export const App = () => {
                   <p className="eyebrow">Widget</p>
                   <h2>Snippet de instalacao</h2>
                 </div>
+                {selectedTenantSnippet ? (
+                  <div className="header-actions">
+                    <button type="button" className="secondary" onClick={() => void handleCopyWidgetSnippet()}>
+                      Copiar snippet
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               {selectedTenantSnippet ? (
@@ -1705,8 +1766,13 @@ export const App = () => {
 
                   {selectedTenantAccess.pendingSecret ? (
                     <div className="banner success secret-banner">
-                      <strong>Segredo gerado uma unica vez</strong>
-                      <code>{selectedTenantAccess.pendingSecret}</code>
+                      <div className="secret-banner-copy">
+                        <strong>Segredo gerado uma unica vez</strong>
+                        <code>{selectedTenantAccess.pendingSecret}</code>
+                      </div>
+                      <button type="button" className="secondary" onClick={() => void handleCopyApiKeySecret()}>
+                        Copiar segredo
+                      </button>
                     </div>
                   ) : null}
 

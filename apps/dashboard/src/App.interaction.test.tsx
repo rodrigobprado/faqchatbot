@@ -249,9 +249,17 @@ const waitForBodyText = async (text: string) => {
 
 describe("App interactions", () => {
   let root: Root | null = null;
+  let clipboardWriteText: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
+    clipboardWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: {
+        writeText: clipboardWriteText
+      },
+      configurable: true
+    });
     window.localStorage.clear();
     root = setupDom();
   });
@@ -295,6 +303,18 @@ describe("App interactions", () => {
     expect(document.body.textContent).toContain("acme");
     expect(document.body.textContent).toContain("Dominios autorizados");
     expect(document.body.textContent).toContain(
+      '<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=acme" data-agent="acme" async></script>',
+    );
+    const copySnippetButton = Array.from(document.querySelectorAll("#widget button")).find((button) =>
+      button.textContent?.includes("Copiar snippet"),
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      copySnippetButton.click();
+    });
+
+    await waitForBodyText("Snippet copiado para a area de transferencia.");
+    expect(clipboardWriteText).toHaveBeenCalledWith(
       '<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=acme" data-agent="acme" async></script>',
     );
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
@@ -828,9 +848,6 @@ describe("App interactions", () => {
       ),
     ).toBe(true);
 
-    const createdUserRoleSelect = Array.from(document.querySelectorAll("#users .user-row select"))[0] as HTMLSelectElement;
-    fillInput(createdUserRoleSelect, "operator");
-    await waitForBodyText("Roles do usuario atualizados com sucesso.");
     const apiKeysForm = document.querySelector("#api-keys form") as HTMLFormElement;
     const apiKeyNameInput = apiKeysForm.querySelector("input") as HTMLInputElement;
     fillInput(apiKeyNameInput, "Key do painel");

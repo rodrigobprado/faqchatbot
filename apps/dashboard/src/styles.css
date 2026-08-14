@@ -492,8 +492,17 @@ h2 {
 }
 
 .secret-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.secret-banner-copy {
   display: grid;
   gap: 0.35rem;
+  min-width: min(100%, 32rem);
 }
 
 .secret-banner code {
