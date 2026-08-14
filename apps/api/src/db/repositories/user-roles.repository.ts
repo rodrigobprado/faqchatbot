@@ -7,6 +7,9 @@ export const createUserRolesRepository = (db: Database) => ({
     const [row] = await db.insert(userRoles).values({ userId, roleId }).onConflictDoNothing().returning();
     return row ?? null;
   },
+  removeRolesByUserId: async (userId: string) => {
+    await db.delete(userRoles).where(eq(userRoles.userId, userId));
+  },
   listRoleSlugsByUserId: async (userId: string) =>
     db
       .select({

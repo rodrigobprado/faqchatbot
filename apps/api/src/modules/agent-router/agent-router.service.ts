@@ -219,7 +219,7 @@ export class AgentRouterService {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private loggerForProvider(): PlatformLogger {
+  private loggerForProvider(_provider: AgentProvider): PlatformLogger {
     return this.logger;
   }
 }

@@ -73,6 +73,52 @@ export type TenantAgentConfigPayload = Readonly<{
   isActive?: boolean;
 }>;
 
+export type TenantUserRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  email: string;
+  status: "active" | "invited" | "suspended";
+  roles: string[];
+  invitedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}>;
+
+export type TenantRoleRecord = Readonly<{
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  permissions: string[];
+}>;
+
+export type TenantApiKeyRecord = Readonly<{
+  id: string;
+  name: string;
+  prefix: string;
+  last4: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}>;
+
+export type InviteTenantUserPayload = Readonly<{
+  email: string;
+  roleSlug: string;
+}>;
+
+export type UpdateTenantUserRolesPayload = Readonly<{
+  roleSlugs: string[];
+}>;
+
+export type CreateTenantApiKeyPayload = Readonly<{
+  name: string;
+}>;
+
+export type CreateTenantApiKeyResponse = TenantApiKeyRecord & Readonly<{
+  secret: string;
+}>;
+
 export type LoginPayload = Readonly<{
   email: string;
   password: string;
@@ -232,6 +278,55 @@ export const upsertTenantAgentConfig = (
   requestJson<TenantAgentConfigRecord>(`/v1/admin/tenants/${tenantId}/agent-config`, {
     method: "PUT",
     body: JSON.stringify(payload)
+  }, accessToken);
+
+export const listTenantUsers = (accessToken: string, tenantId: string): Promise<TenantUserRecord[]> =>
+  requestJson<TenantUserRecord[]>(`/v1/admin/tenants/${tenantId}/users`, {}, accessToken);
+
+export const inviteTenantUser = (
+  accessToken: string,
+  tenantId: string,
+  payload: InviteTenantUserPayload,
+): Promise<TenantUserRecord> =>
+  requestJson<TenantUserRecord>(`/v1/admin/tenants/${tenantId}/users`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, accessToken);
+
+export const updateTenantUserRoles = (
+  accessToken: string,
+  tenantId: string,
+  userId: string,
+  payload: UpdateTenantUserRolesPayload,
+): Promise<TenantUserRecord> =>
+  requestJson<TenantUserRecord>(`/v1/admin/tenants/${tenantId}/users/${userId}/roles`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  }, accessToken);
+
+export const listTenantRoles = (accessToken: string, tenantId: string): Promise<TenantRoleRecord[]> =>
+  requestJson<TenantRoleRecord[]>(`/v1/admin/tenants/${tenantId}/roles`, {}, accessToken);
+
+export const listTenantApiKeys = (accessToken: string, tenantId: string): Promise<TenantApiKeyRecord[]> =>
+  requestJson<TenantApiKeyRecord[]>(`/v1/admin/tenants/${tenantId}/api-keys`, {}, accessToken);
+
+export const createTenantApiKey = (
+  accessToken: string,
+  tenantId: string,
+  payload: CreateTenantApiKeyPayload,
+): Promise<CreateTenantApiKeyResponse> =>
+  requestJson<CreateTenantApiKeyResponse>(`/v1/admin/tenants/${tenantId}/api-keys`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, accessToken);
+
+export const revokeTenantApiKey = (
+  accessToken: string,
+  tenantId: string,
+  apiKeyId: string,
+): Promise<TenantApiKeyRecord> =>
+  requestJson<TenantApiKeyRecord>(`/v1/admin/tenants/${tenantId}/api-keys/${apiKeyId}`, {
+    method: "DELETE"
   }, accessToken);
 
 const escapeAttribute = (value: string): string =>

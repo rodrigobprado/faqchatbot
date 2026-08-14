@@ -55,4 +55,31 @@ describe("UsersRepository", () => {
 
     expect(found).toBeNull();
   });
+
+  it("lists users by tenant and updates their status", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+    const users = createUsersRepository(db);
+
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Tenant",
+      planId: plan.id
+    });
+
+    const user = await users.create({
+      tenantId: tenant.id,
+      email: `invite-${randomUUID()}@example.com`,
+      passwordHash: "salt:hash",
+      status: "invited"
+    });
+
+    const listed = await users.listByTenantId(tenant.id);
+    const updated = await users.updateStatus(user.id, "active");
+
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.status).toBe("invited");
+    expect(updated?.status).toBe("active");
+  });
 });

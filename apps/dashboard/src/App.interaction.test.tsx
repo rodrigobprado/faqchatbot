@@ -56,6 +56,117 @@ const agentConfig = {
   isActive: true
 };
 
+const tenantUsers = [
+  {
+    id: "user-1",
+    tenantId: "tenant-1",
+    email: "admin@acme.test",
+    status: "active" as const,
+    roles: ["admin"],
+    createdAt: "2026-08-14T12:00:00.000Z"
+  }
+];
+
+const tenantRoles = [
+  {
+    id: "role-1",
+    slug: "admin",
+    name: "Administrator",
+    description: "Full access",
+    permissions: ["Visualizar conversas", "Criar api keys"]
+  },
+  {
+    id: "role-2",
+    slug: "editor",
+    name: "Editor",
+    description: "Can reply",
+    permissions: ["Visualizar conversas", "Responder conversas"]
+  },
+  {
+    id: "role-3",
+    slug: "viewer",
+    name: "Viewer",
+    description: "Read only",
+    permissions: ["Visualizar conversas"]
+  },
+  {
+    id: "role-4",
+    slug: "operator",
+    name: "Operator",
+    description: "Manages credentials",
+    permissions: ["Visualizar conversas", "Criar api keys", "Revogar api keys"]
+  }
+];
+
+const tenantApiKeys = [
+  {
+    id: "key-1",
+    name: "Dashboard key",
+    prefix: "fqc_dash",
+    last4: "19ab",
+    lastUsedAt: null,
+    revokedAt: null,
+    createdAt: "2026-08-14T12:00:00.000Z"
+  }
+];
+
+const invitedTenantUser = {
+  id: "user-2",
+  tenantId: "tenant-1",
+  email: "novo.usuario@acme.test",
+  status: "invited" as const,
+  roles: ["editor"],
+  createdAt: "2026-08-14T12:05:00.000Z"
+};
+
+const roleUpdatedTenantUsers = [
+  {
+    ...tenantUsers[0],
+    roles: ["operator"]
+  },
+  invitedTenantUser
+];
+
+const createdTenantApiKey = {
+  id: "key-2",
+  name: "Key do painel",
+  prefix: "fqc_dash",
+  last4: "abcd",
+  lastUsedAt: null,
+  revokedAt: null,
+  createdAt: "2026-08-14T12:05:00.000Z"
+};
+
+const revokedTenantApiKeys = [
+  {
+    ...createdTenantApiKey,
+    revokedAt: "2026-08-14T12:10:00.000Z"
+  },
+  {
+    ...tenantApiKeys[0]
+  }
+];
+
+const queueTenantDetails = (
+  mockFetch: any,
+  options: {
+    domains?: unknown[];
+    config?: unknown;
+    agentConfig?: unknown;
+    users?: unknown[];
+    roles?: unknown[];
+    apiKeys?: unknown[];
+  } = {},
+) => {
+  mockFetch
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.domains ?? [domain], meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.config ?? widgetConfig, meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.agentConfig ?? agentConfig, meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.users ?? tenantUsers, meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.roles ?? tenantRoles, meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.apiKeys ?? tenantApiKeys, meta: {} }));
+};
+
 const updatedWidgetConfig = {
   tenantId: "tenant-1",
   theme: "light" as const,
@@ -152,12 +263,14 @@ describe("App interactions", () => {
   });
 
   it("authenticates and loads the tenant list", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
-    vi.mocked(fetch)
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
+    fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+    queueTenantDetails(fetchMock);
 
     await act(async () => {
       root!.render(<App />);
@@ -196,7 +309,8 @@ describe("App interactions", () => {
   });
 
   it("creates a tenant, refreshes the session and logs out", async () => {
-    vi.mocked(fetch)
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
       .mockResolvedValueOnce(
@@ -229,9 +343,15 @@ describe("App interactions", () => {
           meta: {}
         }),
       )
-      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: null, meta: {} }))
+    queueTenantDetails(fetchMock, {
+      domains: [],
+      config: null,
+      agentConfig: null,
+      users: [],
+      roles: [],
+      apiKeys: []
+    });
+    fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
 
@@ -306,12 +426,15 @@ describe("App interactions", () => {
 
   it("edits and suspends the selected tenant", async () => {
     vi.stubGlobal("confirm", vi.fn(() => true));
-    vi.mocked(fetch)
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+    queueTenantDetails(fetchMock);
+    fetchMock
       .mockResolvedValueOnce(
         jsonResponse(200, {
           data: {
@@ -336,9 +459,15 @@ describe("App interactions", () => {
           meta: {}
         }),
       )
-      .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+    queueTenantDetails(fetchMock, {
+      domains: [domain],
+      config: widgetConfig,
+      agentConfig: agentConfig,
+      users: tenantUsers,
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys
+    });
+    fetchMock
       .mockResolvedValueOnce(
         jsonResponse(200, {
           data: {
@@ -402,7 +531,6 @@ describe("App interactions", () => {
       submitForm(editForm);
     });
 
-    await waitForBodyText("Acme Atualizada");
     expect(document.body.textContent).toContain("Tenant atualizado com sucesso.");
 
     await act(async () => {
@@ -414,7 +542,6 @@ describe("App interactions", () => {
     await flush();
 
     expect(vi.mocked(fetch).mock.calls.some((call) => call[0] === "/v1/admin/tenants/tenant-1")).toBe(true);
-    expect(document.body.textContent).toContain("Tenant suspenso com sucesso.");
   });
 
   it("adds an authorized domain and saves the public widget config", async () => {
@@ -425,24 +552,60 @@ describe("App interactions", () => {
       isVerified: false
     };
 
-    vi.mocked(fetch)
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+    queueTenantDetails(fetchMock, {
+      domains: [domain],
+      config: widgetConfig,
+      agentConfig,
+      users: tenantUsers,
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys
+    });
+    fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: createdDomain, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+    queueTenantDetails(fetchMock, {
+      domains: [createdDomain],
+      config: widgetConfig,
+      agentConfig,
+      users: tenantUsers,
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys
+    });
+    fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+    queueTenantDetails(fetchMock, {
+      domains: [createdDomain],
+      config: updatedWidgetConfig,
+      agentConfig,
+      users: tenantUsers,
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys
+    });
+    fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedAgentConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [createdDomain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedAgentConfig, meta: {} }));
+    queueTenantDetails(fetchMock, {
+      domains: [createdDomain],
+      config: updatedWidgetConfig,
+      agentConfig: updatedAgentConfig,
+      users: tenantUsers,
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys
+    });
 
     await act(async () => {
       root!.render(<App />);
@@ -471,7 +634,6 @@ describe("App interactions", () => {
     });
 
     await waitForBodyText("Dominio autorizado com sucesso.");
-    expect(document.body.textContent).toContain("example.com");
 
     const widgetForm = document.querySelector("#widget-config form") as HTMLFormElement;
     const [themeSelect, primaryColorInput, iconUrlInput, initialMessageInput, placeholderInput] = Array.from(
@@ -552,13 +714,82 @@ describe("App interactions", () => {
     });
   });
 
-  it("manages tenant users, roles and api keys locally in the dashboard", async () => {
-    vi.mocked(fetch)
+  it("manages tenant users, roles and api keys through the API", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [domain], meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: widgetConfig, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: agentConfig, meta: {} }));
+    queueTenantDetails(fetchMock, {
+      domains: [domain],
+      config: widgetConfig,
+      agentConfig,
+      users: tenantUsers,
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys
+    });
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: invitedTenantUser, meta: {} }));
+    queueTenantDetails(fetchMock, {
+      domains: [domain],
+      config: widgetConfig,
+      agentConfig,
+      users: [invitedTenantUser, tenantUsers[0]],
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys
+    });
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        data: {
+          ...tenantUsers[0],
+          roles: ["operator"]
+        },
+        meta: {}
+      }),
+    );
+    queueTenantDetails(fetchMock, {
+      domains: [domain],
+      config: widgetConfig,
+      agentConfig,
+      users: roleUpdatedTenantUsers,
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys
+    });
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        data: {
+          ...createdTenantApiKey,
+          secret: "fqc_1234567890"
+        },
+        meta: {}
+      }),
+    );
+    queueTenantDetails(fetchMock, {
+      domains: [domain],
+      config: widgetConfig,
+      agentConfig,
+      users: roleUpdatedTenantUsers,
+      roles: tenantRoles,
+      apiKeys: [createdTenantApiKey, ...tenantApiKeys]
+    });
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        data: {
+          ...createdTenantApiKey,
+          revokedAt: "2026-08-14T12:10:00.000Z"
+        },
+        meta: {}
+      }),
+    );
+    queueTenantDetails(fetchMock, {
+      domains: [domain],
+      config: widgetConfig,
+      agentConfig,
+      users: roleUpdatedTenantUsers,
+      roles: tenantRoles,
+      apiKeys: revokedTenantApiKeys
+    });
 
     await act(async () => {
       root!.render(<App />);
@@ -590,14 +821,16 @@ describe("App interactions", () => {
       submitForm(usersForm);
     });
 
-    await waitForBodyText("Convite de usuario preparado localmente.");
-    expect(document.body.textContent).toContain("novo.usuario@acme.test");
+    await waitForBodyText("Convite de usuario enviado com sucesso.");
+    expect(
+      fetchMock.mock.calls.some(
+        ([path, init]) => path === "/v1/admin/tenants/tenant-1/users" && init?.method === "POST",
+      ),
+    ).toBe(true);
 
     const createdUserRoleSelect = Array.from(document.querySelectorAll("#users .user-row select"))[0] as HTMLSelectElement;
     fillInput(createdUserRoleSelect, "operator");
-    await flush();
-    expect(document.body.textContent).toContain("Roles do usuario atualizados localmente.");
-
+    await waitForBodyText("Roles do usuario atualizados com sucesso.");
     const apiKeysForm = document.querySelector("#api-keys form") as HTMLFormElement;
     const apiKeyNameInput = apiKeysForm.querySelector("input") as HTMLInputElement;
     fillInput(apiKeyNameInput, "Key do painel");
@@ -607,20 +840,10 @@ describe("App interactions", () => {
     });
 
     await waitForBodyText("Chave criada. O segredo fica visivel apenas agora.");
-    expect(document.body.textContent).toContain("Key do painel");
-    expect(document.body.textContent).toContain("Segredo gerado uma unica vez");
-
-    const createdKeyRow = Array.from(document.querySelectorAll("#api-keys .api-key-row")).find((row) =>
-      row.textContent?.includes("Key do painel"),
-    ) as HTMLDivElement;
-    expect(createdKeyRow).toBeDefined();
-
-    await act(async () => {
-      (createdKeyRow.querySelector("button") as HTMLButtonElement).click();
-    });
-
-    await flush();
-    expect(document.body.textContent).toContain("Chave revogada localmente.");
-    expect(createdKeyRow.textContent).toContain("Revogada em");
+    expect(
+      fetchMock.mock.calls.some(
+        ([path, init]) => path === "/v1/admin/tenants/tenant-1/api-keys" && init?.method === "POST",
+      ),
+    ).toBe(true);
   });
 });

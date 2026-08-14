@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { z } from "zod";
 import type { AdminAccessTokenPayload } from "../../auth/admin-token.js";
+import { hashPassword } from "../../auth/password.js";
 
 const tenantPlanSchema = z.enum(["free", "starter", "growth", "enterprise"]);
 const tenantPublicConfigSchema = z.object({
@@ -71,6 +73,35 @@ type TenantAgentConfigRecord = Readonly<{
   isActive: boolean;
 }>;
 
+type TenantUserRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  email: string;
+  passwordHash: string;
+  status: "active" | "invited" | "suspended";
+  createdAt?: Date;
+  updatedAt?: Date;
+}>;
+
+type TenantRoleRecord = Readonly<{
+  id: string;
+  tenantId: string | null;
+  slug: string;
+  name: string;
+  createdAt?: Date;
+}>;
+
+type TenantApiKeyRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  name: string;
+  hashedKey: string;
+  prefix: string;
+  lastUsedAt: Date | null;
+  revokedAt: Date | null;
+  createdAt?: Date;
+}>;
+
 type PlanRecord = Readonly<{
   id: string;
   slug: string;
@@ -127,6 +158,29 @@ export type TenantsServiceDependencies = Readonly<{
       isActive?: boolean;
     }): Promise<TenantAgentConfigRecord>;
   };
+  users: {
+    create(input: { tenantId: string; email: string; passwordHash: string; status?: "active" | "invited" | "suspended" }): Promise<TenantUserRecord>;
+    findById(id: string): Promise<TenantUserRecord | null>;
+    findByEmail(email: string): Promise<TenantUserRecord | null>;
+    listByTenantId(tenantId: string): Promise<TenantUserRecord[]>;
+    updateStatus(id: string, status: "active" | "invited" | "suspended"): Promise<TenantUserRecord | null>;
+  };
+  userRoles: {
+    assignRole(userId: string, roleId: string): Promise<unknown>;
+    removeRolesByUserId(userId: string): Promise<void>;
+    listRoleSlugsByUserId(userId: string): Promise<Array<Readonly<{ slug: string }>>>;
+  };
+  roles: {
+    create(input: { tenantId?: string; slug: string; name: string }): Promise<TenantRoleRecord>;
+    findByTenantIdAndSlug(tenantId: string | null | undefined, slug: string): Promise<TenantRoleRecord | null>;
+    listByTenantId(tenantId: string): Promise<TenantRoleRecord[]>;
+  };
+  apiKeys: {
+    create(input: { tenantId: string; name: string; hashedKey: string; prefix: string }): Promise<TenantApiKeyRecord>;
+    findById(id: string): Promise<TenantApiKeyRecord | null>;
+    listByTenantId(tenantId: string): Promise<TenantApiKeyRecord[]>;
+    revoke(id: string): Promise<TenantApiKeyRecord | null>;
+  };
   plans: {
     findBySlug(slug: string): Promise<PlanRecord | null>;
     findById(id: string): Promise<PlanRecord | null>;
@@ -170,6 +224,53 @@ const tenantAgentConfigSchema = z.object({
   retryPolicy: z.record(z.string(), z.unknown()).default({}),
   isActive: z.boolean().default(true)
 });
+
+const inviteUserSchema = z.object({
+  email: z.string().email().max(255),
+  roleSlug: z.string().min(1).max(80).default("viewer")
+});
+
+const updateUserRolesSchema = z.object({
+  roleSlugs: z.array(z.string().min(1).max(80)).min(1)
+});
+
+const createApiKeySchema = z.object({
+  name: z.string().min(1).max(120)
+});
+
+const defaultRoleCatalog = [
+  {
+    slug: "admin",
+    name: "Administrator",
+    description: "Acesso total ao tenant.",
+    permissions: [
+      "Visualizar conversas",
+      "Responder conversas",
+      "Invitar usuarios",
+      "Gerenciar roles",
+      "Criar api keys",
+      "Revogar api keys"
+    ]
+  },
+  {
+    slug: "editor",
+    name: "Editor",
+    description: "Atua no atendimento e na operacao cotidiana.",
+    permissions: ["Visualizar conversas", "Responder conversas"]
+  },
+  {
+    slug: "viewer",
+    name: "Viewer",
+    description: "Acompanha a operacao sem alterar dados.",
+    permissions: ["Visualizar conversas"]
+  },
+  {
+    slug: "operator",
+    name: "Operator",
+    description: "Gerencia integracoes e chaves de API.",
+    permissions: ["Visualizar conversas", "Criar api keys", "Revogar api keys"]
+  }
+] as const;
 
 const resolvePlan = async (
   plans: TenantsServiceDependencies["plans"],
@@ -305,6 +406,146 @@ export class TenantsService {
     });
   }
 
+  async listUsers(actor: AdminAccessTokenPayload, tenantId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const users = await this.dependencies.users.listByTenantId(tenantId);
+
+    return Promise.all(
+      users.map(async (user) => ({
+        id: user.id,
+        tenantId: user.tenantId,
+        email: user.email,
+        status: user.status,
+        roles: (await this.dependencies.userRoles.listRoleSlugsByUserId(user.id)).map((role) => role.slug),
+        createdAt: user.createdAt?.toISOString?.() ?? undefined,
+        updatedAt: user.updatedAt?.toISOString?.() ?? undefined
+      })),
+    );
+  }
+
+  async inviteUser(actor: AdminAccessTokenPayload, tenantId: string, rawInput: unknown) {
+    this.assertTenantAccess(actor, tenantId);
+    const input = this.parseInviteUserInput(rawInput);
+    const role = await this.resolveOrCreateRole(tenantId, input.roleSlug);
+    const user = await this.dependencies.users.create({
+      tenantId,
+      email: input.email,
+      passwordHash: hashPassword(`invite-${randomUUID()}`),
+      status: "invited"
+    });
+
+    await this.dependencies.userRoles.assignRole(user.id, role.id);
+
+    return {
+      id: user.id,
+      tenantId: user.tenantId,
+      email: user.email,
+      status: user.status,
+      roles: [role.slug],
+      invitedAt: user.createdAt?.toISOString?.() ?? new Date().toISOString()
+    };
+  }
+
+  async updateUserRoles(actor: AdminAccessTokenPayload, tenantId: string, userId: string, rawInput: unknown) {
+    this.assertTenantAccess(actor, tenantId);
+    const input = this.parseUpdateUserRolesInput(rawInput);
+    const user = await this.dependencies.users.findById(userId);
+    if (!user || user.tenantId !== tenantId) {
+      throw new NotFoundException(`User ${userId} was not found`);
+    }
+
+    const roles = [];
+    for (const slug of input.roleSlugs) {
+      roles.push(await this.resolveOrCreateRole(tenantId, slug));
+    }
+
+    await this.dependencies.userRoles.removeRolesByUserId(userId);
+    await Promise.all(roles.map((role) => this.dependencies.userRoles.assignRole(userId, role.id)));
+
+    return {
+      id: user.id,
+      tenantId: user.tenantId,
+      email: user.email,
+      status: user.status,
+      roles: roles.map((role) => role.slug)
+    };
+  }
+
+  async listRoles(actor: AdminAccessTokenPayload, tenantId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    await this.ensureDefaultRoles(tenantId);
+    const roles = await this.dependencies.roles.listByTenantId(tenantId);
+
+    return roles.map((role) => ({
+      id: role.id,
+      slug: role.slug,
+      name: role.name,
+      description: this.roleDescription(role.slug),
+      permissions: this.rolePermissions(role.slug)
+    }));
+  }
+
+  async listApiKeys(actor: AdminAccessTokenPayload, tenantId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const apiKeys = await this.dependencies.apiKeys.listByTenantId(tenantId);
+
+    return apiKeys.map((apiKey) => ({
+      id: apiKey.id,
+      name: apiKey.name,
+      prefix: apiKey.prefix,
+      last4: apiKey.prefix.slice(-4),
+      lastUsedAt: apiKey.lastUsedAt?.toISOString?.() ?? null,
+      revokedAt: apiKey.revokedAt?.toISOString?.() ?? null,
+      createdAt: apiKey.createdAt?.toISOString?.() ?? new Date().toISOString()
+    }));
+  }
+
+  async createApiKey(actor: AdminAccessTokenPayload, tenantId: string, rawInput: unknown) {
+    this.assertTenantAccess(actor, tenantId);
+    const input = this.parseCreateApiKeyInput(rawInput);
+    const secret = `fqc_${randomUUID().replaceAll("-", "")}`;
+    const created = await this.dependencies.apiKeys.create({
+      tenantId,
+      name: input.name,
+      hashedKey: hashPassword(secret),
+      prefix: secret.slice(0, 8)
+    });
+
+    return {
+      id: created.id,
+      name: created.name,
+      prefix: created.prefix,
+      last4: secret.slice(-4),
+      secret,
+      lastUsedAt: created.lastUsedAt?.toISOString?.() ?? null,
+      revokedAt: created.revokedAt?.toISOString?.() ?? null,
+      createdAt: created.createdAt?.toISOString?.() ?? new Date().toISOString()
+    };
+  }
+
+  async revokeApiKey(actor: AdminAccessTokenPayload, tenantId: string, apiKeyId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const apiKey = await this.dependencies.apiKeys.findById(apiKeyId);
+    if (!apiKey || apiKey.tenantId !== tenantId) {
+      throw new NotFoundException(`Api key ${apiKeyId} was not found`);
+    }
+
+    const revoked = await this.dependencies.apiKeys.revoke(apiKeyId);
+    if (!revoked) {
+      throw new NotFoundException(`Api key ${apiKeyId} was not found`);
+    }
+
+    return {
+      id: revoked.id,
+      name: revoked.name,
+      prefix: revoked.prefix,
+      last4: revoked.prefix.slice(-4),
+      lastUsedAt: revoked.lastUsedAt?.toISOString?.() ?? null,
+      revokedAt: revoked.revokedAt?.toISOString?.() ?? new Date().toISOString(),
+      createdAt: revoked.createdAt?.toISOString?.() ?? new Date().toISOString()
+    };
+  }
+
   async getPublicConfig(publicId: string): Promise<TenantPublicResponse> {
     const tenant = await this.dependencies.tenants.findByPublicId(publicId);
     if (!tenant) {
@@ -386,6 +627,61 @@ export class TenantsService {
     } catch {
       throw new BadRequestException("Invalid tenant agent config payload");
     }
+  }
+
+  private parseInviteUserInput(rawInput: unknown) {
+    try {
+      return inviteUserSchema.parse(rawInput);
+    } catch {
+      throw new BadRequestException("Invalid user payload");
+    }
+  }
+
+  private parseUpdateUserRolesInput(rawInput: unknown) {
+    try {
+      return updateUserRolesSchema.parse(rawInput);
+    } catch {
+      throw new BadRequestException("Invalid user roles payload");
+    }
+  }
+
+  private parseCreateApiKeyInput(rawInput: unknown) {
+    try {
+      return createApiKeySchema.parse(rawInput);
+    } catch {
+      throw new BadRequestException("Invalid api key payload");
+    }
+  }
+
+  private roleDescription(slug: string) {
+    return defaultRoleCatalog.find((role) => role.slug === slug)?.description ?? "Custom role";
+  }
+
+  private rolePermissions(slug: string) {
+    return [...(defaultRoleCatalog.find((role) => role.slug === slug)?.permissions ?? [])];
+  }
+
+  private async ensureDefaultRoles(tenantId: string) {
+    const existing = await this.dependencies.roles.listByTenantId(tenantId);
+    const missing = defaultRoleCatalog.filter((role) => !existing.some((item) => item.slug === role.slug));
+
+    for (const role of missing) {
+      await this.dependencies.roles.create({
+        tenantId,
+        slug: role.slug,
+        name: role.name
+      });
+    }
+  }
+
+  private async resolveOrCreateRole(tenantId: string, slug: string) {
+    await this.ensureDefaultRoles(tenantId);
+    const role = await this.dependencies.roles.findByTenantIdAndSlug(tenantId, slug);
+    if (!role) {
+      throw new NotFoundException(`Role ${slug} was not found`);
+    }
+
+    return role;
   }
 
   private assertPlatformAdmin(actor: AdminAccessTokenPayload) {

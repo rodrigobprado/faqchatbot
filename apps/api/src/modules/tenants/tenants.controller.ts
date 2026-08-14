@@ -75,6 +75,57 @@ export class AdminTenantsController {
   upsertAgentConfig(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
     return this.tenantsService.upsertTenantAgentConfig(request.adminUser!, tenantId, body);
   }
+
+  @Get(":tenantId/users")
+  @ApiOkResponse({ description: "Lists tenant users" })
+  listUsers(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.listUsers(request.adminUser!, tenantId);
+  }
+
+  @Post(":tenantId/users")
+  @ApiOkResponse({ description: "Invites a tenant user" })
+  inviteUser(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+    return this.tenantsService.inviteUser(request.adminUser!, tenantId, body);
+  }
+
+  @Patch(":tenantId/users/:userId/roles")
+  @ApiOkResponse({ description: "Updates tenant user roles" })
+  updateUserRoles(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Param("userId") userId: string,
+    @Body() body: unknown,
+  ) {
+    return this.tenantsService.updateUserRoles(request.adminUser!, tenantId, userId, body);
+  }
+
+  @Get(":tenantId/roles")
+  @ApiOkResponse({ description: "Lists tenant roles" })
+  listRoles(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.listRoles(request.adminUser!, tenantId);
+  }
+
+  @Get(":tenantId/api-keys")
+  @ApiOkResponse({ description: "Lists tenant api keys" })
+  listApiKeys(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.listApiKeys(request.adminUser!, tenantId);
+  }
+
+  @Post(":tenantId/api-keys")
+  @ApiOkResponse({ description: "Creates a tenant api key" })
+  createApiKey(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+    return this.tenantsService.createApiKey(request.adminUser!, tenantId, body);
+  }
+
+  @Delete(":tenantId/api-keys/:apiKeyId")
+  @ApiOkResponse({ description: "Revokes a tenant api key" })
+  revokeApiKey(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Param("apiKeyId") apiKeyId: string,
+  ) {
+    return this.tenantsService.revokeApiKey(request.adminUser!, tenantId, apiKeyId);
+  }
 }
 
 @ApiTags("public-tenants")

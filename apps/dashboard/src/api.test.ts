@@ -4,12 +4,19 @@ import {
   deleteTenant,
   createTenant,
   createTenantDomain,
+  createTenantApiKey,
   getTenantAgentConfig,
   getTenantConfig,
+  inviteTenantUser,
   listTenants,
+  listTenantApiKeys,
+  listTenantRoles,
+  listTenantUsers,
   listTenantDomains,
   loginAdmin,
   refreshAdmin,
+  revokeTenantApiKey,
+  updateTenantUserRoles,
   upsertTenantConfig,
   upsertTenantAgentConfig,
   updateTenant
@@ -66,6 +73,38 @@ const agentConfig = {
   isActive: true
 };
 
+const user = {
+  id: "user-1",
+  tenantId: "tenant-1",
+  email: "user@acme.test",
+  status: "invited" as const,
+  roles: ["viewer"],
+  createdAt: "2026-08-14T12:00:00.000Z"
+};
+
+const role = {
+  id: "role-1",
+  slug: "viewer",
+  name: "Viewer",
+  description: "Read only",
+  permissions: ["Visualizar conversas"]
+};
+
+const apiKey = {
+  id: "key-1",
+  name: "Dashboard key",
+  prefix: "fqc_dash",
+  last4: "19ab",
+  lastUsedAt: null,
+  revokedAt: null,
+  createdAt: "2026-08-14T12:00:00.000Z"
+};
+
+const createdApiKey = {
+  ...apiKey,
+  secret: "fqc_1234567890"
+};
+
 const jsonResponse = (status: number, data: unknown) =>
   new Response(JSON.stringify({ data, meta: { correlationId: "corr-1" } }), {
     status,
@@ -104,7 +143,14 @@ describe("API helpers", () => {
       .mockResolvedValueOnce(jsonResponse(200, config))
       .mockResolvedValueOnce(jsonResponse(200, config))
       .mockResolvedValueOnce(jsonResponse(200, agentConfig))
-      .mockResolvedValueOnce(jsonResponse(200, agentConfig));
+      .mockResolvedValueOnce(jsonResponse(200, agentConfig))
+      .mockResolvedValueOnce(jsonResponse(200, [user]))
+      .mockResolvedValueOnce(jsonResponse(200, user))
+      .mockResolvedValueOnce(jsonResponse(200, user))
+      .mockResolvedValueOnce(jsonResponse(200, [role]))
+      .mockResolvedValueOnce(jsonResponse(200, [apiKey]))
+      .mockResolvedValueOnce(jsonResponse(200, createdApiKey))
+      .mockResolvedValueOnce(jsonResponse(200, apiKey));
 
     await expect(loginAdmin({ email: "admin@acme.test", password: "senha-super-secreta" })).resolves.toEqual(
       session,
@@ -153,6 +199,26 @@ describe("API helpers", () => {
         isActive: true
       }),
     ).resolves.toEqual(agentConfig);
+    await expect(listTenantUsers("access-token-1", "tenant-1")).resolves.toEqual([user]);
+    await expect(
+      inviteTenantUser("access-token-1", "tenant-1", {
+        email: "user@acme.test",
+        roleSlug: "viewer"
+      }),
+    ).resolves.toEqual(user);
+    await expect(
+      updateTenantUserRoles("access-token-1", "tenant-1", "user-1", {
+        roleSlugs: ["viewer"]
+      }),
+    ).resolves.toEqual(user);
+    await expect(listTenantRoles("access-token-1", "tenant-1")).resolves.toEqual([role]);
+    await expect(listTenantApiKeys("access-token-1", "tenant-1")).resolves.toEqual([apiKey]);
+    await expect(
+      createTenantApiKey("access-token-1", "tenant-1", {
+        name: "Dashboard key"
+      }),
+    ).resolves.toEqual(createdApiKey);
+    await expect(revokeTenantApiKey("access-token-1", "tenant-1", "key-1")).resolves.toEqual(apiKey);
 
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       "/v1/admin/tenants",

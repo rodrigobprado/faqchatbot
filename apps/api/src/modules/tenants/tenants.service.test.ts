@@ -43,6 +43,29 @@ const createService = () => {
       findLatestByTenantId: vi.fn(),
       upsert: vi.fn()
     },
+    users: {
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByEmail: vi.fn(),
+      listByTenantId: vi.fn(),
+      updateStatus: vi.fn()
+    },
+    userRoles: {
+      assignRole: vi.fn(),
+      removeRolesByUserId: vi.fn(),
+      listRoleSlugsByUserId: vi.fn()
+    },
+    roles: {
+      create: vi.fn(),
+      findByTenantIdAndSlug: vi.fn(),
+      listByTenantId: vi.fn()
+    },
+    apiKeys: {
+      create: vi.fn(),
+      findById: vi.fn(),
+      listByTenantId: vi.fn(),
+      revoke: vi.fn()
+    },
     plans: {
       findBySlug: vi.fn(),
       findById: vi.fn()
@@ -340,5 +363,224 @@ describe("TenantsService", () => {
 
     dependencies.tenants.softDelete.mockResolvedValueOnce(null);
     await expect(service.deleteTenant(actor, "tenant-a")).rejects.toThrow("Tenant tenant-a was not found");
+  });
+
+  it("manages users, roles and api keys", async () => {
+    const { service, dependencies } = createService();
+    const actor = platformAdmin();
+    const tenantId = "tenant-a";
+    const userId = randomUUID();
+    const apiKeyId = randomUUID();
+
+    dependencies.tenants.findById.mockResolvedValue({
+      id: tenantId,
+      publicId: "acme",
+      name: "Acme",
+      status: "active",
+      planId: "plan-1",
+      defaultLocale: "pt-BR",
+      deletedAt: null
+    });
+    dependencies.users.listByTenantId.mockResolvedValue([
+      {
+        id: userId,
+        tenantId,
+        email: "admin@acme.test",
+        passwordHash: "hash",
+        status: "active",
+        createdAt: new Date("2026-08-14T12:00:00.000Z"),
+        updatedAt: new Date("2026-08-14T12:00:00.000Z")
+      }
+    ]);
+    dependencies.userRoles.listRoleSlugsByUserId.mockResolvedValue([{ slug: "admin" }]);
+    dependencies.roles.listByTenantId.mockResolvedValue([
+      { id: "role-1", tenantId, slug: "admin", name: "Administrator", createdAt: new Date() }
+    ]);
+    dependencies.roles.findByTenantIdAndSlug.mockResolvedValue({
+      id: "role-1",
+      tenantId,
+      slug: "admin",
+      name: "Administrator",
+      createdAt: new Date()
+    });
+    dependencies.users.create.mockResolvedValue({
+      id: userId,
+      tenantId,
+      email: "novo@acme.test",
+      passwordHash: "hash",
+      status: "invited",
+      createdAt: new Date("2026-08-14T12:00:00.000Z")
+    });
+    dependencies.users.findById.mockResolvedValue({
+      id: userId,
+      tenantId,
+      email: "novo@acme.test",
+      passwordHash: "hash",
+      status: "invited",
+      createdAt: new Date("2026-08-14T12:00:00.000Z"),
+      updatedAt: new Date("2026-08-14T12:00:00.000Z")
+    });
+    dependencies.apiKeys.create.mockResolvedValue({
+      id: apiKeyId,
+      tenantId,
+      name: "Key",
+      hashedKey: "hash",
+      prefix: "fqc_1234",
+      lastUsedAt: null,
+      revokedAt: null,
+      createdAt: new Date("2026-08-14T12:00:00.000Z")
+    });
+    dependencies.apiKeys.listByTenantId.mockResolvedValue([
+      {
+        id: apiKeyId,
+        tenantId,
+        name: "Key",
+        hashedKey: "hash",
+        prefix: "fqc_1234",
+        lastUsedAt: null,
+        revokedAt: null,
+        createdAt: new Date("2026-08-14T12:00:00.000Z")
+      }
+    ]);
+    dependencies.apiKeys.findById.mockResolvedValue({
+      id: apiKeyId,
+      tenantId,
+      name: "Key",
+      hashedKey: "hash",
+      prefix: "fqc_1234",
+      lastUsedAt: null,
+      revokedAt: null,
+      createdAt: new Date("2026-08-14T12:00:00.000Z")
+    });
+    dependencies.apiKeys.revoke.mockResolvedValue({
+      id: apiKeyId,
+      tenantId,
+      name: "Key",
+      hashedKey: "hash",
+      prefix: "fqc_1234",
+      lastUsedAt: null,
+      revokedAt: new Date("2026-08-14T12:10:00.000Z"),
+      createdAt: new Date("2026-08-14T12:00:00.000Z")
+    });
+
+    await expect(service.listUsers(actor, tenantId)).resolves.toEqual([
+      {
+        id: userId,
+        tenantId,
+        email: "admin@acme.test",
+        status: "active",
+        roles: ["admin"],
+        createdAt: "2026-08-14T12:00:00.000Z",
+        updatedAt: "2026-08-14T12:00:00.000Z"
+      }
+    ]);
+
+    await expect(service.inviteUser(actor, tenantId, { email: "novo@acme.test", roleSlug: "admin" })).resolves.toMatchObject({
+      email: "novo@acme.test",
+      status: "invited",
+      roles: ["admin"]
+    });
+
+    await expect(service.updateUserRoles(actor, tenantId, userId, { roleSlugs: ["admin"] })).resolves.toMatchObject({
+      id: userId,
+      roles: ["admin"]
+    });
+
+    await expect(service.listRoles(actor, tenantId)).resolves.toEqual([
+      expect.objectContaining({
+        slug: "admin",
+        permissions: expect.arrayContaining(["Criar api keys"])
+      })
+    ]);
+
+    await expect(service.listApiKeys(actor, tenantId)).resolves.toEqual([
+      expect.objectContaining({
+        id: apiKeyId,
+        name: "Key",
+        prefix: "fqc_1234"
+      })
+    ]);
+
+    await expect(service.createApiKey(actor, tenantId, { name: "Key" })).resolves.toEqual(
+      expect.objectContaining({
+        name: "Key",
+        prefix: "fqc_1234",
+        secret: expect.stringMatching(/^fqc_/)
+      }),
+    );
+
+    await expect(service.revokeApiKey(actor, tenantId, apiKeyId)).resolves.toEqual(
+      expect.objectContaining({
+        id: apiKeyId,
+        revokedAt: "2026-08-14T12:10:00.000Z"
+      }),
+    );
+  });
+
+  it("creates default roles on demand and rejects unknown roles", async () => {
+    const { service, dependencies } = createService();
+    const actor = platformAdmin();
+    const tenantId = "tenant-b";
+    const defaultRoles = [
+      { id: "role-1", tenantId, slug: "admin", name: "Administrator", createdAt: new Date() },
+      { id: "role-2", tenantId, slug: "editor", name: "Editor", createdAt: new Date() },
+      { id: "role-3", tenantId, slug: "viewer", name: "Viewer", createdAt: new Date() },
+      { id: "role-4", tenantId, slug: "operator", name: "Operator", createdAt: new Date() }
+    ];
+
+    dependencies.roles.listByTenantId
+      .mockResolvedValueOnce([])
+      .mockResolvedValue(defaultRoles);
+    dependencies.roles.create.mockResolvedValue({
+      id: "role-1",
+      tenantId,
+      slug: "admin",
+      name: "Administrator",
+      createdAt: new Date()
+    });
+    dependencies.roles.findByTenantIdAndSlug.mockResolvedValue(null);
+
+    await expect(service.listRoles(actor, tenantId)).resolves.toHaveLength(4);
+    expect(dependencies.roles.create).toHaveBeenCalledTimes(4);
+
+    await expect(
+      service.inviteUser(actor, tenantId, { email: "novo@acme.test", roleSlug: "custom-role" }),
+    ).rejects.toThrow("Role custom-role was not found");
+  });
+
+  it("rejects malformed user role and api key payloads", async () => {
+    const { service, dependencies } = createService();
+    const actor = platformAdmin();
+    const tenantId = "tenant-c";
+
+    dependencies.users.findById.mockResolvedValue({
+      id: "user-1",
+      tenantId,
+      email: "user@acme.test",
+      passwordHash: "hash",
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    dependencies.roles.listByTenantId.mockResolvedValue([]);
+    dependencies.roles.create.mockResolvedValue({
+      id: "role-1",
+      tenantId,
+      slug: "admin",
+      name: "Administrator",
+      createdAt: new Date()
+    });
+    dependencies.roles.findByTenantIdAndSlug.mockResolvedValue({
+      id: "role-1",
+      tenantId,
+      slug: "admin",
+      name: "Administrator",
+      createdAt: new Date()
+    });
+
+    await expect(service.updateUserRoles(actor, tenantId, "user-1", { roleSlugs: [] })).rejects.toThrow(
+      "Invalid user roles payload",
+    );
+    await expect(service.createApiKey(actor, tenantId, {})).rejects.toThrow("Invalid api key payload");
   });
 });
