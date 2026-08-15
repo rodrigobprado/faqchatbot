@@ -1,6 +1,6 @@
 import { Controller, Get } from "@nestjs/common";
 import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
-import type { DatabaseService } from "../../db/database.service.js";
+import { DatabaseService } from "../../db/database.service.js";
 
 export type HealthResponse = Readonly<{
   status: "ok";
