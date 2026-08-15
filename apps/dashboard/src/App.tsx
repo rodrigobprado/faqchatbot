@@ -127,6 +127,9 @@ type ViewState = Readonly<{
 }>;
 
 type DashboardSection = "overview" | "plans" | "tenants" | "operations" | "access";
+type TenantWorkspace = "list" | "create" | "details" | "widget" | "security" | "agent";
+type OperationsWorkspace = "sessions" | "analytics" | "logs" | "conversations";
+type AccessWorkspace = "users" | "roles" | "api-keys";
 
 const defaultLoginState = (): LoginState => ({
   email: "",
@@ -241,6 +244,92 @@ const dashboardSections: ReadonlyArray<{
     id: "access",
     label: "Acesso",
     description: "Usuarios, roles e API keys",
+  },
+] as const;
+
+const tenantWorkspaces: ReadonlyArray<{
+  id: TenantWorkspace;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "list",
+    label: "Lista",
+    description: "Pesquisar e selecionar tenants",
+  },
+  {
+    id: "create",
+    label: "Criar",
+    description: "Cadastrar um novo tenant",
+  },
+  {
+    id: "details",
+    label: "Detalhes",
+    description: "Editar o tenant selecionado",
+  },
+  {
+    id: "widget",
+    label: "Widget",
+    description: "Snippet e configuração pública",
+  },
+  {
+    id: "security",
+    label: "Segurança",
+    description: "Domínios autorizados",
+  },
+  {
+    id: "agent",
+    label: "Agente",
+    description: "Provider, webhook e regras",
+  },
+] as const;
+
+const operationsWorkspaces: ReadonlyArray<{
+  id: OperationsWorkspace;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "sessions",
+    label: "Sessões",
+    description: "Sessões do widget",
+  },
+  {
+    id: "analytics",
+    label: "Analytics",
+    description: "Eventos e métricas",
+  },
+  {
+    id: "logs",
+    label: "Logs",
+    description: "Auditoria e system logs",
+  },
+  {
+    id: "conversations",
+    label: "Conversas",
+    description: "Histórico do atendimento",
+  },
+] as const;
+
+const accessWorkspaces: ReadonlyArray<{
+  id: AccessWorkspace;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "users",
+    label: "Usuários",
+    description: "Convites e permissões",
+  },
+  {
+    id: "roles",
+    label: "Roles",
+    description: "Catálogo de acessos",
+  },
+  {
+    id: "api-keys",
+    label: "API keys",
+    description: "Credenciais do tenant",
   },
 ] as const;
 
@@ -411,6 +500,9 @@ export const App = () => {
     "loading",
   );
   const [activeSection, setActiveSection] = useState<DashboardSection>("overview");
+  const [tenantWorkspace, setTenantWorkspace] = useState<TenantWorkspace>("list");
+  const [operationsWorkspace, setOperationsWorkspace] = useState<OperationsWorkspace>("sessions");
+  const [accessWorkspace, setAccessWorkspace] = useState<AccessWorkspace>("users");
   const [viewState, setViewState] = useState<ViewState>({
     loading: false,
     error: null,
@@ -468,6 +560,10 @@ export const App = () => {
       setTenants([]);
       setPlans([]);
       setSelectedTenantId(null);
+      setActiveSection("overview");
+      setTenantWorkspace("list");
+      setOperationsWorkspace("sessions");
+      setAccessWorkspace("users");
       setTenantFilters(defaultTenantListFiltersState());
       setTenantPage(0);
       setTenantDomains([]);
@@ -526,6 +622,9 @@ export const App = () => {
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
 
     if (!session || !selectedTenant) {
+      if (tenantWorkspace !== "list" && tenantWorkspace !== "create") {
+        setTenantWorkspace("list");
+      }
       setTenantDomains([]);
       setDomainForm("");
       setWidgetConfig(defaultTenantWidgetConfigState());
@@ -539,7 +638,7 @@ export const App = () => {
     }
 
     void loadTenantDetails(selectedTenant.id);
-  }, [selectedTenantId, tenants, session]);
+  }, [selectedTenantId, tenants, session, tenantWorkspace]);
 
   useEffect(() => {
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
@@ -809,6 +908,7 @@ export const App = () => {
         setTenantSessionsById({});
         setTenantInsightsById({});
         setSelectedTenantId(null);
+        setTenantWorkspace("list");
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -862,6 +962,10 @@ export const App = () => {
     try {
       const result = await loginAdmin(loginState);
       setSession(result);
+      setActiveSection("overview");
+      setTenantWorkspace("list");
+      setOperationsWorkspace("sessions");
+      setAccessWorkspace("users");
       setLoginState(defaultLoginState);
       setViewState((current) => ({
         ...current,
@@ -904,6 +1008,10 @@ export const App = () => {
     setSession(null);
     setTenants([]);
     setPlans([]);
+    setActiveSection("overview");
+    setTenantWorkspace("list");
+    setOperationsWorkspace("sessions");
+    setAccessWorkspace("users");
     setLoginState(defaultLoginState);
     setTenantForm(defaultTenantFormState());
     setTenantEdit(defaultTenantEditState(undefined, []));
@@ -930,7 +1038,7 @@ export const App = () => {
     setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
 
     try {
-      await withSessionRetry((accessToken) =>
+      const createdTenant = await withSessionRetry((accessToken) =>
         createTenant(accessToken, {
           publicId: tenantForm.publicId,
           name: tenantForm.name,
@@ -939,9 +1047,10 @@ export const App = () => {
         }),
       );
 
-      setSelectedTenantId(null);
+      setSelectedTenantId(createdTenant.id);
       setTenantForm(defaultTenantFormState(plans));
       setActiveSection("tenants");
+      setTenantWorkspace("details");
       await loadTenants();
       updateNotice("Tenant criado com sucesso.");
     } catch (error) {
@@ -963,6 +1072,7 @@ export const App = () => {
   const handleSelectTenant = (tenant: TenantRecord) => {
     setSelectedTenantId(tenant.id);
     setActiveSection("tenants");
+    setTenantWorkspace("details");
   };
 
   const handleCreateDomainSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1320,6 +1430,7 @@ export const App = () => {
       setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
       await withSessionRetry((accessToken) => deleteTenant(accessToken, selectedTenant.id));
       setSelectedTenantId(null);
+      setTenantWorkspace("list");
       await loadTenants();
       updateNotice("Tenant excluido com sucesso.");
     } catch (error) {
@@ -1514,7 +1625,13 @@ export const App = () => {
         </section>
       </aside>
 
-      <section className="content" data-active-section={activeSection}>
+      <section
+        className="content"
+        data-active-section={activeSection}
+        data-tenant-workspace={tenantWorkspace}
+        data-operations-workspace={operationsWorkspace}
+        data-access-workspace={accessWorkspace}
+      >
         <header className="page-header">
           <div>
             <p>Plataforma</p>
@@ -1547,6 +1664,61 @@ export const App = () => {
           <div className="banner warning">
             Este usuário está em modo restrito. Ações globais, como criar ou excluir tenants, foram
             bloqueadas.
+          </div>
+        ) : null}
+
+        {session && activeSection === "tenants" ? (
+          <div className="workspace-tabs" aria-label="Navegação de tenants">
+            {tenantWorkspaces.map((workspace) => (
+              <button
+                key={workspace.id}
+                type="button"
+                className={tenantWorkspace === workspace.id ? "tab-link is-active" : "tab-link"}
+                onClick={() => setTenantWorkspace(workspace.id)}
+                title={workspace.description}
+                disabled={
+                  !selectedTenant &&
+                  (workspace.id === "details" ||
+                    workspace.id === "widget" ||
+                    workspace.id === "security" ||
+                    workspace.id === "agent")
+                }
+              >
+                {workspace.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {session && activeSection === "operations" ? (
+          <div className="workspace-tabs" aria-label="Navegação de operações">
+            {operationsWorkspaces.map((workspace) => (
+              <button
+                key={workspace.id}
+                type="button"
+                className={operationsWorkspace === workspace.id ? "tab-link is-active" : "tab-link"}
+                onClick={() => setOperationsWorkspace(workspace.id)}
+                title={workspace.description}
+              >
+                {workspace.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {session && activeSection === "access" ? (
+          <div className="workspace-tabs" aria-label="Navegação de acesso">
+            {accessWorkspaces.map((workspace) => (
+              <button
+                key={workspace.id}
+                type="button"
+                className={accessWorkspace === workspace.id ? "tab-link is-active" : "tab-link"}
+                onClick={() => setAccessWorkspace(workspace.id)}
+                title={workspace.description}
+              >
+                {workspace.label}
+              </button>
+            ))}
           </div>
         ) : null}
 
@@ -1731,7 +1903,11 @@ export const App = () => {
             </section>
 
             <section className="two-column panel-section panel-tenants">
-              <article className="surface panel-section panel-tenants" id="tenants">
+              <article
+                className="surface panel-section panel-tenants"
+                id="tenants"
+                data-tenant-panel="list"
+              >
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Clientes</p>
@@ -1885,7 +2061,11 @@ export const App = () => {
                 ) : null}
               </article>
 
-              <article className="surface panel-section panel-tenants" id="config">
+              <article
+                className="surface panel-section panel-tenants"
+                id="config"
+                data-tenant-panel="create"
+              >
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Operacao inicial</p>
@@ -1973,6 +2153,7 @@ export const App = () => {
               <section
                 className="surface tenant-detail panel-section panel-tenants"
                 id="tenant-detail"
+                data-tenant-panel="details"
               >
                 <div className="section-heading">
                   <div>
@@ -2110,7 +2291,11 @@ export const App = () => {
               </section>
             ) : null}
 
-            <section className="surface widget-card panel-section panel-tenants" id="widget">
+            <section
+              className="surface widget-card panel-section panel-tenants"
+              id="widget"
+              data-tenant-panel="widget"
+            >
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Widget</p>
@@ -2141,7 +2326,11 @@ export const App = () => {
 
             {selectedTenant ? (
               <section className="two-column panel-section panel-tenants">
-                <article className="surface domain-card panel-section panel-tenants" id="domains">
+                <article
+                  className="surface domain-card panel-section panel-tenants"
+                  id="domains"
+                  data-tenant-panel="security"
+                >
                   <div className="section-heading">
                     <div>
                       <p className="eyebrow">Seguranca</p>
@@ -2187,6 +2376,7 @@ export const App = () => {
                 <article
                   className="surface widget-config-card panel-section panel-tenants"
                   id="widget-config"
+                  data-tenant-panel="widget"
                 >
                   <div className="section-heading">
                     <div>
@@ -2284,6 +2474,7 @@ export const App = () => {
               <section
                 className="surface agent-config-card panel-section panel-tenants"
                 id="agent-config"
+                data-tenant-panel="agent"
               >
                 <div className="section-heading">
                   <div>
@@ -2445,7 +2636,11 @@ export const App = () => {
             ) : null}
 
             {selectedTenant ? (
-              <section className="surface panel-section panel-operations" id="sessions">
+              <section
+                className="surface panel-section panel-operations"
+                id="sessions"
+                data-operations-panel="sessions"
+              >
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Visibilidade</p>
@@ -2504,7 +2699,11 @@ export const App = () => {
             ) : null}
 
             {selectedTenant ? (
-              <section className="surface panel-section panel-operations" id="analytics">
+              <section
+                className="surface panel-section panel-operations"
+                id="analytics"
+                data-operations-panel="analytics"
+              >
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Medição</p>
@@ -2576,7 +2775,11 @@ export const App = () => {
             ) : null}
 
             {selectedTenant ? (
-              <section className="surface panel-section panel-operations" id="logs">
+              <section
+                className="surface panel-section panel-operations"
+                id="logs"
+                data-operations-panel="logs"
+              >
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Confiabilidade</p>
@@ -2635,7 +2838,11 @@ export const App = () => {
             ) : null}
 
             {selectedTenant ? (
-              <section className="surface panel-section panel-operations" id="conversations">
+              <section
+                className="surface panel-section panel-operations"
+                id="conversations"
+                data-operations-panel="conversations"
+              >
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Atendimento</p>
@@ -2773,7 +2980,11 @@ export const App = () => {
 
             {selectedTenant && selectedTenantAccess ? (
               <section className="three-column access-grid panel-section panel-access">
-                <article className="surface access-card panel-section panel-access" id="users">
+                <article
+                  className="surface access-card panel-section panel-access"
+                  id="users"
+                  data-access-panel="users"
+                >
                   <div className="section-heading">
                     <div>
                       <p className="eyebrow">Equipe</p>
@@ -2870,7 +3081,11 @@ export const App = () => {
                   </div>
                 </article>
 
-                <article className="surface access-card panel-section panel-access" id="roles">
+                <article
+                  className="surface access-card panel-section panel-access"
+                  id="roles"
+                  data-access-panel="roles"
+                >
                   <div className="section-heading">
                     <div>
                       <p className="eyebrow">Acesso</p>
@@ -2915,7 +3130,11 @@ export const App = () => {
                   </div>
                 </article>
 
-                <article className="surface access-card panel-section panel-access" id="api-keys">
+                <article
+                  className="surface access-card panel-section panel-access"
+                  id="api-keys"
+                  data-access-panel="api-keys"
+                >
                   <div className="section-heading">
                     <div>
                       <p className="eyebrow">Credenciais</p>

@@ -180,11 +180,77 @@ h2 {
   padding: 1.5rem;
 }
 
+.workspace-tabs {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.15rem 0;
+}
+
+.tab-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.6rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid rgb(148 163 184 / 0.18);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.72);
+  color: #334155;
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgb(15 23 42 / 0.03);
+}
+
+.tab-link:hover {
+  border-color: rgb(37 99 235 / 0.22);
+  background: rgb(37 99 235 / 0.06);
+}
+
+.tab-link.is-active {
+  border-color: rgb(37 99 235 / 0.28);
+  background: linear-gradient(135deg, rgb(15 118 110 / 0.12), rgb(37 99 235 / 0.1));
+  color: #0f172a;
+}
+
+.tab-link:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .content[data-active-section="overview"] .panel-section:not(.panel-overview),
 .content[data-active-section="plans"] .panel-section:not(.panel-plans),
 .content[data-active-section="tenants"] .panel-section:not(.panel-tenants),
 .content[data-active-section="operations"] .panel-section:not(.panel-operations),
 .content[data-active-section="access"] .panel-section:not(.panel-access) {
+  display: none;
+}
+
+.content[data-active-section="tenants"][data-tenant-workspace="list"]
+  [data-tenant-panel]:not([data-tenant-panel="list"]),
+.content[data-active-section="tenants"][data-tenant-workspace="create"]
+  [data-tenant-panel]:not([data-tenant-panel="create"]),
+.content[data-active-section="tenants"][data-tenant-workspace="details"]
+  [data-tenant-panel]:not([data-tenant-panel="details"]),
+.content[data-active-section="tenants"][data-tenant-workspace="widget"]
+  [data-tenant-panel]:not([data-tenant-panel="widget"]),
+.content[data-active-section="tenants"][data-tenant-workspace="security"]
+  [data-tenant-panel]:not([data-tenant-panel="security"]),
+.content[data-active-section="tenants"][data-tenant-workspace="agent"]
+  [data-tenant-panel]:not([data-tenant-panel="agent"]),
+.content[data-active-section="operations"][data-operations-workspace="sessions"]
+  [data-operations-panel]:not([data-operations-panel="sessions"]),
+.content[data-active-section="operations"][data-operations-workspace="analytics"]
+  [data-operations-panel]:not([data-operations-panel="analytics"]),
+.content[data-active-section="operations"][data-operations-workspace="logs"]
+  [data-operations-panel]:not([data-operations-panel="logs"]),
+.content[data-active-section="operations"][data-operations-workspace="conversations"]
+  [data-operations-panel]:not([data-operations-panel="conversations"]),
+.content[data-active-section="access"][data-access-workspace="users"]
+  [data-access-panel]:not([data-access-panel="users"]),
+.content[data-active-section="access"][data-access-workspace="roles"]
+  [data-access-panel]:not([data-access-panel="roles"]),
+.content[data-active-section="access"][data-access-workspace="api-keys"]
+  [data-access-panel]:not([data-access-panel="api-keys"]) {
   display: none;
 }
 

@@ -13,16 +13,16 @@ const adminSession = {
     id: "user-1",
     tenantId: "tenant-admin-1",
     email: "admin@acme.test",
-    roles: ["platform_admin", "admin"]
-  }
+    roles: ["platform_admin", "admin"],
+  },
 };
 
 const restrictedSession = {
   ...adminSession,
   user: {
     ...adminSession.user,
-    roles: ["admin"]
-  }
+    roles: ["admin"],
+  },
 };
 
 const tenant = {
@@ -32,7 +32,7 @@ const tenant = {
   status: "active" as const,
   planId: "plan-starter",
   defaultLocale: "pt-BR",
-  deletedAt: null
+  deletedAt: null,
 };
 
 const tenantTwo = {
@@ -42,7 +42,7 @@ const tenantTwo = {
   status: "suspended" as const,
   planId: "plan-growth",
   defaultLocale: "pt-BR",
-  deletedAt: null
+  deletedAt: null,
 };
 
 const tenantThree = {
@@ -52,7 +52,7 @@ const tenantThree = {
   status: "active" as const,
   planId: "plan-free",
   defaultLocale: "pt-BR",
-  deletedAt: null
+  deletedAt: null,
 };
 
 const tenantFour = {
@@ -62,7 +62,7 @@ const tenantFour = {
   status: "inactive" as const,
   planId: "plan-starter",
   defaultLocale: "pt-BR",
-  deletedAt: null
+  deletedAt: null,
 };
 
 const tenantFive = {
@@ -72,7 +72,7 @@ const tenantFive = {
   status: "active" as const,
   planId: "plan-growth",
   defaultLocale: "pt-BR",
-  deletedAt: null
+  deletedAt: null,
 };
 
 const tenantSix = {
@@ -82,7 +82,7 @@ const tenantSix = {
   status: "suspended" as const,
   planId: "plan-enterprise",
   defaultLocale: "pt-BR",
-  deletedAt: null
+  deletedAt: null,
 };
 
 const plans = [
@@ -94,7 +94,7 @@ const plans = [
     priceCents: 0,
     isActive: true,
     createdAt: "2026-08-14T12:00:00.000Z",
-    updatedAt: "2026-08-14T12:00:00.000Z"
+    updatedAt: "2026-08-14T12:00:00.000Z",
   },
   {
     id: "plan-starter",
@@ -104,7 +104,7 @@ const plans = [
     priceCents: 4900,
     isActive: true,
     createdAt: "2026-08-14T12:00:00.000Z",
-    updatedAt: "2026-08-14T12:00:00.000Z"
+    updatedAt: "2026-08-14T12:00:00.000Z",
   },
   {
     id: "plan-growth",
@@ -114,7 +114,7 @@ const plans = [
     priceCents: 9900,
     isActive: true,
     createdAt: "2026-08-14T12:00:00.000Z",
-    updatedAt: "2026-08-14T12:00:00.000Z"
+    updatedAt: "2026-08-14T12:00:00.000Z",
   },
   {
     id: "plan-enterprise",
@@ -124,15 +124,15 @@ const plans = [
     priceCents: 19900,
     isActive: false,
     createdAt: "2026-08-14T12:00:00.000Z",
-    updatedAt: "2026-08-14T12:00:00.000Z"
-  }
+    updatedAt: "2026-08-14T12:00:00.000Z",
+  },
 ];
 
 const domain = {
   id: "domain-1",
   tenantId: "tenant-1",
   domain: "acme.com",
-  isVerified: false
+  isVerified: false,
 };
 
 const widgetConfig = {
@@ -141,7 +141,7 @@ const widgetConfig = {
   primaryColor: "#111111",
   iconUrl: "https://example.com/icon.png",
   initialMessage: "Bem-vindo",
-  placeholder: "Escreva aqui"
+  placeholder: "Escreva aqui",
 };
 
 const agentConfig = {
@@ -154,7 +154,7 @@ const agentConfig = {
   routingRules: { fallback: "n8n" },
   timeoutMs: 15000,
   retryPolicy: { attempts: 2 },
-  isActive: true
+  isActive: true,
 };
 
 const tenantUsers = [
@@ -164,8 +164,8 @@ const tenantUsers = [
     email: "admin@acme.test",
     status: "active" as const,
     roles: ["admin"],
-    createdAt: "2026-08-14T12:00:00.000Z"
-  }
+    createdAt: "2026-08-14T12:00:00.000Z",
+  },
 ];
 
 const tenantRoles = [
@@ -174,29 +174,29 @@ const tenantRoles = [
     slug: "admin",
     name: "Administrator",
     description: "Full access",
-    permissions: ["Visualizar conversas", "Criar api keys"]
+    permissions: ["Visualizar conversas", "Criar api keys"],
   },
   {
     id: "role-2",
     slug: "editor",
     name: "Editor",
     description: "Can reply",
-    permissions: ["Visualizar conversas", "Responder conversas"]
+    permissions: ["Visualizar conversas", "Responder conversas"],
   },
   {
     id: "role-3",
     slug: "viewer",
     name: "Viewer",
     description: "Read only",
-    permissions: ["Visualizar conversas"]
+    permissions: ["Visualizar conversas"],
   },
   {
     id: "role-4",
     slug: "operator",
     name: "Operator",
     description: "Manages credentials",
-    permissions: ["Visualizar conversas", "Criar api keys", "Revogar api keys"]
-  }
+    permissions: ["Visualizar conversas", "Criar api keys", "Revogar api keys"],
+  },
 ];
 
 const tenantApiKeys = [
@@ -207,8 +207,8 @@ const tenantApiKeys = [
     last4: "19ab",
     lastUsedAt: null,
     revokedAt: null,
-    createdAt: "2026-08-14T12:00:00.000Z"
-  }
+    createdAt: "2026-08-14T12:00:00.000Z",
+  },
 ];
 
 const invitedTenantUser = {
@@ -217,15 +217,15 @@ const invitedTenantUser = {
   email: "novo.usuario@acme.test",
   status: "invited" as const,
   roles: ["editor"],
-  createdAt: "2026-08-14T12:05:00.000Z"
+  createdAt: "2026-08-14T12:05:00.000Z",
 };
 
 const roleUpdatedTenantUsers = [
   {
     ...tenantUsers[0],
-    roles: ["operator"]
+    roles: ["operator"],
   },
-  invitedTenantUser
+  invitedTenantUser,
 ];
 
 const createdTenantApiKey = {
@@ -235,17 +235,17 @@ const createdTenantApiKey = {
   last4: "abcd",
   lastUsedAt: null,
   revokedAt: null,
-  createdAt: "2026-08-14T12:05:00.000Z"
+  createdAt: "2026-08-14T12:05:00.000Z",
 };
 
 const revokedTenantApiKeys = [
   {
     ...createdTenantApiKey,
-    revokedAt: "2026-08-14T12:10:00.000Z"
+    revokedAt: "2026-08-14T12:10:00.000Z",
   },
   {
-    ...tenantApiKeys[0]
-  }
+    ...tenantApiKeys[0],
+  },
 ];
 
 const queueTenantDetails = (
@@ -267,13 +267,29 @@ const queueTenantDetails = (
   mockFetch
     .mockResolvedValueOnce(jsonResponse(200, { data: options.domains ?? [domain], meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.config ?? widgetConfig, meta: {} }))
-    .mockResolvedValueOnce(jsonResponse(200, { data: options.agentConfig ?? agentConfig, meta: {} }))
+    .mockResolvedValueOnce(
+      jsonResponse(200, { data: options.agentConfig ?? agentConfig, meta: {} }),
+    )
     .mockResolvedValueOnce(jsonResponse(200, { data: options.users ?? tenantUsers, meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.roles ?? tenantRoles, meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.apiKeys ?? tenantApiKeys, meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.sessions ?? [], meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.conversations ?? [], meta: {} }))
-    .mockResolvedValueOnce(jsonResponse(200, { data: options.analytics ?? { totalEvents: 0, eventTypeCounts: [], originCounts: [], domainCounts: [], deviceCounts: [], resolutionCounts: [], timeline: [], events: [] }, meta: {} }))
+    .mockResolvedValueOnce(
+      jsonResponse(200, {
+        data: options.analytics ?? {
+          totalEvents: 0,
+          eventTypeCounts: [],
+          originCounts: [],
+          domainCounts: [],
+          deviceCounts: [],
+          resolutionCounts: [],
+          timeline: [],
+          events: [],
+        },
+        meta: {},
+      }),
+    )
     .mockResolvedValueOnce(jsonResponse(200, { data: options.auditLogs ?? [], meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.systemLogs ?? [], meta: {} }));
 };
@@ -284,7 +300,7 @@ const updatedWidgetConfig = {
   primaryColor: "#123456",
   iconUrl: "https://cdn.example.com/icon.png",
   initialMessage: "Olá, posso ajudar?",
-  placeholder: "Digite sua dúvida"
+  placeholder: "Digite sua dúvida",
 };
 
 const updatedAgentConfig = {
@@ -297,15 +313,15 @@ const updatedAgentConfig = {
   routingRules: { fallback: "n8n", priority: 1 },
   timeoutMs: 25000,
   retryPolicy: { attempts: 3, backoffMs: 500 },
-  isActive: false
+  isActive: false,
 };
 
 const jsonResponse = (status: number, body: MockResponseBody) =>
   new Response(JSON.stringify(body), {
     status,
     headers: {
-      "Content-Type": "application/json"
-    }
+      "Content-Type": "application/json",
+    },
   });
 
 const healthResponse = {
@@ -313,8 +329,8 @@ const healthResponse = {
   service: "api" as const,
   timestamp: "2026-08-14T12:00:00.000Z",
   checks: {
-    database: "ok" as const
-  }
+    database: "ok" as const,
+  },
 };
 
 const setupDom = () => {
@@ -327,11 +343,12 @@ const setupDom = () => {
   return createRoot(element);
 };
 
-const fillInput = (input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) => {
-  const descriptor = Object.getOwnPropertyDescriptor(
-    Object.getPrototypeOf(input),
-    "value",
-  ) as PropertyDescriptor | undefined;
+const fillInput = (
+  input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+  value: string,
+) => {
+  const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value") as
+    PropertyDescriptor | undefined;
 
   descriptor?.set?.call(input, value);
 
@@ -376,9 +393,9 @@ describe("App interactions", () => {
     clipboardWriteText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(window.navigator, "clipboard", {
       value: {
-        writeText: clipboardWriteText
+        writeText: clipboardWriteText,
       },
-      configurable: true
+      configurable: true,
     });
     window.localStorage.clear();
     root = setupDom();
@@ -425,8 +442,8 @@ describe("App interactions", () => {
     expect(document.body.textContent).toContain(
       '<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=acme" data-agent="acme" async></script>',
     );
-    const copySnippetButton = Array.from(document.querySelectorAll("#widget button")).find((button) =>
-      button.textContent?.includes("Copiar snippet"),
+    const copySnippetButton = Array.from(document.querySelectorAll("#widget button")).find(
+      (button) => button.textContent?.includes("Copiar snippet"),
     ) as HTMLButtonElement;
 
     await act(async () => {
@@ -442,8 +459,8 @@ describe("App interactions", () => {
       "/v1/admin/tenants",
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: "Bearer access-token-1"
-        })
+          Authorization: "Bearer access-token-1",
+        }),
       }),
     );
   });
@@ -529,8 +546,8 @@ describe("App interactions", () => {
     ) as [HTMLInputElement, HTMLSelectElement, HTMLSelectElement];
 
     const visibleRows = () =>
-      Array.from(tenantsSection.querySelectorAll(".table-row:not(.table-head)")).filter(
-        (row) => row.textContent?.includes("Editar"),
+      Array.from(tenantsSection.querySelectorAll(".table-row:not(.table-head)")).filter((row) =>
+        row.textContent?.includes("Editar"),
       );
 
     expect(visibleRows()).toHaveLength(2);
@@ -547,9 +564,11 @@ describe("App interactions", () => {
     expect(visibleRows()[0]?.textContent).toContain("bravo");
 
     await act(async () => {
-      (Array.from(tenantsSection.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("Limpar filtros"),
-      ) as HTMLButtonElement).click();
+      (
+        Array.from(tenantsSection.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Limpar filtros"),
+        ) as HTMLButtonElement
+      ).click();
     });
 
     await waitForBodyText("2 tenant(s) no total.");
@@ -562,7 +581,10 @@ describe("App interactions", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
     fetchMock
       .mockResolvedValueOnce(
-        jsonResponse(200, { data: [tenant, tenantTwo, tenantThree, tenantFour, tenantFive, tenantSix], meta: {} }),
+        jsonResponse(200, {
+          data: [tenant, tenantTwo, tenantThree, tenantFour, tenantFive, tenantSix],
+          meta: {},
+        }),
       )
       .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
     queueTenantDetails(fetchMock);
@@ -596,9 +618,11 @@ describe("App interactions", () => {
     expect(tenantsSection.textContent).toContain("Página 1 de 2");
 
     await act(async () => {
-      (Array.from(tenantsSection.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("Próximo"),
-      ) as HTMLButtonElement).click();
+      (
+        Array.from(tenantsSection.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Próximo"),
+        ) as HTMLButtonElement
+      ).click();
     });
 
     await waitForBodyText("Página 2 de 2");
@@ -645,9 +669,9 @@ describe("App interactions", () => {
             status: "active",
             planId: "plan-growth",
             defaultLocale: "pt-BR",
-            deletedAt: null
+            deletedAt: null,
           },
-          meta: {}
+          meta: {},
         }),
       )
       .mockResolvedValueOnce(
@@ -660,10 +684,10 @@ describe("App interactions", () => {
               status: "active",
               planId: "plan-growth",
               defaultLocale: "pt-BR",
-              deletedAt: null
-            }
+              deletedAt: null,
+            },
           ],
-          meta: {}
+          meta: {},
         }),
       );
     queueTenantDetails(fetchMock, {
@@ -672,16 +696,17 @@ describe("App interactions", () => {
       agentConfig: null,
       users: [],
       roles: [],
-      apiKeys: []
+      apiKeys: [],
     });
 
-    const inputs = Array.from(document.querySelectorAll("input"));
+    const createForm = document.querySelector("#config form") as HTMLFormElement;
+    const inputs = Array.from(createForm.querySelectorAll("input"));
     const [publicIdInput, nameInput, localeInput] = inputs as [
       HTMLInputElement,
       HTMLInputElement,
-      HTMLInputElement
+      HTMLInputElement,
     ];
-    const planSelect = document.querySelector("#config select") as HTMLSelectElement;
+    const planSelect = createForm.querySelector("select") as HTMLSelectElement;
     fillInput(publicIdInput, "beta");
     fillInput(nameInput, "Beta");
     fillInput(planSelect, "growth");
@@ -690,7 +715,7 @@ describe("App interactions", () => {
     await flush();
 
     await act(async () => {
-      submitForm(document.querySelector("form") as HTMLFormElement);
+      submitForm(createForm);
     });
 
     await waitForBodyText("Beta");
@@ -733,7 +758,7 @@ describe("App interactions", () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
       .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
     queueTenantDetails(fetchMock);
     fetchMock
       .mockResolvedValueOnce(
@@ -742,9 +767,9 @@ describe("App interactions", () => {
             ...tenant,
             name: "Acme Atualizada",
             status: "inactive",
-            defaultLocale: "en-US"
+            defaultLocale: "en-US",
           },
-          meta: {}
+          meta: {},
         }),
       )
       .mockResolvedValueOnce(
@@ -754,19 +779,19 @@ describe("App interactions", () => {
               ...tenant,
               name: "Acme Atualizada",
               status: "inactive",
-              defaultLocale: "en-US"
-            }
+              defaultLocale: "en-US",
+            },
           ],
-          meta: {}
+          meta: {},
         }),
-      )
+      );
     queueTenantDetails(fetchMock, {
       domains: [domain],
       config: widgetConfig,
       agentConfig: agentConfig,
       users: tenantUsers,
       roles: tenantRoles,
-      apiKeys: tenantApiKeys
+      apiKeys: tenantApiKeys,
     });
     fetchMock
       .mockResolvedValueOnce(
@@ -775,9 +800,9 @@ describe("App interactions", () => {
             ...tenant,
             name: "Acme Atualizada",
             status: "suspended",
-            defaultLocale: "en-US"
+            defaultLocale: "en-US",
           },
-          meta: {}
+          meta: {},
         }),
       )
       .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
@@ -802,21 +827,22 @@ describe("App interactions", () => {
     await waitForBodyText("Lista de tenants");
 
     await act(async () => {
-      (Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("Editar"),
-      ) as HTMLButtonElement).click();
+      (
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Editar"),
+        ) as HTMLButtonElement
+      ).click();
     });
 
     await waitForBodyText("Tenant selecionado");
 
-    const editForms = document.querySelectorAll("form");
-    const editForm = editForms[1] as HTMLFormElement;
+    const editForm = document.querySelector("#tenant-detail form") as HTMLFormElement;
     const editInputs = Array.from(editForm.querySelectorAll("input"));
     const editSelects = Array.from(editForm.querySelectorAll("select"));
     const [editPublicIdInput, editNameInput, editLocaleInput] = editInputs as [
       HTMLInputElement,
       HTMLInputElement,
-      HTMLInputElement
+      HTMLInputElement,
     ];
     const [planSelect, statusSelect] = editSelects as [HTMLSelectElement, HTMLSelectElement];
 
@@ -835,15 +861,19 @@ describe("App interactions", () => {
     expect(document.body.textContent).toContain("Tenant atualizado com sucesso.");
 
     await act(async () => {
-      (Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("Excluir tenant"),
-      ) as HTMLButtonElement).click();
+      (
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Excluir tenant"),
+        ) as HTMLButtonElement
+      ).click();
     });
 
     await flush();
 
-    expect(vi.mocked(fetch).mock.calls.some((call) => call[0] === "/v1/admin/tenants/tenant-1")).toBe(true);
-    expect(confirmMock).toHaveBeenCalledWith("Excluir Acme Atualizada? Esta acao nao pode ser desfeita.");
+    expect(
+      vi.mocked(fetch).mock.calls.some((call) => call[0] === "/v1/admin/tenants/tenant-1"),
+    ).toBe(true);
+    expect(confirmMock).toHaveBeenCalledWith("Excluir Acme? Esta acao nao pode ser desfeita.");
   });
 
   it("adds an authorized domain and saves the public widget config", async () => {
@@ -851,7 +881,7 @@ describe("App interactions", () => {
       id: "domain-2",
       tenantId: "tenant-1",
       domain: "example.com",
-      isVerified: false
+      isVerified: false,
     };
 
     const fetchMock = vi.mocked(fetch);
@@ -866,7 +896,7 @@ describe("App interactions", () => {
       agentConfig,
       users: tenantUsers,
       roles: tenantRoles,
-      apiKeys: tenantApiKeys
+      apiKeys: tenantApiKeys,
     });
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: createdDomain, meta: {} }))
@@ -880,7 +910,7 @@ describe("App interactions", () => {
       agentConfig,
       users: tenantUsers,
       roles: tenantRoles,
-      apiKeys: tenantApiKeys
+      apiKeys: tenantApiKeys,
     });
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedWidgetConfig, meta: {} }))
@@ -894,7 +924,7 @@ describe("App interactions", () => {
       agentConfig,
       users: tenantUsers,
       roles: tenantRoles,
-      apiKeys: tenantApiKeys
+      apiKeys: tenantApiKeys,
     });
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { data: updatedAgentConfig, meta: {} }))
@@ -908,7 +938,7 @@ describe("App interactions", () => {
       agentConfig: updatedAgentConfig,
       users: tenantUsers,
       roles: tenantRoles,
-      apiKeys: tenantApiKeys
+      apiKeys: tenantApiKeys,
     });
 
     await act(async () => {
@@ -930,7 +960,7 @@ describe("App interactions", () => {
 
     await waitForBodyText("Dominios autorizados");
 
-    const domainInput = document.querySelector('#domains input') as HTMLInputElement;
+    const domainInput = document.querySelector("#domains input") as HTMLInputElement;
     fillInput(domainInput, "example.com");
 
     await act(async () => {
@@ -940,9 +970,14 @@ describe("App interactions", () => {
     await waitForBodyText("Dominio autorizado com sucesso.");
 
     const widgetForm = document.querySelector("#widget-config form") as HTMLFormElement;
-    const [themeSelect, primaryColorInput, iconUrlInput, initialMessageInput, placeholderInput] = Array.from(
-      widgetForm.querySelectorAll("input, select"),
-    ) as [HTMLSelectElement, HTMLInputElement, HTMLInputElement, HTMLInputElement, HTMLInputElement];
+    const [themeSelect, primaryColorInput, iconUrlInput, initialMessageInput, placeholderInput] =
+      Array.from(widgetForm.querySelectorAll("input, select")) as [
+        HTMLSelectElement,
+        HTMLInputElement,
+        HTMLInputElement,
+        HTMLInputElement,
+        HTMLInputElement,
+      ];
 
     fillInput(themeSelect, "light");
     fillInput(primaryColorInput, "#123456");
@@ -968,18 +1003,21 @@ describe("App interactions", () => {
       primaryColor: "#123456",
       iconUrl: "https://cdn.example.com/icon.png",
       initialMessage: "Olá, posso ajudar?",
-      placeholder: "Digite sua dúvida"
+      placeholder: "Digite sua dúvida",
     });
 
     const agentForm = document.querySelector("#agent-config form") as HTMLFormElement;
     const providerSelect = agentForm.querySelector("select") as HTMLSelectElement;
-    const agentInputs = Array.from(
-      agentForm.querySelectorAll('input:not([type="checkbox"])'),
-    ) as [HTMLInputElement, HTMLInputElement, HTMLInputElement, HTMLInputElement];
+    const agentInputs = Array.from(agentForm.querySelectorAll('input:not([type="checkbox"])')) as [
+      HTMLInputElement,
+      HTMLInputElement,
+      HTMLInputElement,
+      HTMLInputElement,
+    ];
     const [modelInput, webhookInput, credentialsInput, timeoutInput] = agentInputs;
     const agentTextareas = Array.from(agentForm.querySelectorAll("textarea")) as [
       HTMLTextAreaElement,
-      HTMLTextAreaElement
+      HTMLTextAreaElement,
     ];
     const [routingRulesInput, retryPolicyInput] = agentTextareas;
     const activeInput = agentForm.querySelector('input[type="checkbox"]') as HTMLInputElement;
@@ -1002,7 +1040,8 @@ describe("App interactions", () => {
     const agentRequest = vi
       .mocked(fetch)
       .mock.calls.find(
-        ([path, init]) => path === "/v1/admin/tenants/tenant-1/agent-config" && init?.method === "PUT",
+        ([path, init]) =>
+          path === "/v1/admin/tenants/tenant-1/agent-config" && init?.method === "PUT",
       );
 
     expect(agentRequest).toBeDefined();
@@ -1014,7 +1053,7 @@ describe("App interactions", () => {
       routingRules: { fallback: "n8n", priority: 1 },
       timeoutMs: 25000,
       retryPolicy: { attempts: 3, backoffMs: 500 },
-      isActive: false
+      isActive: false,
     });
   });
 
@@ -1031,7 +1070,7 @@ describe("App interactions", () => {
       agentConfig,
       users: tenantUsers,
       roles: tenantRoles,
-      apiKeys: tenantApiKeys
+      apiKeys: tenantApiKeys,
     });
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: invitedTenantUser, meta: {} }));
     queueTenantDetails(fetchMock, {
@@ -1040,15 +1079,15 @@ describe("App interactions", () => {
       agentConfig,
       users: [invitedTenantUser, tenantUsers[0]],
       roles: tenantRoles,
-      apiKeys: tenantApiKeys
+      apiKeys: tenantApiKeys,
     });
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, {
         data: {
           ...tenantUsers[0],
-          roles: ["operator"]
+          roles: ["operator"],
         },
-        meta: {}
+        meta: {},
       }),
     );
     queueTenantDetails(fetchMock, {
@@ -1057,15 +1096,15 @@ describe("App interactions", () => {
       agentConfig,
       users: roleUpdatedTenantUsers,
       roles: tenantRoles,
-      apiKeys: tenantApiKeys
+      apiKeys: tenantApiKeys,
     });
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, {
         data: {
           ...createdTenantApiKey,
-          secret: "fqc_1234567890"
+          secret: "fqc_1234567890",
         },
-        meta: {}
+        meta: {},
       }),
     );
     queueTenantDetails(fetchMock, {
@@ -1074,15 +1113,15 @@ describe("App interactions", () => {
       agentConfig,
       users: roleUpdatedTenantUsers,
       roles: tenantRoles,
-      apiKeys: [createdTenantApiKey, ...tenantApiKeys]
+      apiKeys: [createdTenantApiKey, ...tenantApiKeys],
     });
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, {
         data: {
           ...createdTenantApiKey,
-          revokedAt: "2026-08-14T12:10:00.000Z"
+          revokedAt: "2026-08-14T12:10:00.000Z",
         },
-        meta: {}
+        meta: {},
       }),
     );
     queueTenantDetails(fetchMock, {
@@ -1091,7 +1130,7 @@ describe("App interactions", () => {
       agentConfig,
       users: roleUpdatedTenantUsers,
       roles: tenantRoles,
-      apiKeys: revokedTenantApiKeys
+      apiKeys: revokedTenantApiKeys,
     });
 
     await act(async () => {
@@ -1114,7 +1153,9 @@ describe("App interactions", () => {
     await waitForBodyText("Usuarios do tenant");
 
     const usersForm = document.querySelector("#users form") as HTMLFormElement;
-    const [inviteEmailInput] = Array.from(usersForm.querySelectorAll("input")) as [HTMLInputElement];
+    const [inviteEmailInput] = Array.from(usersForm.querySelectorAll("input")) as [
+      HTMLInputElement,
+    ];
     const inviteRoleSelect = usersForm.querySelector("select") as HTMLSelectElement;
 
     fillInput(inviteEmailInput, "novo.usuario@acme.test");
