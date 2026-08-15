@@ -139,6 +139,24 @@ export class AdminTenantsController {
     return this.tenantsService.listApiKeys(request.adminUser!, tenantId);
   }
 
+  @Get(":tenantId/analytics")
+  @ApiOkResponse({ description: "Lists tenant analytics events and aggregates" })
+  listAnalytics(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.listAnalytics(request.adminUser!, tenantId);
+  }
+
+  @Get(":tenantId/audit-logs")
+  @ApiOkResponse({ description: "Lists tenant audit logs" })
+  listAuditLogs(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.listAuditLogs(request.adminUser!, tenantId);
+  }
+
+  @Get(":tenantId/system-logs")
+  @ApiOkResponse({ description: "Lists tenant system logs" })
+  listSystemLogs(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
+    return this.tenantsService.listSystemLogs(request.adminUser!, tenantId);
+  }
+
   @Post(":tenantId/api-keys")
   @ApiOkResponse({ description: "Creates a tenant api key" })
   createApiKey(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {

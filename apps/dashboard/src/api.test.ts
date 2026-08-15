@@ -12,12 +12,15 @@ import {
   inviteTenantUser,
   listPlans,
   listTenants,
+  listTenantAnalytics,
+  listTenantAuditLogs,
   listTenantConversations,
   listTenantApiKeys,
   listTenantSessions,
   listTenantRoles,
   listTenantUsers,
   listTenantDomains,
+  listTenantSystemLogs,
   loginAdmin,
   refreshAdmin,
   revokeTenantApiKey,
@@ -166,6 +169,49 @@ const apiKey = {
   createdAt: "2026-08-14T12:00:00.000Z"
 };
 
+const analyticsReport = {
+  totalEvents: 3,
+  eventTypeCounts: [{ value: "WidgetSessionStarted", count: 2 }],
+  originCounts: [{ value: "https://example.com", count: 2 }],
+  domainCounts: [{ value: "example.com", count: 2 }],
+  deviceCounts: [{ value: "desktop", count: 2 }],
+  resolutionCounts: [{ value: "1440x900", count: 2 }],
+  timeline: [{ value: "2026-08-14", count: 2 }],
+  events: [
+    {
+      id: "event-1",
+      tenantId: "tenant-1",
+      conversationId: "conversation-1",
+      eventType: "WidgetSessionStarted",
+      payload: { url: "https://example.com/pricing" },
+      createdAt: "2026-08-14T12:00:00.000Z"
+    }
+  ]
+};
+
+const auditLog = {
+  id: "audit-1",
+  tenantId: "tenant-1",
+  actorUserId: "user-1",
+  actorUserEmail: "admin@acme.test",
+  action: "tenant.updated",
+  targetType: "tenant",
+  targetId: "tenant-1",
+  correlationId: "corr-1",
+  metadata: { correlationId: "corr-1" },
+  createdAt: "2026-08-14T12:00:00.000Z"
+};
+
+const systemLog = {
+  id: "system-1",
+  tenantId: "tenant-1",
+  level: "info" as const,
+  message: "Background job completed",
+  correlationId: "corr-2",
+  context: { correlationId: "corr-2" },
+  createdAt: "2026-08-14T12:00:00.000Z"
+};
+
 const createdApiKey = {
   ...apiKey,
   secret: "fqc_1234567890"
@@ -219,6 +265,9 @@ describe("API helpers", () => {
       .mockResolvedValueOnce(jsonResponse(200, conversationDetail))
       .mockResolvedValueOnce(jsonResponse(200, [sessionRecord]))
       .mockResolvedValueOnce(jsonResponse(200, [apiKey]))
+      .mockResolvedValueOnce(jsonResponse(200, analyticsReport))
+      .mockResolvedValueOnce(jsonResponse(200, [auditLog]))
+      .mockResolvedValueOnce(jsonResponse(200, [systemLog]))
       .mockResolvedValueOnce(jsonResponse(200, createdApiKey))
       .mockResolvedValueOnce(jsonResponse(200, apiKey));
 
@@ -289,6 +338,9 @@ describe("API helpers", () => {
     );
     await expect(listTenantSessions("access-token-1", "tenant-1")).resolves.toEqual([sessionRecord]);
     await expect(listTenantApiKeys("access-token-1", "tenant-1")).resolves.toEqual([apiKey]);
+    await expect(listTenantAnalytics("access-token-1", "tenant-1")).resolves.toEqual(analyticsReport);
+    await expect(listTenantAuditLogs("access-token-1", "tenant-1")).resolves.toEqual([auditLog]);
+    await expect(listTenantSystemLogs("access-token-1", "tenant-1")).resolves.toEqual([systemLog]);
     await expect(
       createTenantApiKey("access-token-1", "tenant-1", {
         name: "Dashboard key"

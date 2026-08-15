@@ -141,6 +141,35 @@ type MessageRecord = Readonly<{
   createdAt: Date;
 }>;
 
+type AnalyticsEventRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  conversationId: string | null;
+  eventType: string;
+  payload: Record<string, unknown>;
+  createdAt: Date;
+}>;
+
+type AuditLogRecord = Readonly<{
+  id: string;
+  tenantId: string | null;
+  actorUserId: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+}>;
+
+type SystemLogRecord = Readonly<{
+  id: string;
+  tenantId: string | null;
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
+  context: Record<string, unknown>;
+  createdAt: Date;
+}>;
+
 type PlanRecord = Readonly<{
   id: string;
   slug: string;
@@ -231,6 +260,15 @@ export type TenantsServiceDependencies = Readonly<{
   };
   messages: {
     listByConversationId(conversationId: string): Promise<MessageRecord[]>;
+  };
+  analyticsEvents: {
+    listByTenantId(tenantId: string): Promise<AnalyticsEventRecord[]>;
+  };
+  auditLogs: {
+    listByTenantId(tenantId: string): Promise<AuditLogRecord[]>;
+  };
+  systemLogs: {
+    listByTenantId(tenantId: string): Promise<SystemLogRecord[]>;
   };
   plans: {
     findBySlug(slug: string): Promise<PlanRecord | null>;
@@ -619,6 +657,82 @@ export class TenantsService {
     }));
   }
 
+  async listAnalytics(actor: AdminAccessTokenPayload, tenantId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const events = await this.dependencies.analyticsEvents.listByTenantId(tenantId);
+
+    const normalizedEvents = events.map((event) => ({
+      id: event.id,
+      tenantId: event.tenantId,
+      conversationId: event.conversationId,
+      eventType: event.eventType,
+      payload: event.payload ?? {},
+      createdAt: event.createdAt.toISOString()
+    }));
+
+    const totals = this.summarizeCounts(events, (event) => event.eventType);
+    const origins = this.summarizeCounts(events, (event) => this.analyticsValue(event.payload, ["origin", "referrer", "source"]));
+    const domains = this.summarizeCounts(events, (event) =>
+      this.analyticsValue(event.payload, ["domain"]) ?? this.hostFromUrl(this.analyticsValue(event.payload, ["url"]))
+    );
+    const devices = this.summarizeCounts(events, (event) => this.analyticsValue(event.payload, ["deviceType", "device", "platform"]));
+    const resolutions = this.summarizeCounts(events, (event) =>
+      this.analyticsValue(event.payload, ["resolution"]) ?? this.resolutionFromPayload(event.payload)
+    );
+    const timeline = this.summarizeCounts(events, (event) => event.createdAt.toISOString().slice(0, 10));
+
+    return {
+      totalEvents: events.length,
+      eventTypeCounts: totals,
+      originCounts: origins,
+      domainCounts: domains,
+      deviceCounts: devices,
+      resolutionCounts: resolutions,
+      timeline,
+      events: normalizedEvents
+    };
+  }
+
+  async listAuditLogs(actor: AdminAccessTokenPayload, tenantId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const logs = await this.dependencies.auditLogs.listByTenantId(tenantId);
+
+    return Promise.all(
+      logs.map(async (log) => {
+        const actorUser = log.actorUserId ? await this.dependencies.users.findById(log.actorUserId) : null;
+        const correlationId = this.analyticsValue(log.metadata, ["correlationId", "correlation_id"]);
+
+        return {
+          id: log.id,
+          tenantId: log.tenantId,
+          actorUserId: log.actorUserId,
+          actorUserEmail: actorUser?.email ?? null,
+          action: log.action,
+          targetType: log.targetType,
+          targetId: log.targetId,
+          correlationId: correlationId ?? null,
+          metadata: log.metadata ?? {},
+          createdAt: log.createdAt.toISOString()
+        };
+      }),
+    );
+  }
+
+  async listSystemLogs(actor: AdminAccessTokenPayload, tenantId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const logs = await this.dependencies.systemLogs.listByTenantId(tenantId);
+
+    return logs.map((log) => ({
+      id: log.id,
+      tenantId: log.tenantId,
+      level: log.level,
+      message: log.message,
+      correlationId: this.analyticsValue(log.context, ["correlationId", "correlation_id"]) ?? null,
+      context: log.context ?? {},
+      createdAt: log.createdAt.toISOString()
+    }));
+  }
+
   async createApiKey(actor: AdminAccessTokenPayload, tenantId: string, rawInput: unknown) {
     this.assertTenantAccess(actor, tenantId);
     const input = this.parseCreateApiKeyInput(rawInput);
@@ -742,6 +856,67 @@ export class TenantsService {
       providerMessageId: message.providerMessageId,
       createdAt: message.createdAt.toISOString()
     };
+  }
+
+  private analyticsValue(payload: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+      const value = payload[key];
+      if (typeof value === "string" && value.trim()) {
+        return value;
+      }
+    }
+
+    return null;
+  }
+
+  private hostFromUrl(value: string | null) {
+    if (!value) {
+      return null;
+    }
+
+    try {
+      return new URL(value).hostname.toLowerCase();
+    } catch {
+      return null;
+    }
+  }
+
+  private resolutionFromPayload(payload: Record<string, unknown>) {
+    const viewport = payload.viewport;
+    if (typeof viewport === "object" && viewport !== null) {
+      const record = viewport as Record<string, unknown>;
+      const width = record.width;
+      const height = record.height;
+      if (typeof width === "number" && typeof height === "number") {
+        return `${width}x${height}`;
+      }
+    }
+
+    const width = payload.width;
+    const height = payload.height;
+    if (typeof width === "number" && typeof height === "number") {
+      return `${width}x${height}`;
+    }
+
+    return null;
+  }
+
+  private summarizeCounts<T>(items: T[], selector: (item: T) => string | null) {
+    const counts = new Map<string, number>();
+
+    for (const item of items) {
+      const value = selector(item);
+      if (!value) {
+        continue;
+      }
+
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+
+    return [...counts.entries()]
+      .map(([value, count]) => ({ value, count }))
+      .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value))
+      .slice(0, 10);
   }
 
   private readPositiveInteger(value: unknown, fallback: number): number {

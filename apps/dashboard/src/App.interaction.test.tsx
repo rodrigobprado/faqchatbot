@@ -251,6 +251,9 @@ const queueTenantDetails = (
     apiKeys?: unknown[];
     sessions?: unknown[];
     conversations?: unknown[];
+    analytics?: unknown;
+    auditLogs?: unknown[];
+    systemLogs?: unknown[];
   } = {},
 ) => {
   mockFetch
@@ -261,7 +264,10 @@ const queueTenantDetails = (
     .mockResolvedValueOnce(jsonResponse(200, { data: options.roles ?? tenantRoles, meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.apiKeys ?? tenantApiKeys, meta: {} }))
     .mockResolvedValueOnce(jsonResponse(200, { data: options.sessions ?? [], meta: {} }))
-    .mockResolvedValueOnce(jsonResponse(200, { data: options.conversations ?? [], meta: {} }));
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.conversations ?? [], meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.analytics ?? { totalEvents: 0, eventTypeCounts: [], originCounts: [], domainCounts: [], deviceCounts: [], resolutionCounts: [], timeline: [], events: [] }, meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.auditLogs ?? [], meta: {} }))
+    .mockResolvedValueOnce(jsonResponse(200, { data: options.systemLogs ?? [], meta: {} }));
 };
 
 const updatedWidgetConfig = {

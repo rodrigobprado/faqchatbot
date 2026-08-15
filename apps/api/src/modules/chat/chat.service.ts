@@ -126,6 +126,14 @@ export type ChatServiceDependencies = Readonly<{
     }): Promise<MessageRecord>;
     listByConversationId(conversationId: string): Promise<MessageRecord[]>;
   };
+  analyticsEvents?: {
+    create(input: {
+      tenantId: string;
+      conversationId?: string | null;
+      eventType: string;
+      payload?: Record<string, unknown>;
+    }): Promise<unknown>;
+  };
 }>;
 
 export class ChatService {
@@ -141,6 +149,16 @@ export class ChatService {
       type: input.content.type,
       content: input.content,
       metadata: input.metadata
+    });
+    await this.recordAnalyticsEvent({
+      tenantId: actor.tenantId,
+      conversationId: conversation.id,
+      eventType: "WidgetMessageSent",
+      payload: {
+        role: "user",
+        messageType: input.content.type,
+        messageId: userMessage.id
+      }
     });
     const assistantRoute = await this.dependencies.agentRouter.route({
       tenantId: actor.tenantId,
@@ -159,6 +177,17 @@ export class ChatService {
         provider: assistantRoute.provider,
         providerMessageId: assistantRoute.providerMessageId,
         ...assistantRoute.metadata
+      }
+    });
+    await this.recordAnalyticsEvent({
+      tenantId: actor.tenantId,
+      conversationId: conversation.id,
+      eventType: "WidgetReplyCreated",
+      payload: {
+        role: "assistant",
+        messageType: String(assistantRoute.content.type ?? "text"),
+        messageId: assistantMessage.id,
+        provider: assistantRoute.provider
       }
     });
 
@@ -222,5 +251,22 @@ export class ChatService {
       metadata: message.metadata ?? {},
       content: message.content
     });
+  }
+
+  private async recordAnalyticsEvent(input: {
+    tenantId: string;
+    conversationId?: string | null;
+    eventType: string;
+    payload?: Record<string, unknown>;
+  }) {
+    if (!this.dependencies.analyticsEvents) {
+      return;
+    }
+
+    try {
+      await this.dependencies.analyticsEvents.create(input);
+    } catch {
+      // Analytics must never block the chat flow.
+    }
   }
 }

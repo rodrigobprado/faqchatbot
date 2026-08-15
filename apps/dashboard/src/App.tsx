@@ -13,12 +13,15 @@ import {
   inviteTenantUser,
   listPlans,
   listTenants,
+  listTenantAnalytics,
+  listTenantAuditLogs,
   listTenantConversations,
   listTenantApiKeys,
   listTenantSessions,
   listTenantRoles,
   listTenantUsers,
   listTenantDomains,
+  listTenantSystemLogs,
   loginAdmin,
   refreshAdmin,
   revokeTenantApiKey,
@@ -31,6 +34,8 @@ import {
   type TenantAgentConfigPayload,
   type TenantAgentConfigRecord,
   type TenantApiKeyRecord,
+  type TenantAnalyticsReport,
+  type TenantAuditLogRecord,
   type TenantConfigPayload,
   type TenantConfigRecord,
   type TenantDomainRecord,
@@ -40,6 +45,7 @@ import {
   type PlanRecord,
   type TenantRoleRecord,
   type PlatformHealthRecord,
+  type TenantSystemLogRecord,
   type TenantUserRecord,
   type UpdateTenantPayload,
   type TenantRecord
@@ -97,6 +103,12 @@ type TenantConversationState = Readonly<{
   conversations: TenantConversationRecord[];
   selectedConversationId: string | null;
   selectedConversation: TenantConversationDetailRecord | null;
+}>;
+
+type TenantAnalyticsState = Readonly<{
+  analytics: TenantAnalyticsReport | null;
+  auditLogs: TenantAuditLogRecord[];
+  systemLogs: TenantSystemLogRecord[];
 }>;
 
 type TenantStatusFilter = "" | TenantRecord["status"];
@@ -200,6 +212,12 @@ const emptyTenantConversationState = (): TenantConversationState => ({
   conversations: [],
   selectedConversationId: null,
   selectedConversation: null
+});
+
+const emptyTenantAnalyticsState = (): TenantAnalyticsState => ({
+  analytics: null,
+  auditLogs: [],
+  systemLogs: []
 });
 
 const parseJsonObject = (input: string, label: string): Record<string, unknown> => {
@@ -329,6 +347,7 @@ export const App = () => {
   const [tenantAccessById, setTenantAccessById] = useState<Record<string, TenantAccessState>>({});
   const [tenantConversationsById, setTenantConversationsById] = useState<Record<string, TenantConversationState>>({});
   const [tenantSessionsById, setTenantSessionsById] = useState<Record<string, TenantSessionRecord[]>>({});
+  const [tenantInsightsById, setTenantInsightsById] = useState<Record<string, TenantAnalyticsState>>({});
   const [userInviteForm, setUserInviteForm] = useState({ email: "", roleSlug: "viewer" });
   const [keyForm, setKeyForm] = useState({ name: "" });
   const [platformHealth, setPlatformHealth] = useState<PlatformHealthRecord | null>(null);
@@ -399,6 +418,7 @@ export const App = () => {
       setTenantAccessById({});
       setTenantConversationsById({});
       setTenantSessionsById({});
+      setTenantInsightsById({});
       setUserInviteForm({ email: "", roleSlug: "viewer" });
       setKeyForm({ name: "" });
       return;
@@ -453,6 +473,7 @@ export const App = () => {
       setTenantAgentConfig(defaultTenantAgentConfigState());
       setTenantAccessById({});
       setTenantSessionsById({});
+      setTenantInsightsById({});
       setUserInviteForm({ email: "", roleSlug: "viewer" });
       setKeyForm({ name: "" });
       return;
@@ -493,6 +514,24 @@ export const App = () => {
       return {
         ...current,
         [selectedTenant.id]: emptyTenantConversationState()
+      };
+    });
+  }, [selectedTenantId, tenants, session]);
+
+  useEffect(() => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setTenantInsightsById((current) => {
+      if (current[selectedTenant.id]) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [selectedTenant.id]: emptyTenantAnalyticsState()
       };
     });
   }, [selectedTenantId, tenants, session]);
@@ -582,6 +621,7 @@ export const App = () => {
         setTenants([]);
         setPlans([]);
         setTenantConversationsById({});
+        setTenantInsightsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -598,7 +638,7 @@ export const App = () => {
     setViewState((current) => ({ ...current, loading: true, error: null }));
 
     try {
-      const [domains, config, agentConfig, users, roles, apiKeys, sessions, conversations] = await withSessionRetry(async (accessToken) => {
+      const [domains, config, agentConfig, users, roles, apiKeys, sessions, conversations, analytics, auditLogs, systemLogs] = await withSessionRetry(async (accessToken) => {
         const [nextDomains, nextConfig, nextAgentConfig] = await Promise.all([
           listTenantDomains(accessToken, tenantId),
           getTenantConfig(accessToken, tenantId),
@@ -613,8 +653,25 @@ export const App = () => {
 
         const nextSessions = await listTenantSessions(accessToken, tenantId);
         const nextConversations = await listTenantConversations(accessToken, tenantId);
+        const [nextAnalytics, nextAuditLogs, nextSystemLogs] = await Promise.all([
+          listTenantAnalytics(accessToken, tenantId),
+          listTenantAuditLogs(accessToken, tenantId),
+          listTenantSystemLogs(accessToken, tenantId)
+        ]);
 
-        return [nextDomains, nextConfig, nextAgentConfig, nextUsers, nextRoles, nextApiKeys, nextSessions, nextConversations] as const;
+        return [
+          nextDomains,
+          nextConfig,
+          nextAgentConfig,
+          nextUsers,
+          nextRoles,
+          nextApiKeys,
+          nextSessions,
+          nextConversations,
+          nextAnalytics,
+          nextAuditLogs,
+          nextSystemLogs
+        ] as const;
       });
 
       setTenantDomains(domains);
@@ -633,6 +690,14 @@ export const App = () => {
       setTenantSessionsById((current) => ({
         ...current,
         [tenantId]: Array.isArray(sessions) ? sessions : []
+      }));
+      setTenantInsightsById((current) => ({
+        ...current,
+        [tenantId]: {
+          analytics: analytics ?? null,
+          auditLogs: Array.isArray(auditLogs) ? auditLogs : [],
+          systemLogs: Array.isArray(systemLogs) ? systemLogs : []
+        }
       }));
       setTenantConversationsById((current) => {
         const previous = current[tenantId] ?? emptyTenantConversationState();
@@ -665,6 +730,7 @@ export const App = () => {
         setTenantAccessById({});
         setTenantConversationsById({});
         setTenantSessionsById({});
+        setTenantInsightsById({});
         setSelectedTenantId(null);
         updateError("Sessao expirada. Entre novamente.");
         return;
@@ -703,6 +769,7 @@ export const App = () => {
         setTenants([]);
         setTenantConversationsById({});
         setTenantSessionsById({});
+        setTenantInsightsById({});
         updateError("Sessao expirada. Entre novamente.");
         return;
       }
@@ -750,6 +817,7 @@ export const App = () => {
       setTenants([]);
       setTenantConversationsById({});
       setTenantSessionsById({});
+      setTenantInsightsById({});
       setViewState((current) => ({ ...current, loading: false }));
       updateError(error instanceof Error ? error.message : "Falha ao renovar sessao");
     }
@@ -766,6 +834,7 @@ export const App = () => {
     setTenantAccessById({});
     setTenantConversationsById({});
     setTenantSessionsById({});
+    setTenantInsightsById({});
     setViewState({
       loading: false,
       error: null,
@@ -1229,6 +1298,10 @@ export const App = () => {
   const selectedTenantRoleCount = selectedTenantAccessRoles.length;
   const selectedTenantApiKeyCount = selectedTenantAccessApiKeys.length;
   const selectedTenantSessionCount = selectedTenantSessions.length;
+  const selectedTenantInsights = selectedTenant ? tenantInsightsById[selectedTenant.id] ?? emptyTenantAnalyticsState() : emptyTenantAnalyticsState();
+  const selectedTenantAnalytics = selectedTenantInsights.analytics;
+  const selectedTenantAuditLogs = Array.isArray(selectedTenantInsights.auditLogs) ? selectedTenantInsights.auditLogs : [];
+  const selectedTenantSystemLogs = Array.isArray(selectedTenantInsights.systemLogs) ? selectedTenantInsights.systemLogs : [];
 
   const handleSelectConversation = (conversationId: string) => {
     if (!selectedTenant) {
@@ -1294,6 +1367,8 @@ export const App = () => {
           <a href="#config">Configuracao</a>
           <a href="#agent-config">Agente</a>
           <a href="#sessions">Sessoes</a>
+          <a href="#analytics">Analytics</a>
+          <a href="#logs">Logs</a>
           <a href="#conversations">Conversas</a>
           <a href="#users">Usuarios</a>
           <a href="#roles">Roles</a>
@@ -2211,6 +2286,133 @@ export const App = () => {
                       </button>
                     ))
                   )}
+                </div>
+              </section>
+            ) : null}
+
+            {selectedTenant ? (
+              <section className="surface" id="analytics">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Medição</p>
+                    <h2>Analytics</h2>
+                    <p className="section-subtitle">
+                      {selectedTenantAnalytics
+                        ? `${selectedTenantAnalytics.totalEvents} evento(s) carregado(s).`
+                        : "Nenhum evento analytics encontrado para este tenant."}
+                    </p>
+                  </div>
+                </div>
+
+                <dl className="session-grid tenant-summary">
+                  <div>
+                    <dt>Total de eventos</dt>
+                    <dd>{selectedTenantAnalytics?.totalEvents ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt>Tipos</dt>
+                    <dd>{selectedTenantAnalytics?.eventTypeCounts?.length ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt>Origens</dt>
+                    <dd>{selectedTenantAnalytics?.originCounts?.length ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt>Dominios</dt>
+                    <dd>{selectedTenantAnalytics?.domainCounts?.length ?? 0}</dd>
+                  </div>
+                </dl>
+
+                <div className="two-column compact">
+                  <div className="list-card">
+                    <strong>Eventos por tipo</strong>
+                    {selectedTenantAnalytics?.eventTypeCounts?.length ? (
+                      selectedTenantAnalytics.eventTypeCounts.map((item) => (
+                        <div className="list-row" key={`event-type-${item.value}`}>
+                          <span>{item.value}</span>
+                          <span>{item.count}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p>Sem agregacoes disponiveis.</p>
+                    )}
+                  </div>
+
+                  <div className="list-card">
+                    <strong>Eventos recentes</strong>
+                    {selectedTenantAnalytics?.events?.length ? (
+                      selectedTenantAnalytics.events.slice(0, 8).map((event) => (
+                        <div className="list-row" key={event.id}>
+                          <div>
+                            <strong>{event.eventType}</strong>
+                            <p className="mono">{event.payload.url ? String(event.payload.url) : event.conversationId ?? "Sem contexto"}</p>
+                          </div>
+                          <span>{new Date(event.createdAt).toLocaleString("pt-BR")}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p>Sem eventos registrados.</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {selectedTenant ? (
+              <section className="surface" id="logs">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Confiabilidade</p>
+                    <h2>Logs e auditoria</h2>
+                    <p className="section-subtitle">
+                      {selectedTenantAuditLogs.length + selectedTenantSystemLogs.length === 0
+                        ? "Nenhum log encontrado para este tenant."
+                        : `${selectedTenantAuditLogs.length} audit log(s) e ${selectedTenantSystemLogs.length} system log(s) carregado(s).`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="two-column compact">
+                  <div className="list-card">
+                    <strong>Auditoria</strong>
+                    {selectedTenantAuditLogs.length ? (
+                      selectedTenantAuditLogs.map((log) => (
+                        <div className="list-row" key={log.id}>
+                          <div>
+                            <strong>{log.action}</strong>
+                            <p className="mono">
+                              {log.targetType} {log.targetId}
+                            </p>
+                            <small>
+                              {log.actorUserEmail ?? log.actorUserId ?? "Sistema"}
+                              {log.correlationId ? ` · ${log.correlationId}` : ""}
+                            </small>
+                          </div>
+                          <span>{new Date(log.createdAt).toLocaleString("pt-BR")}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p>Sem auditoria registrada.</p>
+                    )}
+                  </div>
+
+                  <div className="list-card">
+                    <strong>System logs</strong>
+                    {selectedTenantSystemLogs.length ? (
+                      selectedTenantSystemLogs.map((log) => (
+                        <div className="list-row" key={log.id}>
+                          <div>
+                            <strong>{log.level.toUpperCase()}</strong>
+                            <p>{log.message}</p>
+                            <small>{log.correlationId ?? "Sem correlation id"}</small>
+                          </div>
+                          <span>{new Date(log.createdAt).toLocaleString("pt-BR")}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p>Sem system logs registrados.</p>
+                    )}
+                  </div>
                 </div>
               </section>
             ) : null}

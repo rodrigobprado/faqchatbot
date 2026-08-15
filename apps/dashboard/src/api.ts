@@ -113,6 +113,54 @@ export type TenantApiKeyRecord = Readonly<{
   createdAt: string;
 }>;
 
+export type TenantAnalyticsEventRecord = Readonly<{
+  id: string;
+  tenantId: string;
+  conversationId: string | null;
+  eventType: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}>;
+
+export type TenantCountRecord = Readonly<{
+  value: string;
+  count: number;
+}>;
+
+export type TenantAnalyticsReport = Readonly<{
+  totalEvents: number;
+  eventTypeCounts: TenantCountRecord[];
+  originCounts: TenantCountRecord[];
+  domainCounts: TenantCountRecord[];
+  deviceCounts: TenantCountRecord[];
+  resolutionCounts: TenantCountRecord[];
+  timeline: TenantCountRecord[];
+  events: TenantAnalyticsEventRecord[];
+}>;
+
+export type TenantAuditLogRecord = Readonly<{
+  id: string;
+  tenantId: string | null;
+  actorUserId: string | null;
+  actorUserEmail: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  correlationId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}>;
+
+export type TenantSystemLogRecord = Readonly<{
+  id: string;
+  tenantId: string | null;
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
+  correlationId: string | null;
+  context: Record<string, unknown>;
+  createdAt: string;
+}>;
+
 export type TenantConversationMessageRecord = Readonly<{
   id: string;
   tenantId: string;
@@ -406,6 +454,15 @@ export const listTenantRoles = (accessToken: string, tenantId: string): Promise<
 
 export const listTenantApiKeys = (accessToken: string, tenantId: string): Promise<TenantApiKeyRecord[]> =>
   requestJson<TenantApiKeyRecord[]>(`/v1/admin/tenants/${tenantId}/api-keys`, {}, accessToken);
+
+export const listTenantAnalytics = (accessToken: string, tenantId: string): Promise<TenantAnalyticsReport> =>
+  requestJson<TenantAnalyticsReport>(`/v1/admin/tenants/${tenantId}/analytics`, {}, accessToken);
+
+export const listTenantAuditLogs = (accessToken: string, tenantId: string): Promise<TenantAuditLogRecord[]> =>
+  requestJson<TenantAuditLogRecord[]>(`/v1/admin/tenants/${tenantId}/audit-logs`, {}, accessToken);
+
+export const listTenantSystemLogs = (accessToken: string, tenantId: string): Promise<TenantSystemLogRecord[]> =>
+  requestJson<TenantSystemLogRecord[]>(`/v1/admin/tenants/${tenantId}/system-logs`, {}, accessToken);
 
 export const createTenantApiKey = (
   accessToken: string,

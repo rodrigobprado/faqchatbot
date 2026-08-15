@@ -2,12 +2,15 @@ import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../../db/database.module.js";
 import { DatabaseService } from "../../db/database.service.js";
 import { createApiKeysRepository } from "../../db/repositories/api-keys.repository.js";
+import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
+import { createAuditLogsRepository } from "../../db/repositories/audit-logs.repository.js";
 import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
-import { createPlansRepository } from "../../db/repositories/plans.repository.js";
 import { createMessagesRepository } from "../../db/repositories/messages.repository.js";
+import { createPlansRepository } from "../../db/repositories/plans.repository.js";
 import { createTenantAgentConfigsRepository } from "../../db/repositories/tenant-agent-configs.repository.js";
 import { createTenantConfigsRepository } from "../../db/repositories/tenant-configs.repository.js";
 import { createTenantDomainsRepository } from "../../db/repositories/tenant-domains.repository.js";
+import { createSystemLogsRepository } from "../../db/repositories/system-logs.repository.js";
 import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
 import { createRolesRepository } from "../../db/repositories/roles.repository.js";
 import { createUserRolesRepository } from "../../db/repositories/user-roles.repository.js";
@@ -40,6 +43,9 @@ import { TenantsService } from "./tenants.service.js";
           visitorSessions: createVisitorSessionsRepository(db),
           conversations: createConversationsRepository(db),
           messages: createMessagesRepository(db),
+          analyticsEvents: createAnalyticsEventsRepository(db),
+          auditLogs: createAuditLogsRepository(db),
+          systemLogs: createSystemLogsRepository(db),
           plans: createPlansRepository(db)
         });
       }

@@ -127,6 +127,14 @@ export type WidgetSessionDependencies = Readonly<{
     findById(id: string): Promise<ConversationRecord | null>;
     findLatestBySessionId(sessionId: string): Promise<ConversationRecord | null>;
   };
+  analyticsEvents?: {
+    create(input: {
+      tenantId: string;
+      conversationId?: string | null;
+      eventType: string;
+      payload?: Record<string, unknown>;
+    }): Promise<unknown>;
+  };
   widgetTokenSecret: string;
   widgetTokenTtlSeconds: number;
 }>;
@@ -216,6 +224,24 @@ export class WidgetSessionService {
     const visitorId = input.visitorId ?? randomUUID();
     const session = await this.resolveSession(tenant.id, visitorId, input);
     const conversation = await this.resolveConversation(tenant.id, session.id, input);
+    await this.recordAnalyticsEvent({
+      tenantId: tenant.id,
+      conversationId: conversation.id,
+      eventType: "WidgetSessionStarted",
+      payload: {
+        visitorId,
+        sessionId: session.id,
+        conversationId: conversation.id,
+        origin: headers.origin ?? null,
+        referer: headers.referer ?? null,
+        url: input.context.url,
+        title: input.context.title ?? null,
+        currentPage: input.context.currentPage ?? null,
+        userAgent: input.context.userAgent ?? null,
+        viewport: input.context.viewport,
+        utm: input.context.utm
+      }
+    });
     const issuedAt = Math.floor(Date.now() / 1000);
     const expiresAt = issuedAt + this.dependencies.widgetTokenTtlSeconds;
 
@@ -320,5 +346,22 @@ export class WidgetSessionService {
       tenantId,
       sessionId
     });
+  }
+
+  private async recordAnalyticsEvent(input: {
+    tenantId: string;
+    conversationId?: string | null;
+    eventType: string;
+    payload?: Record<string, unknown>;
+  }) {
+    if (!this.dependencies.analyticsEvents) {
+      return;
+    }
+
+    try {
+      await this.dependencies.analyticsEvents.create(input);
+    } catch {
+      // Analytics must not block widget startup.
+    }
   }
 }
