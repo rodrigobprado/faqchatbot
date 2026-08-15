@@ -436,12 +436,24 @@ describe("App interactions", () => {
     await flush();
 
     expect(document.body.textContent).toContain("Lista de tenants");
+    expect(document.body.textContent).toContain("Configuracoes gerais");
     expect(document.body.textContent).toContain("Planos disponíveis");
     expect(document.body.textContent).toContain("acme");
     expect(document.body.textContent).toContain("Dominios autorizados");
     expect(document.body.textContent).toContain(
       '<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=acme" data-agent="acme" async></script>',
     );
+
+    const settingsButton = Array.from(document.querySelectorAll(".sidebar-nav button")).find(
+      (button) => button.textContent?.includes("Configuracoes"),
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      settingsButton.click();
+    });
+
+    await waitForBodyText("Dominio da plataforma");
+
     const copySnippetButton = Array.from(document.querySelectorAll("#widget button")).find(
       (button) => button.textContent?.includes("Copiar snippet"),
     ) as HTMLButtonElement;

@@ -128,7 +128,7 @@ type ViewState = Readonly<{
   notice: string | null;
 }>;
 
-type DashboardSection = "overview" | "plans" | "tenants" | "operations" | "access";
+type DashboardSection = "overview" | "settings" | "plans" | "tenants" | "operations" | "access";
 type TenantWorkspace = "list" | "create" | "details" | "widget" | "security" | "agent";
 type OperationsWorkspace = "sessions" | "analytics" | "logs" | "conversations";
 type AccessWorkspace = "users" | "roles" | "api-keys";
@@ -226,6 +226,11 @@ const dashboardSections: ReadonlyArray<{
     id: "overview",
     label: "Visao geral",
     description: "Resumo operacional e saude da plataforma",
+  },
+  {
+    id: "settings",
+    label: "Configuracoes",
+    description: "Dominio, ambiente e parametros operacionais",
   },
   {
     id: "plans",
@@ -1537,6 +1542,12 @@ export const App = () => {
   const totalActiveTenants = tenants.filter((tenant) => tenant.status === "active").length;
   const totalSuspendedTenants = tenants.filter((tenant) => tenant.status === "suspended").length;
   const activePlanCount = plans.filter((plan) => plan.isActive).length;
+  const platformOrigin =
+    typeof window !== "undefined" ? window.location.origin : "https://faqchatbot.rigbie.com.br";
+  const platformHostname =
+    typeof window !== "undefined" ? window.location.hostname : "faqchatbot.rigbie.com.br";
+  const platformEnvironment = import.meta.env.MODE;
+  const widgetScriptUrl = `${platformOrigin}/widget.js`;
   const selectedTenantSnippet = selectedTenant?.publicId
     ? buildWidgetSnippet(selectedTenant.publicId)
     : null;
@@ -1913,6 +1924,72 @@ export const App = () => {
                 <span>Sessoes do tenant</span>
                 <strong>{selectedTenantSessionCount}</strong>
               </article>
+            </section>
+
+            <section
+              className="surface settings-section panel-section panel-settings"
+              id="settings"
+            >
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Plataforma</p>
+                  <h2>Configuracoes gerais</h2>
+                  <p className="section-subtitle">
+                    Dominio publico, ambiente de execucao e parametros operacionais atuais.
+                  </p>
+                </div>
+                <strong>{platformEnvironment}</strong>
+              </div>
+
+              <div className="settings-grid">
+                <article className="surface settings-card">
+                  <span>Dominio da plataforma</span>
+                  <strong>{platformHostname}</strong>
+                  <p>Origem atual: {platformOrigin}</p>
+                </article>
+
+                <article className="surface settings-card">
+                  <span>Ambiente</span>
+                  <strong>{platformEnvironment}</strong>
+                  <p>Build e rotas do dashboard seguem o ambiente configurado no Vite.</p>
+                </article>
+
+                <article className="surface settings-card">
+                  <span>Widget publico</span>
+                  <strong className="mono">{widgetScriptUrl}</strong>
+                  <p>Endpoint principal para publicar o script embutivel.</p>
+                </article>
+
+                <article className="surface settings-card">
+                  <span>Parametros operacionais</span>
+                  <strong>{tenantPageSize} tenants por pagina</strong>
+                  <p>Paginação do painel, sessão local e health checks do backend.</p>
+                </article>
+              </div>
+
+              <div className="two-column compact">
+                <article className="surface settings-card">
+                  <span>Estado da API</span>
+                  <strong>
+                    {platformHealthStatus === "loading"
+                      ? "Carregando"
+                      : platformHealthStatus === "ok"
+                        ? "Operacional"
+                        : "Indisponivel"}
+                  </strong>
+                  <p>
+                    {platformHealth?.checks?.database === "ok"
+                      ? `Banco online desde ${new Date(platformHealth.timestamp).toLocaleString("pt-BR")}.`
+                      : "Sem resposta detalhada do health check."}
+                  </p>
+                </article>
+
+                <article className="surface settings-card">
+                  <span>Persistencia do login</span>
+                  <strong className="mono">{STORAGE_KEY}</strong>
+                  <p>Token da sessao administrativa salvo localmente no navegador.</p>
+                </article>
+              </div>
             </section>
 
             <section className="surface plan-section panel-section panel-plans" id="plans">
