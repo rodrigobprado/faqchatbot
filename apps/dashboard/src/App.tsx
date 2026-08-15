@@ -48,7 +48,7 @@ import {
   type TenantSystemLogRecord,
   type TenantUserRecord,
   type UpdateTenantPayload,
-  type TenantRecord
+  type TenantRecord,
 } from "./api.js";
 
 const STORAGE_KEY = "faqchatbot.dashboard.session.v1";
@@ -126,9 +126,11 @@ type ViewState = Readonly<{
   notice: string | null;
 }>;
 
+type DashboardSection = "overview" | "plans" | "tenants" | "operations" | "access";
+
 const defaultLoginState = (): LoginState => ({
   email: "",
-  password: ""
+  password: "",
 });
 
 const getDefaultPlanSlug = (plans: PlanRecord[]): TenantFormState["planSlug"] => {
@@ -149,28 +151,37 @@ const defaultTenantFormState = (plans: PlanRecord[] = []): TenantFormState => ({
   publicId: "",
   name: "",
   planSlug: getDefaultPlanSlug(plans),
-  defaultLocale: "pt-BR"
+  defaultLocale: "pt-BR",
 });
 
-const defaultTenantEditState = (tenant?: TenantRecord | null, plans: PlanRecord[] = []): TenantEditState => ({
+const defaultTenantEditState = (
+  tenant?: TenantRecord | null,
+  plans: PlanRecord[] = [],
+): TenantEditState => ({
   publicId: tenant?.publicId ?? "",
   name: tenant?.name ?? "",
-  planSlug: (tenant?.planId ? plans.find((plan) => plan.id === tenant.planId)?.slug ?? "" : "") as TenantEditState["planSlug"],
+  planSlug: (tenant?.planId
+    ? (plans.find((plan) => plan.id === tenant.planId)?.slug ?? "")
+    : "") as TenantEditState["planSlug"],
   defaultLocale: tenant?.defaultLocale ?? "pt-BR",
-  status: tenant?.status ?? "active"
+  status: tenant?.status ?? "active",
 });
 
-const defaultTenantWidgetConfigState = (config?: TenantConfigRecord | null): TenantWidgetConfigState => ({
+const defaultTenantWidgetConfigState = (
+  config?: TenantConfigRecord | null,
+): TenantWidgetConfigState => ({
   theme: config?.theme ?? "auto",
   primaryColor: config?.primaryColor ?? "#2563eb",
   iconUrl: config?.iconUrl ?? "",
   initialMessage: config?.initialMessage ?? "Ola! Como posso ajudar?",
-  placeholder: config?.placeholder ?? "Digite sua mensagem"
+  placeholder: config?.placeholder ?? "Digite sua mensagem",
 });
 
 const stringifyJson = (value: unknown) => JSON.stringify(value ?? {}, null, 2);
 
-const defaultTenantAgentConfigState = (config?: TenantAgentConfigRecord | null): TenantAgentConfigState => ({
+const defaultTenantAgentConfigState = (
+  config?: TenantAgentConfigRecord | null,
+): TenantAgentConfigState => ({
   provider: config?.provider ?? "n8n",
   model: config?.model ?? "",
   webhookEndpointId: config?.webhookEndpointId ?? "",
@@ -178,18 +189,18 @@ const defaultTenantAgentConfigState = (config?: TenantAgentConfigRecord | null):
   routingRules: stringifyJson(config?.routingRules),
   timeoutMs: String(config?.timeoutMs ?? 15000),
   retryPolicy: stringifyJson(config?.retryPolicy),
-  isActive: config?.isActive ?? true
+  isActive: config?.isActive ?? true,
 });
 
 const defaultTenantListFiltersState = (): TenantListFiltersState => ({
   search: "",
   status: "",
-  planId: ""
+  planId: "",
 });
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
-  currency: "BRL"
+  currency: "BRL",
 });
 
 const accessPermissionCatalog = [
@@ -198,26 +209,58 @@ const accessPermissionCatalog = [
   "Invitar usuarios",
   "Gerenciar roles",
   "Criar api keys",
-  "Revogar api keys"
+  "Revogar api keys",
 ];
+
+const dashboardSections: ReadonlyArray<{
+  id: DashboardSection;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "overview",
+    label: "Visao geral",
+    description: "Resumo operacional e saude da plataforma",
+  },
+  {
+    id: "plans",
+    label: "Planos",
+    description: "Catalogo de planos cadastrados",
+  },
+  {
+    id: "tenants",
+    label: "Tenants",
+    description: "Clientes, widgets e configuracoes do tenant",
+  },
+  {
+    id: "operations",
+    label: "Operacao",
+    description: "Sessoes, analytics, logs e conversas",
+  },
+  {
+    id: "access",
+    label: "Acesso",
+    description: "Usuarios, roles e API keys",
+  },
+] as const;
 
 const emptyTenantAccessState = (): TenantAccessState => ({
   users: [],
   roles: [],
   apiKeys: [],
-  pendingSecret: null
+  pendingSecret: null,
 });
 
 const emptyTenantConversationState = (): TenantConversationState => ({
   conversations: [],
   selectedConversationId: null,
-  selectedConversation: null
+  selectedConversation: null,
 });
 
 const emptyTenantAnalyticsState = (): TenantAnalyticsState => ({
   analytics: null,
   auditLogs: [],
-  systemLogs: []
+  systemLogs: [],
 });
 
 const parseJsonObject = (input: string, label: string): Record<string, unknown> => {
@@ -272,12 +315,15 @@ const getPlanDisplayName = (plans: PlanRecord[], planId: string) =>
 
 const getPlanLabel = (plans: PlanRecord[], planId: string) => getPlanDisplayName(plans, planId);
 
-const formatPlanPrice = (priceCents: number) => (priceCents <= 0 ? "Gratuito" : currencyFormatter.format(priceCents / 100));
+const formatPlanPrice = (priceCents: number) =>
+  priceCents <= 0 ? "Gratuito" : currencyFormatter.format(priceCents / 100);
 
 const formatPlanLimits = (limits: PlanRecord["limits"]) => {
   const record = limits && typeof limits === "object" ? (limits as Record<string, unknown>) : {};
-  const messagesPerMinute = typeof record.messagesPerMinute === "number" ? record.messagesPerMinute : null;
-  const conversationsPerDay = typeof record.conversationsPerDay === "number" ? record.conversationsPerDay : null;
+  const messagesPerMinute =
+    typeof record.messagesPerMinute === "number" ? record.messagesPerMinute : null;
+  const conversationsPerDay =
+    typeof record.conversationsPerDay === "number" ? record.conversationsPerDay : null;
 
   return { messagesPerMinute, conversationsPerDay };
 };
@@ -285,7 +331,7 @@ const formatPlanLimits = (limits: PlanRecord["limits"]) => {
 const normalizeTenantUser = (user: TenantUserRecord): TenantUserRecord =>
   ({
     ...user,
-    invitedAt: user.invitedAt ?? user.createdAt ?? user.updatedAt ?? new Date().toISOString()
+    invitedAt: user.invitedAt ?? user.createdAt ?? user.updatedAt ?? new Date().toISOString(),
   }) as TenantUserRecord;
 
 const copyTextToClipboard = async (text: string) => {
@@ -323,7 +369,7 @@ const agentProviderOptions = [
   { value: "dify", label: "Dify" },
   { value: "crewai", label: "CrewAI" },
   { value: "mcp", label: "MCP" },
-  { value: "custom", label: "Custom" }
+  { value: "custom", label: "Custom" },
 ] as const;
 
 export const App = () => {
@@ -334,8 +380,12 @@ export const App = () => {
   const [tenantDomains, setTenantDomains] = useState<TenantDomainRecord[]>([]);
   const [loginState, setLoginState] = useState<LoginState>(defaultLoginState);
   const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState());
-  const [tenantEdit, setTenantEdit] = useState<TenantEditState>(defaultTenantEditState(undefined, []));
-  const [tenantFilters, setTenantFilters] = useState<TenantListFiltersState>(defaultTenantListFiltersState);
+  const [tenantEdit, setTenantEdit] = useState<TenantEditState>(
+    defaultTenantEditState(undefined, []),
+  );
+  const [tenantFilters, setTenantFilters] = useState<TenantListFiltersState>(
+    defaultTenantListFiltersState,
+  );
   const [tenantPage, setTenantPage] = useState(0);
   const [domainForm, setDomainForm] = useState("");
   const [widgetConfig, setWidgetConfig] = useState<TenantWidgetConfigState>(
@@ -345,17 +395,26 @@ export const App = () => {
     defaultTenantAgentConfigState(),
   );
   const [tenantAccessById, setTenantAccessById] = useState<Record<string, TenantAccessState>>({});
-  const [tenantConversationsById, setTenantConversationsById] = useState<Record<string, TenantConversationState>>({});
-  const [tenantSessionsById, setTenantSessionsById] = useState<Record<string, TenantSessionRecord[]>>({});
-  const [tenantInsightsById, setTenantInsightsById] = useState<Record<string, TenantAnalyticsState>>({});
+  const [tenantConversationsById, setTenantConversationsById] = useState<
+    Record<string, TenantConversationState>
+  >({});
+  const [tenantSessionsById, setTenantSessionsById] = useState<
+    Record<string, TenantSessionRecord[]>
+  >({});
+  const [tenantInsightsById, setTenantInsightsById] = useState<
+    Record<string, TenantAnalyticsState>
+  >({});
   const [userInviteForm, setUserInviteForm] = useState({ email: "", roleSlug: "viewer" });
   const [keyForm, setKeyForm] = useState({ name: "" });
   const [platformHealth, setPlatformHealth] = useState<PlatformHealthRecord | null>(null);
-  const [platformHealthStatus, setPlatformHealthStatus] = useState<"loading" | "ok" | "error">("loading");
+  const [platformHealthStatus, setPlatformHealthStatus] = useState<"loading" | "ok" | "error">(
+    "loading",
+  );
+  const [activeSection, setActiveSection] = useState<DashboardSection>("overview");
   const [viewState, setViewState] = useState<ViewState>({
     loading: false,
     error: null,
-    notice: null
+    notice: null,
   });
 
   useEffect(() => {
@@ -495,7 +554,7 @@ export const App = () => {
 
       return {
         ...current,
-        [selectedTenant.id]: emptyTenantAccessState()
+        [selectedTenant.id]: emptyTenantAccessState(),
       };
     });
   }, [selectedTenantId, tenants, session]);
@@ -513,7 +572,7 @@ export const App = () => {
 
       return {
         ...current,
-        [selectedTenant.id]: emptyTenantConversationState()
+        [selectedTenant.id]: emptyTenantConversationState(),
       };
     });
   }, [selectedTenantId, tenants, session]);
@@ -531,7 +590,7 @@ export const App = () => {
 
       return {
         ...current,
-        [selectedTenant.id]: emptyTenantAnalyticsState()
+        [selectedTenant.id]: emptyTenantAnalyticsState(),
       };
     });
   }, [selectedTenantId, tenants, session]);
@@ -547,8 +606,12 @@ export const App = () => {
       return;
     }
 
-    const selectedConversationId = currentState.selectedConversationId ?? currentState.conversations[0]?.id ?? null;
-    if (!selectedConversationId || currentState.selectedConversation?.id === selectedConversationId) {
+    const selectedConversationId =
+      currentState.selectedConversationId ?? currentState.conversations[0]?.id ?? null;
+    if (
+      !selectedConversationId ||
+      currentState.selectedConversation?.id === selectedConversationId
+    ) {
       return;
     }
 
@@ -559,7 +622,7 @@ export const App = () => {
     setViewState((current) => ({
       ...current,
       notice,
-      error: null
+      error: null,
     }));
   };
 
@@ -567,7 +630,7 @@ export const App = () => {
     setViewState((current) => ({
       ...current,
       error,
-      notice: null
+      notice: null,
     }));
   };
 
@@ -601,7 +664,7 @@ export const App = () => {
       const [items, nextPlans] = await withSessionRetry(async (accessToken) =>
         Promise.all([
           listTenants(accessToken),
-          shouldRefreshPlans ? listPlans(accessToken) : Promise.resolve(plans)
+          shouldRefreshPlans ? listPlans(accessToken) : Promise.resolve(plans),
         ]),
       );
       setTenants(items);
@@ -611,7 +674,7 @@ export const App = () => {
       setViewState((current) => ({
         ...current,
         loading: false,
-        notice: `${items.length} tenant(s) carregado(s).`
+        notice: `${items.length} tenant(s) carregado(s).`,
       }));
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
@@ -638,17 +701,29 @@ export const App = () => {
     setViewState((current) => ({ ...current, loading: true, error: null }));
 
     try {
-      const [domains, config, agentConfig, users, roles, apiKeys, sessions, conversations, analytics, auditLogs, systemLogs] = await withSessionRetry(async (accessToken) => {
+      const [
+        domains,
+        config,
+        agentConfig,
+        users,
+        roles,
+        apiKeys,
+        sessions,
+        conversations,
+        analytics,
+        auditLogs,
+        systemLogs,
+      ] = await withSessionRetry(async (accessToken) => {
         const [nextDomains, nextConfig, nextAgentConfig] = await Promise.all([
           listTenantDomains(accessToken, tenantId),
           getTenantConfig(accessToken, tenantId),
-          getTenantAgentConfig(accessToken, tenantId)
+          getTenantAgentConfig(accessToken, tenantId),
         ]);
 
         const [nextUsers, nextRoles, nextApiKeys] = await Promise.all([
           listTenantUsers(accessToken, tenantId),
           listTenantRoles(accessToken, tenantId),
-          listTenantApiKeys(accessToken, tenantId)
+          listTenantApiKeys(accessToken, tenantId),
         ]);
 
         const nextSessions = await listTenantSessions(accessToken, tenantId);
@@ -656,7 +731,7 @@ export const App = () => {
         const [nextAnalytics, nextAuditLogs, nextSystemLogs] = await Promise.all([
           listTenantAnalytics(accessToken, tenantId),
           listTenantAuditLogs(accessToken, tenantId),
-          listTenantSystemLogs(accessToken, tenantId)
+          listTenantSystemLogs(accessToken, tenantId),
         ]);
 
         return [
@@ -670,7 +745,7 @@ export const App = () => {
           nextConversations,
           nextAnalytics,
           nextAuditLogs,
-          nextSystemLogs
+          nextSystemLogs,
         ] as const;
       });
 
@@ -684,40 +759,42 @@ export const App = () => {
           users: Array.isArray(users) ? users.map(normalizeTenantUser) : [],
           roles: Array.isArray(roles) ? roles : [],
           apiKeys: Array.isArray(apiKeys) ? apiKeys : [],
-          pendingSecret: null
-        }
+          pendingSecret: null,
+        },
       }));
       setTenantSessionsById((current) => ({
         ...current,
-        [tenantId]: Array.isArray(sessions) ? sessions : []
+        [tenantId]: Array.isArray(sessions) ? sessions : [],
       }));
       setTenantInsightsById((current) => ({
         ...current,
         [tenantId]: {
           analytics: analytics ?? null,
           auditLogs: Array.isArray(auditLogs) ? auditLogs : [],
-          systemLogs: Array.isArray(systemLogs) ? systemLogs : []
-        }
+          systemLogs: Array.isArray(systemLogs) ? systemLogs : [],
+        },
       }));
       setTenantConversationsById((current) => {
         const previous = current[tenantId] ?? emptyTenantConversationState();
         const nextConversations = Array.isArray(conversations) ? conversations : [];
-        const selectedConversationId = nextConversations.some((conversation) => conversation.id === previous.selectedConversationId)
+        const selectedConversationId = nextConversations.some(
+          (conversation) => conversation.id === previous.selectedConversationId,
+        )
           ? previous.selectedConversationId
-          : nextConversations[0]?.id ?? null;
+          : (nextConversations[0]?.id ?? null);
 
         return {
           ...current,
           [tenantId]: {
             conversations: nextConversations,
             selectedConversationId,
-            selectedConversation: previous.selectedConversation ?? null
-          }
+            selectedConversation: previous.selectedConversation ?? null,
+          },
         };
       });
       setViewState((current) => ({
         ...current,
-        loading: false
+        loading: false,
       }));
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
@@ -757,8 +834,8 @@ export const App = () => {
         [tenantId]: {
           ...(current[tenantId] ?? emptyTenantConversationState()),
           selectedConversationId: conversation.id,
-          selectedConversation: conversation
-        }
+          selectedConversation: conversation,
+        },
       }));
       setViewState((current) => ({ ...current, loading: false }));
     } catch (error) {
@@ -789,7 +866,7 @@ export const App = () => {
       setViewState((current) => ({
         ...current,
         loading: false,
-        notice: `Bem-vindo, ${result.user.email}.`
+        notice: `Bem-vindo, ${result.user.email}.`,
       }));
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
@@ -810,7 +887,7 @@ export const App = () => {
       setViewState((current) => ({
         ...current,
         loading: false,
-        notice: "Sessao renovada com sucesso."
+        notice: "Sessao renovada com sucesso.",
       }));
     } catch (error) {
       setSession(null);
@@ -835,10 +912,11 @@ export const App = () => {
     setTenantConversationsById({});
     setTenantSessionsById({});
     setTenantInsightsById({});
+    setActiveSection("overview");
     setViewState({
       loading: false,
       error: null,
-      notice: "Sessao encerrada."
+      notice: "Sessao encerrada.",
     });
   };
 
@@ -857,12 +935,13 @@ export const App = () => {
           publicId: tenantForm.publicId,
           name: tenantForm.name,
           planSlug: tenantForm.planSlug,
-          defaultLocale: tenantForm.defaultLocale
+          defaultLocale: tenantForm.defaultLocale,
         }),
       );
 
       setSelectedTenantId(null);
       setTenantForm(defaultTenantFormState(plans));
+      setActiveSection("tenants");
       await loadTenants();
       updateNotice("Tenant criado com sucesso.");
     } catch (error) {
@@ -883,6 +962,7 @@ export const App = () => {
 
   const handleSelectTenant = (tenant: TenantRecord) => {
     setSelectedTenantId(tenant.id);
+    setActiveSection("tenants");
   };
 
   const handleCreateDomainSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -935,10 +1015,12 @@ export const App = () => {
         primaryColor: widgetConfig.primaryColor,
         iconUrl: widgetConfig.iconUrl.trim() || null,
         initialMessage: widgetConfig.initialMessage,
-        placeholder: widgetConfig.placeholder
+        placeholder: widgetConfig.placeholder,
       };
 
-      await withSessionRetry((accessToken) => upsertTenantConfig(accessToken, selectedTenant.id, payload));
+      await withSessionRetry((accessToken) =>
+        upsertTenantConfig(accessToken, selectedTenant.id, payload),
+      );
       await loadTenantDetails(selectedTenant.id);
       updateNotice("Configuracao do widget salva com sucesso.");
     } catch (error) {
@@ -955,7 +1037,9 @@ export const App = () => {
         return;
       }
 
-      updateError(error instanceof Error ? error.message : "Falha ao salvar configuracao do widget");
+      updateError(
+        error instanceof Error ? error.message : "Falha ao salvar configuracao do widget",
+      );
     }
   };
 
@@ -983,7 +1067,7 @@ export const App = () => {
         routingRules: parseJsonObject(tenantAgentConfig.routingRules, "Routing rules"),
         timeoutMs,
         retryPolicy: parseJsonObject(tenantAgentConfig.retryPolicy, "Retry policy"),
-        isActive: tenantAgentConfig.isActive
+        isActive: tenantAgentConfig.isActive,
       };
 
       await withSessionRetry((accessToken) =>
@@ -1006,7 +1090,9 @@ export const App = () => {
         return;
       }
 
-      updateError(error instanceof Error ? error.message : "Falha ao salvar configuracao de agente");
+      updateError(
+        error instanceof Error ? error.message : "Falha ao salvar configuracao de agente",
+      );
     }
   };
 
@@ -1030,7 +1116,7 @@ export const App = () => {
       await withSessionRetry((accessToken) =>
         inviteTenantUser(accessToken, selectedTenant.id, {
           email,
-          roleSlug: userInviteForm.roleSlug
+          roleSlug: userInviteForm.roleSlug,
         }),
       );
       await loadTenantDetails(selectedTenant.id);
@@ -1064,7 +1150,7 @@ export const App = () => {
     try {
       await withSessionRetry((accessToken) =>
         updateTenantUserRoles(accessToken, selectedTenant.id, userId, {
-          roleSlugs: [roleSlug]
+          roleSlugs: [roleSlug],
         }),
       );
       await loadTenantDetails(selectedTenant.id);
@@ -1111,8 +1197,8 @@ export const App = () => {
         ...current,
         [selectedTenant.id]: {
           ...(current[selectedTenant.id] ?? emptyTenantAccessState()),
-          pendingSecret: created.secret
-        }
+          pendingSecret: created.secret,
+        },
       }));
       setKeyForm({ name: "" });
       updateNotice("Chave criada. O segredo fica visivel apenas agora.");
@@ -1142,7 +1228,9 @@ export const App = () => {
     setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
 
     try {
-      await withSessionRetry((accessToken) => revokeTenantApiKey(accessToken, selectedTenant.id, keyId));
+      await withSessionRetry((accessToken) =>
+        revokeTenantApiKey(accessToken, selectedTenant.id, keyId),
+      );
       await loadTenantDetails(selectedTenant.id);
       updateNotice("Chave revogada com sucesso.");
     } catch (error) {
@@ -1177,14 +1265,16 @@ export const App = () => {
         publicId: tenantEdit.publicId,
         name: tenantEdit.name,
         defaultLocale: tenantEdit.defaultLocale,
-        status: tenantEdit.status
+        status: tenantEdit.status,
       };
 
       if (tenantEdit.planSlug) {
         payload.planSlug = tenantEdit.planSlug;
       }
 
-      await withSessionRetry((accessToken) => updateTenant(accessToken, selectedTenant.id, payload));
+      await withSessionRetry((accessToken) =>
+        updateTenant(accessToken, selectedTenant.id, payload),
+      );
       await loadTenants();
       updateNotice("Tenant atualizado com sucesso.");
     } catch (error) {
@@ -1250,16 +1340,26 @@ export const App = () => {
   };
 
   const isPlatformAdmin = Boolean(session?.user.roles.includes("platform_admin"));
-  const canSubmitTenant = Boolean(tenantForm.publicId.trim() && tenantForm.name.trim() && session && isPlatformAdmin);
-  const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? tenants[0] ?? null;
-  const selectedTenantPlan = selectedTenant ? plans.find((plan) => plan.id === selectedTenant.planId) ?? null : null;
+  const canSubmitTenant = Boolean(
+    tenantForm.publicId.trim() && tenantForm.name.trim() && session && isPlatformAdmin,
+  );
+  const selectedTenant =
+    tenants.find((tenant) => tenant.id === selectedTenantId) ?? tenants[0] ?? null;
+  const selectedTenantPlan = selectedTenant
+    ? (plans.find((plan) => plan.id === selectedTenant.planId) ?? null)
+    : null;
   const totalActiveTenants = tenants.filter((tenant) => tenant.status === "active").length;
   const totalSuspendedTenants = tenants.filter((tenant) => tenant.status === "suspended").length;
   const activePlanCount = plans.filter((plan) => plan.isActive).length;
-  const selectedTenantSnippet = selectedTenant?.publicId ? buildWidgetSnippet(selectedTenant.publicId) : null;
+  const selectedTenantSnippet = selectedTenant?.publicId
+    ? buildWidgetSnippet(selectedTenant.publicId)
+    : null;
   const canSubmitDomain = Boolean(session && selectedTenant && domainForm.trim());
   const safeTenantDomains = Array.isArray(tenantDomains) ? tenantDomains : [];
-  const domainLabel = safeTenantDomains.length === 0 ? "Nenhum dominio cadastrado" : `${safeTenantDomains.length} dominio(s)`;
+  const domainLabel =
+    safeTenantDomains.length === 0
+      ? "Nenhum dominio cadastrado"
+      : `${safeTenantDomains.length} dominio(s)`;
   const filteredTenants = tenants.filter((tenant) => {
     const search = tenantFilters.search.trim().toLowerCase();
     const matchesSearch =
@@ -1279,40 +1379,57 @@ export const App = () => {
     tenantPageIndex * tenantPageSize + tenantPageSize,
   );
   const tenantPageStart = filteredTenants.length === 0 ? 0 : tenantPageIndex * tenantPageSize + 1;
-  const tenantPageEnd = filteredTenants.length === 0
-    ? 0
-    : Math.min(filteredTenants.length, tenantPageIndex * tenantPageSize + tenantPageSize);
+  const tenantPageEnd =
+    filteredTenants.length === 0
+      ? 0
+      : Math.min(filteredTenants.length, tenantPageIndex * tenantPageSize + tenantPageSize);
   const hasTenantFilters =
-    tenantFilters.search.trim().length > 0 || tenantFilters.status !== "" || tenantFilters.planId !== "";
+    tenantFilters.search.trim().length > 0 ||
+    tenantFilters.status !== "" ||
+    tenantFilters.planId !== "";
   const selectedTenantAccess = selectedTenant
-    ? tenantAccessById[selectedTenant.id] ?? emptyTenantAccessState()
+    ? (tenantAccessById[selectedTenant.id] ?? emptyTenantAccessState())
     : null;
-  const selectedTenantAccessUsers = selectedTenantAccess && Array.isArray(selectedTenantAccess.users)
-    ? selectedTenantAccess.users
+  const selectedTenantAccessUsers =
+    selectedTenantAccess && Array.isArray(selectedTenantAccess.users)
+      ? selectedTenantAccess.users
+      : [];
+  const selectedTenantAccessRoles =
+    selectedTenantAccess && Array.isArray(selectedTenantAccess.roles)
+      ? selectedTenantAccess.roles
+      : [];
+  const selectedTenantAccessApiKeys =
+    selectedTenantAccess && Array.isArray(selectedTenantAccess.apiKeys)
+      ? selectedTenantAccess.apiKeys
+      : [];
+  const selectedTenantSessions = selectedTenant
+    ? (tenantSessionsById[selectedTenant.id] ?? [])
     : [];
-  const selectedTenantAccessRoles = selectedTenantAccess && Array.isArray(selectedTenantAccess.roles)
-    ? selectedTenantAccess.roles
-    : [];
-  const selectedTenantAccessApiKeys = selectedTenantAccess && Array.isArray(selectedTenantAccess.apiKeys)
-    ? selectedTenantAccess.apiKeys
-    : [];
-  const selectedTenantSessions = selectedTenant ? tenantSessionsById[selectedTenant.id] ?? [] : [];
-  const selectedTenantConversations = selectedTenant ? tenantConversationsById[selectedTenant.id] ?? emptyTenantConversationState() : null;
+  const selectedTenantConversations = selectedTenant
+    ? (tenantConversationsById[selectedTenant.id] ?? emptyTenantConversationState())
+    : null;
   const selectedTenantConversationList = selectedTenantConversations?.conversations ?? [];
   const selectedConversationDetail = selectedTenantConversations?.selectedConversation ?? null;
   const selectedConversationId = selectedTenantConversations?.selectedConversationId ?? null;
-  const selectedConversationMessages = selectedConversationDetail && Array.isArray(selectedConversationDetail.messages)
-    ? selectedConversationDetail.messages
-    : [];
+  const selectedConversationMessages =
+    selectedConversationDetail && Array.isArray(selectedConversationDetail.messages)
+      ? selectedConversationDetail.messages
+      : [];
   const selectedTenantDomainCount = safeTenantDomains.length;
   const selectedTenantUserCount = selectedTenantAccessUsers.length;
   const selectedTenantRoleCount = selectedTenantAccessRoles.length;
   const selectedTenantApiKeyCount = selectedTenantAccessApiKeys.length;
   const selectedTenantSessionCount = selectedTenantSessions.length;
-  const selectedTenantInsights = selectedTenant ? tenantInsightsById[selectedTenant.id] ?? emptyTenantAnalyticsState() : emptyTenantAnalyticsState();
+  const selectedTenantInsights = selectedTenant
+    ? (tenantInsightsById[selectedTenant.id] ?? emptyTenantAnalyticsState())
+    : emptyTenantAnalyticsState();
   const selectedTenantAnalytics = selectedTenantInsights.analytics;
-  const selectedTenantAuditLogs = Array.isArray(selectedTenantInsights.auditLogs) ? selectedTenantInsights.auditLogs : [];
-  const selectedTenantSystemLogs = Array.isArray(selectedTenantInsights.systemLogs) ? selectedTenantInsights.systemLogs : [];
+  const selectedTenantAuditLogs = Array.isArray(selectedTenantInsights.auditLogs)
+    ? selectedTenantInsights.auditLogs
+    : [];
+  const selectedTenantSystemLogs = Array.isArray(selectedTenantInsights.systemLogs)
+    ? selectedTenantInsights.systemLogs
+    : [];
 
   const handleSelectConversation = (conversationId: string) => {
     if (!selectedTenant) {
@@ -1326,8 +1443,11 @@ export const App = () => {
         [selectedTenant.id]: {
           ...currentState,
           selectedConversationId: conversationId,
-          selectedConversation: currentState.selectedConversation?.id === conversationId ? currentState.selectedConversation : null
-        }
+          selectedConversation:
+            currentState.selectedConversation?.id === conversationId
+              ? currentState.selectedConversation
+              : null,
+        },
       };
     });
   };
@@ -1370,20 +1490,20 @@ export const App = () => {
           </div>
         </div>
 
-        <nav>
-          <a href="#overview">Visao geral</a>
-          <a href="#plans">Planos</a>
-          <a href="#tenants">Tenants</a>
-          <a href="#widget">Widget</a>
-          <a href="#config">Configuracao</a>
-          <a href="#agent-config">Agente</a>
-          <a href="#sessions">Sessoes</a>
-          <a href="#analytics">Analytics</a>
-          <a href="#logs">Logs</a>
-          <a href="#conversations">Conversas</a>
-          <a href="#users">Usuarios</a>
-          <a href="#roles">Roles</a>
-          <a href="#api-keys">API keys</a>
+        <nav aria-label="Seções do dashboard" className="sidebar-nav">
+          {dashboardSections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              className={activeSection === section.id ? "nav-link is-active" : "nav-link"}
+              onClick={() => setActiveSection(section.id)}
+              aria-pressed={activeSection === section.id}
+              title={section.description}
+            >
+              <span>{section.label}</span>
+              <small>{section.description}</small>
+            </button>
+          ))}
         </nav>
 
         <section className="sidebar-panel">
@@ -1394,7 +1514,7 @@ export const App = () => {
         </section>
       </aside>
 
-      <section className="content">
+      <section className="content" data-active-section={activeSection}>
         <header className="page-header">
           <div>
             <p>Plataforma</p>
@@ -1405,7 +1525,12 @@ export const App = () => {
           <div className="header-actions">
             {session ? (
               <>
-                <button type="button" className="secondary" onClick={handleRefresh} disabled={viewState.loading}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={handleRefresh}
+                  disabled={viewState.loading}
+                >
                   Renovar sessao
                 </button>
                 <button type="button" className="secondary danger" onClick={handleLogout}>
@@ -1420,13 +1545,14 @@ export const App = () => {
         {viewState.notice ? <div className="banner success">{viewState.notice}</div> : null}
         {session && !isPlatformAdmin ? (
           <div className="banner warning">
-            Este usuário está em modo restrito. Ações globais, como criar ou excluir tenants, foram bloqueadas.
+            Este usuário está em modo restrito. Ações globais, como criar ou excluir tenants, foram
+            bloqueadas.
           </div>
         ) : null}
 
         {!session ? (
           <section className="auth-grid" id="overview">
-          <article className="hero-card">
+            <article className="hero-card">
               <p className="eyebrow">Controle operacional</p>
               <h2>Entre no painel para administrar tenants, widgets e configuracoes.</h2>
               <p>
@@ -1496,7 +1622,7 @@ export const App = () => {
           </section>
         ) : (
           <>
-            <section className="metric-grid" id="overview">
+            <section className="metric-grid panel-section panel-overview" id="overview">
               <article className="surface metric-card">
                 <span>Status da plataforma</span>
                 <strong>
@@ -1541,7 +1667,7 @@ export const App = () => {
               </article>
             </section>
 
-            <section className="surface plan-section" id="plans">
+            <section className="surface plan-section panel-section panel-plans" id="plans">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Catálogo</p>
@@ -1552,7 +1678,12 @@ export const App = () => {
                       : `${plans.length} plano(s) sincronizado(s) com a API.`}
                   </p>
                 </div>
-                <button type="button" className="secondary" onClick={() => void loadTenants()} disabled={viewState.loading}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void loadTenants()}
+                  disabled={viewState.loading}
+                >
                   Recarregar
                 </button>
               </div>
@@ -1561,7 +1692,9 @@ export const App = () => {
                 {plans.length === 0 ? (
                   <div className="empty-state">
                     <strong>Nenhum plano carregado.</strong>
-                    <p>Verifique a API administrativa ou recarregue a sessão para buscar o catálogo.</p>
+                    <p>
+                      Verifique a API administrativa ou recarregue a sessão para buscar o catálogo.
+                    </p>
                   </div>
                 ) : (
                   plans.map((plan) => {
@@ -1597,8 +1730,8 @@ export const App = () => {
               </div>
             </section>
 
-            <section className="two-column">
-              <article className="surface" id="tenants">
+            <section className="two-column panel-section panel-tenants">
+              <article className="surface panel-section panel-tenants" id="tenants">
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Clientes</p>
@@ -1607,10 +1740,17 @@ export const App = () => {
                       {filteredTenants.length === tenants.length
                         ? `${tenants.length} tenant(s) no total.`
                         : `${filteredTenants.length} de ${tenants.length} tenant(s) visiveis.`}
-                      {filteredTenants.length > 0 ? ` Mostrando ${tenantPageStart}-${tenantPageEnd} de ${filteredTenants.length}.` : ""}
+                      {filteredTenants.length > 0
+                        ? ` Mostrando ${tenantPageStart}-${tenantPageEnd} de ${filteredTenants.length}.`
+                        : ""}
                     </p>
                   </div>
-                  <button type="button" className="secondary" onClick={() => void loadTenants()} disabled={viewState.loading}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void loadTenants()}
+                    disabled={viewState.loading}
+                  >
                     Recarregar
                   </button>
                 </div>
@@ -1633,7 +1773,7 @@ export const App = () => {
                       onChange={(event) =>
                         setTenantFilters((current) => ({
                           ...current,
-                          status: event.target.value as TenantStatusFilter
+                          status: event.target.value as TenantStatusFilter,
                         }))
                       }
                     >
@@ -1650,11 +1790,11 @@ export const App = () => {
                       onChange={(event) =>
                         setTenantFilters((current) => ({
                           ...current,
-                          planId: event.target.value as TenantPlanFilter
+                          planId: event.target.value as TenantPlanFilter,
                         }))
                       }
-                      >
-                        <option value="">Todos</option>
+                    >
+                      <option value="">Todos</option>
                       {plans.map((plan) => (
                         <option key={`filter-plan-${plan.id}`} value={plan.id}>
                           {plan.name}
@@ -1685,7 +1825,9 @@ export const App = () => {
                   {filteredTenants.length === 0 ? (
                     <div className="empty-state">
                       <strong>
-                        {tenants.length === 0 ? "Nenhum tenant encontrado." : "Nenhum tenant corresponde aos filtros."}
+                        {tenants.length === 0
+                          ? "Nenhum tenant encontrado."
+                          : "Nenhum tenant corresponde aos filtros."}
                       </strong>
                       <p>
                         {tenants.length === 0
@@ -1731,7 +1873,9 @@ export const App = () => {
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => setTenantPage((current) => Math.min(tenantPageCount - 1, current + 1))}
+                        onClick={() =>
+                          setTenantPage((current) => Math.min(tenantPageCount - 1, current + 1))
+                        }
                         disabled={tenantPageIndex >= tenantPageCount - 1}
                       >
                         Próximo
@@ -1741,14 +1885,15 @@ export const App = () => {
                 ) : null}
               </article>
 
-              <article className="surface" id="config">
+              <article className="surface panel-section panel-tenants" id="config">
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Operacao inicial</p>
                     <h2>Criar tenant</h2>
                     {!isPlatformAdmin ? (
                       <p className="section-subtitle">
-                        Somente usuários com papel <span className="mono">platform_admin</span> podem criar tenants.
+                        Somente usuários com papel <span className="mono">platform_admin</span>{" "}
+                        podem criar tenants.
                       </p>
                     ) : null}
                   </div>
@@ -1786,10 +1931,10 @@ export const App = () => {
                       onChange={(event) =>
                         setTenantForm((current) => ({
                           ...current,
-                          planSlug: event.target.value as CreateTenantPayload["planSlug"]
+                          planSlug: event.target.value as CreateTenantPayload["planSlug"],
                         }))
                       }
-                      >
+                    >
                       {plans.map((plan) => (
                         <option key={`create-plan-${plan.slug}`} value={plan.slug}>
                           {plan.name}
@@ -1803,14 +1948,21 @@ export const App = () => {
                     <input
                       value={tenantForm.defaultLocale}
                       onChange={(event) =>
-                        setTenantForm((current) => ({ ...current, defaultLocale: event.target.value }))
+                        setTenantForm((current) => ({
+                          ...current,
+                          defaultLocale: event.target.value,
+                        }))
                       }
                       placeholder="pt-BR"
                       required
                     />
                   </label>
 
-                  <button type="submit" className="primary" disabled={viewState.loading || !canSubmitTenant}>
+                  <button
+                    type="submit"
+                    className="primary"
+                    disabled={viewState.loading || !canSubmitTenant}
+                  >
                     {viewState.loading ? "Salvando..." : "Criar tenant"}
                   </button>
                 </form>
@@ -1818,7 +1970,10 @@ export const App = () => {
             </section>
 
             {selectedTenant ? (
-              <section className="surface tenant-detail" id="tenant-detail">
+              <section
+                className="surface tenant-detail panel-section panel-tenants"
+                id="tenant-detail"
+              >
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Tenant selecionado</p>
@@ -1847,7 +2002,11 @@ export const App = () => {
                   </div>
                   <div>
                     <dt>Plano</dt>
-                    <dd>{selectedTenantPlan ? `${selectedTenantPlan.name} (${selectedTenantPlan.slug})` : selectedTenant.planId}</dd>
+                    <dd>
+                      {selectedTenantPlan
+                        ? `${selectedTenantPlan.name} (${selectedTenantPlan.slug})`
+                        : selectedTenant.planId}
+                    </dd>
                   </div>
                   <div>
                     <dt>Dominios</dt>
@@ -1898,11 +2057,11 @@ export const App = () => {
                         onChange={(event) =>
                           setTenantEdit((current) => ({
                             ...current,
-                            planSlug: event.target.value as TenantEditState["planSlug"]
+                            planSlug: event.target.value as TenantEditState["planSlug"],
                           }))
                         }
                       >
-                          <option value="">Manter plano atual</option>
+                        <option value="">Manter plano atual</option>
                         {plans.map((plan) => (
                           <option key={`edit-plan-${plan.slug}`} value={plan.slug}>
                             {plan.name}
@@ -1918,7 +2077,7 @@ export const App = () => {
                         onChange={(event) =>
                           setTenantEdit((current) => ({
                             ...current,
-                            status: event.target.value as TenantRecord["status"]
+                            status: event.target.value as TenantRecord["status"],
                           }))
                         }
                       >
@@ -1934,7 +2093,10 @@ export const App = () => {
                     <input
                       value={tenantEdit.defaultLocale}
                       onChange={(event) =>
-                        setTenantEdit((current) => ({ ...current, defaultLocale: event.target.value }))
+                        setTenantEdit((current) => ({
+                          ...current,
+                          defaultLocale: event.target.value,
+                        }))
                       }
                       placeholder="pt-BR"
                       required
@@ -1948,7 +2110,7 @@ export const App = () => {
               </section>
             ) : null}
 
-            <section className="surface widget-card" id="widget">
+            <section className="surface widget-card panel-section panel-tenants" id="widget">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Widget</p>
@@ -1956,7 +2118,11 @@ export const App = () => {
                 </div>
                 {selectedTenantSnippet ? (
                   <div className="header-actions">
-                    <button type="button" className="secondary" onClick={() => void handleCopyWidgetSnippet()}>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void handleCopyWidgetSnippet()}
+                    >
                       Copiar snippet
                     </button>
                   </div>
@@ -1974,8 +2140,8 @@ export const App = () => {
             </section>
 
             {selectedTenant ? (
-              <section className="two-column">
-                <article className="surface domain-card" id="domains">
+              <section className="two-column panel-section panel-tenants">
+                <article className="surface domain-card panel-section panel-tenants" id="domains">
                   <div className="section-heading">
                     <div>
                       <p className="eyebrow">Seguranca</p>
@@ -1995,7 +2161,11 @@ export const App = () => {
                       />
                     </label>
 
-                    <button type="submit" className="primary" disabled={viewState.loading || !canSubmitDomain}>
+                    <button
+                      type="submit"
+                      className="primary"
+                      disabled={viewState.loading || !canSubmitDomain}
+                    >
                       {viewState.loading ? "Salvando..." : "Adicionar dominio"}
                     </button>
                   </form>
@@ -2014,7 +2184,10 @@ export const App = () => {
                   </div>
                 </article>
 
-                <article className="surface widget-config-card" id="widget-config">
+                <article
+                  className="surface widget-config-card panel-section panel-tenants"
+                  id="widget-config"
+                >
                   <div className="section-heading">
                     <div>
                       <p className="eyebrow">Widget</p>
@@ -2030,7 +2203,7 @@ export const App = () => {
                         onChange={(event) =>
                           setWidgetConfig((current) => ({
                             ...current,
-                            theme: event.target.value as TenantWidgetConfigState["theme"]
+                            theme: event.target.value as TenantWidgetConfigState["theme"],
                           }))
                         }
                       >
@@ -2047,7 +2220,7 @@ export const App = () => {
                         onChange={(event) =>
                           setWidgetConfig((current) => ({
                             ...current,
-                            primaryColor: event.target.value
+                            primaryColor: event.target.value,
                           }))
                         }
                         placeholder="#2563eb"
@@ -2062,7 +2235,7 @@ export const App = () => {
                         onChange={(event) =>
                           setWidgetConfig((current) => ({
                             ...current,
-                            iconUrl: event.target.value
+                            iconUrl: event.target.value,
                           }))
                         }
                         placeholder="https://cdn.exemplo.com/icon.png"
@@ -2076,7 +2249,7 @@ export const App = () => {
                         onChange={(event) =>
                           setWidgetConfig((current) => ({
                             ...current,
-                            initialMessage: event.target.value
+                            initialMessage: event.target.value,
                           }))
                         }
                         placeholder="Ola! Como posso ajudar?"
@@ -2091,7 +2264,7 @@ export const App = () => {
                         onChange={(event) =>
                           setWidgetConfig((current) => ({
                             ...current,
-                            placeholder: event.target.value
+                            placeholder: event.target.value,
                           }))
                         }
                         placeholder="Digite sua mensagem"
@@ -2108,7 +2281,10 @@ export const App = () => {
             ) : null}
 
             {selectedTenant ? (
-              <section className="surface agent-config-card" id="agent-config">
+              <section
+                className="surface agent-config-card panel-section panel-tenants"
+                id="agent-config"
+              >
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Agente</p>
@@ -2140,7 +2316,7 @@ export const App = () => {
                         onChange={(event) =>
                           setTenantAgentConfig((current) => ({
                             ...current,
-                            provider: event.target.value as TenantAgentConfigState["provider"]
+                            provider: event.target.value as TenantAgentConfigState["provider"],
                           }))
                         }
                       >
@@ -2157,7 +2333,10 @@ export const App = () => {
                       <input
                         value={tenantAgentConfig.model}
                         onChange={(event) =>
-                          setTenantAgentConfig((current) => ({ ...current, model: event.target.value }))
+                          setTenantAgentConfig((current) => ({
+                            ...current,
+                            model: event.target.value,
+                          }))
                         }
                         placeholder="gpt-4.1-mini"
                       />
@@ -2172,7 +2351,7 @@ export const App = () => {
                         onChange={(event) =>
                           setTenantAgentConfig((current) => ({
                             ...current,
-                            webhookEndpointId: event.target.value
+                            webhookEndpointId: event.target.value,
                           }))
                         }
                         placeholder="UUID do webhook"
@@ -2186,7 +2365,7 @@ export const App = () => {
                         onChange={(event) =>
                           setTenantAgentConfig((current) => ({
                             ...current,
-                            encryptedCredentialsRef: event.target.value
+                            encryptedCredentialsRef: event.target.value,
                           }))
                         }
                         placeholder="vault://tenant-agent-secret"
@@ -2203,7 +2382,10 @@ export const App = () => {
                         step="1"
                         value={tenantAgentConfig.timeoutMs}
                         onChange={(event) =>
-                          setTenantAgentConfig((current) => ({ ...current, timeoutMs: event.target.value }))
+                          setTenantAgentConfig((current) => ({
+                            ...current,
+                            timeoutMs: event.target.value,
+                          }))
                         }
                         placeholder="15000"
                         required
@@ -2218,7 +2400,7 @@ export const App = () => {
                         onChange={(event) =>
                           setTenantAgentConfig((current) => ({
                             ...current,
-                            isActive: event.target.checked
+                            isActive: event.target.checked,
                           }))
                         }
                       />
@@ -2233,7 +2415,7 @@ export const App = () => {
                       onChange={(event) =>
                         setTenantAgentConfig((current) => ({
                           ...current,
-                          routingRules: event.target.value
+                          routingRules: event.target.value,
                         }))
                       }
                       placeholder='{"fallback":"n8n"}'
@@ -2248,7 +2430,7 @@ export const App = () => {
                       onChange={(event) =>
                         setTenantAgentConfig((current) => ({
                           ...current,
-                          retryPolicy: event.target.value
+                          retryPolicy: event.target.value,
                         }))
                       }
                       placeholder='{"attempts":2}'
@@ -2263,7 +2445,7 @@ export const App = () => {
             ) : null}
 
             {selectedTenant ? (
-              <section className="surface" id="sessions">
+              <section className="surface panel-section panel-operations" id="sessions">
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Visibilidade</p>
@@ -2294,7 +2476,11 @@ export const App = () => {
                       >
                         <div>
                           <strong>{sessionRecord.visitorId}</strong>
-                          <p className="mono">{sessionRecord.currentPage ?? sessionRecord.pageUrl ?? "Pagina nao informada"}</p>
+                          <p className="mono">
+                            {sessionRecord.currentPage ??
+                              sessionRecord.pageUrl ??
+                              "Pagina nao informada"}
+                          </p>
                           <small>
                             {sessionRecord.conversationId
                               ? `Conversa ${sessionRecord.conversationId}`
@@ -2318,7 +2504,7 @@ export const App = () => {
             ) : null}
 
             {selectedTenant ? (
-              <section className="surface" id="analytics">
+              <section className="surface panel-section panel-operations" id="analytics">
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Medição</p>
@@ -2372,7 +2558,11 @@ export const App = () => {
                         <div className="list-row" key={event.id}>
                           <div>
                             <strong>{event.eventType}</strong>
-                            <p className="mono">{event.payload.url ? String(event.payload.url) : event.conversationId ?? "Sem contexto"}</p>
+                            <p className="mono">
+                              {event.payload.url
+                                ? String(event.payload.url)
+                                : (event.conversationId ?? "Sem contexto")}
+                            </p>
                           </div>
                           <span>{new Date(event.createdAt).toLocaleString("pt-BR")}</span>
                         </div>
@@ -2386,7 +2576,7 @@ export const App = () => {
             ) : null}
 
             {selectedTenant ? (
-              <section className="surface" id="logs">
+              <section className="surface panel-section panel-operations" id="logs">
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Confiabilidade</p>
@@ -2445,7 +2635,7 @@ export const App = () => {
             ) : null}
 
             {selectedTenant ? (
-              <section className="surface" id="conversations">
+              <section className="surface panel-section panel-operations" id="conversations">
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">Atendimento</p>
@@ -2472,9 +2662,14 @@ export const App = () => {
                         >
                           <div>
                             <strong>{conversation.visitorId ?? conversation.sessionId}</strong>
-                            <p className="mono">{conversation.currentPage ?? conversation.pageUrl ?? "Pagina nao informada"}</p>
+                            <p className="mono">
+                              {conversation.currentPage ??
+                                conversation.pageUrl ??
+                                "Pagina nao informada"}
+                            </p>
                             <small>
-                              {conversation.status === "open" ? "Aberta" : "Fechada"} - {conversation.messageCount} mensagem(s)
+                              {conversation.status === "open" ? "Aberta" : "Fechada"} -{" "}
+                              {conversation.messageCount} mensagem(s)
                             </small>
                           </div>
                           <div>
@@ -2495,9 +2690,14 @@ export const App = () => {
                         <div className="section-heading">
                           <div>
                             <p className="eyebrow">Detalhe</p>
-                            <h3>{selectedConversationDetail.visitorId ?? selectedConversationDetail.sessionId}</h3>
+                            <h3>
+                              {selectedConversationDetail.visitorId ??
+                                selectedConversationDetail.sessionId}
+                            </h3>
                             <p className="section-subtitle">
-                              {selectedConversationDetail.currentPage ?? selectedConversationDetail.pageUrl ?? "Pagina nao informada"}
+                              {selectedConversationDetail.currentPage ??
+                                selectedConversationDetail.pageUrl ??
+                                "Pagina nao informada"}
                             </p>
                           </div>
                         </div>
@@ -2505,7 +2705,9 @@ export const App = () => {
                         <dl className="session-grid">
                           <div>
                             <dt>Status</dt>
-                            <dd>{selectedConversationDetail.status === "open" ? "Aberta" : "Fechada"}</dd>
+                            <dd>
+                              {selectedConversationDetail.status === "open" ? "Aberta" : "Fechada"}
+                            </dd>
                           </div>
                           <div>
                             <dt>Mensagens</dt>
@@ -2513,11 +2715,21 @@ export const App = () => {
                           </div>
                           <div>
                             <dt>Inicio</dt>
-                            <dd>{new Date(selectedConversationDetail.startedAt).toLocaleString("pt-BR")}</dd>
+                            <dd>
+                              {new Date(selectedConversationDetail.startedAt).toLocaleString(
+                                "pt-BR",
+                              )}
+                            </dd>
                           </div>
                           <div>
                             <dt>Ultima atividade</dt>
-                            <dd>{selectedConversationDetail.lastMessageAt ? new Date(selectedConversationDetail.lastMessageAt).toLocaleString("pt-BR") : "-"}</dd>
+                            <dd>
+                              {selectedConversationDetail.lastMessageAt
+                                ? new Date(selectedConversationDetail.lastMessageAt).toLocaleString(
+                                    "pt-BR",
+                                  )
+                                : "-"}
+                            </dd>
                           </div>
                         </dl>
 
@@ -2537,7 +2749,9 @@ export const App = () => {
                                       ? message.content
                                       : JSON.stringify(message.content)}
                                   </p>
-                                  <small>{new Date(message.createdAt).toLocaleString("pt-BR")}</small>
+                                  <small>
+                                    {new Date(message.createdAt).toLocaleString("pt-BR")}
+                                  </small>
                                 </div>
                               </div>
                             ))
@@ -2547,7 +2761,9 @@ export const App = () => {
                     ) : (
                       <div className="empty-state">
                         <strong>Selecione uma conversa.</strong>
-                        <p>Escolha um item da lista ao lado para abrir o histórico e os metadados.</p>
+                        <p>
+                          Escolha um item da lista ao lado para abrir o histórico e os metadados.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -2556,8 +2772,8 @@ export const App = () => {
             ) : null}
 
             {selectedTenant && selectedTenantAccess ? (
-              <section className="three-column access-grid">
-                <article className="surface access-card" id="users">
+              <section className="three-column access-grid panel-section panel-access">
+                <article className="surface access-card panel-section panel-access" id="users">
                   <div className="section-heading">
                     <div>
                       <p className="eyebrow">Equipe</p>
@@ -2571,7 +2787,10 @@ export const App = () => {
                       <input
                         value={userInviteForm.email}
                         onChange={(event) =>
-                          setUserInviteForm((current) => ({ ...current, email: event.target.value }))
+                          setUserInviteForm((current) => ({
+                            ...current,
+                            email: event.target.value,
+                          }))
                         }
                         placeholder="usuario@empresa.com"
                         required
@@ -2583,7 +2802,10 @@ export const App = () => {
                       <select
                         value={userInviteForm.roleSlug}
                         onChange={(event) =>
-                          setUserInviteForm((current) => ({ ...current, roleSlug: event.target.value }))
+                          setUserInviteForm((current) => ({
+                            ...current,
+                            roleSlug: event.target.value,
+                          }))
                         }
                       >
                         {selectedTenantAccessRoles.map((role) => (
@@ -2607,16 +2829,26 @@ export const App = () => {
                         <div className="user-row" key={user.id}>
                           <div>
                             <strong>{user.email}</strong>
-                            <p>{user.status === "active" ? "Ativo" : user.status === "invited" ? "Convidado" : "Suspenso"}</p>
+                            <p>
+                              {user.status === "active"
+                                ? "Ativo"
+                                : user.status === "invited"
+                                  ? "Convidado"
+                                  : "Suspenso"}
+                            </p>
                             <small>
                               Convidado em{" "}
-                              {new Date(user.invitedAt ?? user.createdAt ?? user.updatedAt ?? Date.now()).toLocaleDateString("pt-BR")}
+                              {new Date(
+                                user.invitedAt ?? user.createdAt ?? user.updatedAt ?? Date.now(),
+                              ).toLocaleDateString("pt-BR")}
                             </small>
                           </div>
                           <div className="user-actions">
                             <select
                               value={userRoles[0] ?? "viewer"}
-                              onChange={(event) => void handleUpdateUserRoles(user.id, event.target.value)}
+                              onChange={(event) =>
+                                void handleUpdateUserRoles(user.id, event.target.value)
+                              }
                             >
                               {selectedTenantAccessRoles.map((role) => (
                                 <option key={`user-role-${user.id}-${role.slug}`} value={role.slug}>
@@ -2638,7 +2870,7 @@ export const App = () => {
                   </div>
                 </article>
 
-                <article className="surface access-card" id="roles">
+                <article className="surface access-card panel-section panel-access" id="roles">
                   <div className="section-heading">
                     <div>
                       <p className="eyebrow">Acesso</p>
@@ -2648,7 +2880,9 @@ export const App = () => {
 
                   <div className="list-card">
                     {selectedTenantAccessRoles.map((role) => {
-                      const rolePermissions = Array.isArray(role.permissions) ? role.permissions : [];
+                      const rolePermissions = Array.isArray(role.permissions)
+                        ? role.permissions
+                        : [];
 
                       return (
                         <div className="role-row" key={role.id}>
@@ -2681,7 +2915,7 @@ export const App = () => {
                   </div>
                 </article>
 
-                <article className="surface access-card" id="api-keys">
+                <article className="surface access-card panel-section panel-access" id="api-keys">
                   <div className="section-heading">
                     <div>
                       <p className="eyebrow">Credenciais</p>
@@ -2695,18 +2929,27 @@ export const App = () => {
                         <strong>Segredo gerado uma unica vez</strong>
                         <code>{selectedTenantAccess.pendingSecret}</code>
                       </div>
-                      <button type="button" className="secondary" onClick={() => void handleCopyApiKeySecret()}>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void handleCopyApiKeySecret()}
+                      >
                         Copiar segredo
                       </button>
                     </div>
                   ) : null}
 
-                  <form className="stack" onSubmit={(event) => void handleCreateApiKeySubmit(event)}>
+                  <form
+                    className="stack"
+                    onSubmit={(event) => void handleCreateApiKeySubmit(event)}
+                  >
                     <label>
                       <span>Nome da chave</span>
                       <input
                         value={keyForm.name}
-                        onChange={(event) => setKeyForm((current) => ({ ...current, name: event.target.value }))}
+                        onChange={(event) =>
+                          setKeyForm((current) => ({ ...current, name: event.target.value }))
+                        }
                         placeholder="Key do painel"
                         required
                       />
@@ -2726,7 +2969,9 @@ export const App = () => {
                             {key.prefix}...{key.last4}
                           </p>
                           <small>
-                            {key.revokedAt ? `Revogada em ${new Date(key.revokedAt).toLocaleDateString("pt-BR")}` : "Ativa"}
+                            {key.revokedAt
+                              ? `Revogada em ${new Date(key.revokedAt).toLocaleDateString("pt-BR")}`
+                              : "Ativa"}
                           </small>
                         </div>
                         <button
@@ -2744,7 +2989,7 @@ export const App = () => {
               </section>
             ) : null}
 
-            <section className="surface session-card">
+            <section className="surface session-card panel-section panel-overview">
               <div className="section-heading">
                 <div>
                   <p className="eyebrow">Sessao</p>
