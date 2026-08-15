@@ -348,6 +348,10 @@ const updateUserRolesSchema = z.object({
   roleSlugs: z.array(z.string().min(1).max(80)).min(1),
 });
 
+const updateUserStatusSchema = z.object({
+  status: z.enum(["active", "invited", "suspended"]),
+});
+
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(120),
 });
@@ -675,6 +679,37 @@ export class TenantsService {
       email: user.email,
       status: user.status,
       roles: roles.map((role) => role.slug),
+    };
+  }
+
+  async updateUserStatus(
+    actor: AdminAccessTokenPayload,
+    tenantId: string,
+    userId: string,
+    rawInput: unknown,
+  ) {
+    this.assertTenantAccess(actor, tenantId);
+    const input = this.parseUpdateUserStatusInput(rawInput);
+    const user = await this.dependencies.users.findById(userId);
+    if (!user || user.tenantId !== tenantId) {
+      throw new NotFoundException(`User ${userId} was not found`);
+    }
+
+    const updated = await this.dependencies.users.updateStatus(userId, input.status);
+    if (!updated) {
+      throw new NotFoundException(`User ${userId} was not found`);
+    }
+
+    const roles = await this.dependencies.userRoles.listRoleSlugsByUserId(userId);
+
+    return {
+      id: updated.id,
+      tenantId: updated.tenantId,
+      email: updated.email,
+      status: updated.status,
+      roles: roles.map((role) => role.slug),
+      createdAt: updated.createdAt?.toISOString?.() ?? undefined,
+      updatedAt: updated.updatedAt?.toISOString?.() ?? undefined,
     };
   }
 
@@ -1048,6 +1083,14 @@ export class TenantsService {
       return updateUserRolesSchema.parse(rawInput);
     } catch {
       throw new BadRequestException("Invalid user roles payload");
+    }
+  }
+
+  private parseUpdateUserStatusInput(rawInput: unknown) {
+    try {
+      return updateUserStatusSchema.parse(rawInput);
+    } catch {
+      throw new BadRequestException("Invalid user status payload");
     }
   }
 

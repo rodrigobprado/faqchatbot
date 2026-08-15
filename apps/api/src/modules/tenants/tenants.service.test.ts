@@ -795,6 +795,26 @@ describe("TenantsService", () => {
       roles: ["admin"],
     });
 
+    dependencies.users.updateStatus.mockResolvedValue({
+      id: userId,
+      tenantId,
+      email: "admin@acme.test",
+      passwordHash: "hash",
+      status: "suspended",
+      createdAt: new Date("2026-08-14T12:00:00.000Z"),
+      updatedAt: new Date("2026-08-14T12:10:00.000Z"),
+    });
+    dependencies.userRoles.listRoleSlugsByUserId.mockResolvedValueOnce([{ slug: "admin" }]);
+
+    await expect(
+      service.updateUserStatus(actor, tenantId, userId, { status: "suspended" }),
+    ).resolves.toMatchObject({
+      id: userId,
+      status: "suspended",
+      roles: ["admin"],
+      updatedAt: "2026-08-14T12:10:00.000Z",
+    });
+
     await expect(service.listRoles(actor, tenantId)).resolves.toEqual([
       expect.objectContaining({
         slug: "admin",
@@ -914,6 +934,9 @@ describe("TenantsService", () => {
     await expect(
       service.updateUserRoles(actor, tenantId, "user-1", { roleSlugs: [] }),
     ).rejects.toThrow("Invalid user roles payload");
+    await expect(
+      service.updateUserStatus(actor, tenantId, "user-1", { status: "invalid" }),
+    ).rejects.toThrow("Invalid user status payload");
     await expect(service.createApiKey(actor, tenantId, {})).rejects.toThrow(
       "Invalid api key payload",
     );

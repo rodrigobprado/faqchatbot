@@ -26,6 +26,7 @@ import {
   refreshAdmin,
   revokeTenantApiKey,
   updateTenantUserRoles,
+  updateTenantUserStatus,
   upsertTenantConfig,
   upsertTenantAgentConfig,
   updateTenant,
@@ -393,5 +394,20 @@ describe("API helpers", () => {
     await expect(deleteTenantDomain("access-token-1", "tenant-1", "domain-2")).resolves.toEqual(
       removedDomain,
     );
+  });
+
+  it("updates a tenant user status", async () => {
+    const updatedUser = {
+      ...user,
+      status: "suspended" as const,
+    };
+
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, updatedUser));
+
+    await expect(
+      updateTenantUserStatus("access-token-1", "tenant-1", "user-1", {
+        status: "suspended",
+      }),
+    ).resolves.toEqual(updatedUser);
   });
 });

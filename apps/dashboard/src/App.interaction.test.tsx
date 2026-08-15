@@ -1128,6 +1128,29 @@ describe("App interactions", () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, {
         data: {
+          ...roleUpdatedTenantUsers[0],
+          status: "suspended",
+        },
+        meta: {},
+      }),
+    );
+    queueTenantDetails(fetchMock, {
+      domains: [domain],
+      config: widgetConfig,
+      agentConfig,
+      users: [
+        {
+          ...roleUpdatedTenantUsers[0],
+          status: "suspended",
+        },
+        roleUpdatedTenantUsers[1],
+      ],
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys,
+    });
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        data: {
           ...createdTenantApiKey,
           secret: "fqc_1234567890",
         },
@@ -1196,6 +1219,23 @@ describe("App interactions", () => {
     expect(
       fetchMock.mock.calls.some(
         ([path, init]) => path === "/v1/admin/tenants/tenant-1/users" && init?.method === "POST",
+      ),
+    ).toBe(true);
+
+    const adminUserRow = Array.from(document.querySelectorAll("#users .user-row")).find((row) =>
+      row.textContent?.includes("admin@acme.test"),
+    ) as HTMLElement;
+    const suspendButton = adminUserRow.querySelector(".user-actions button") as HTMLButtonElement;
+
+    await act(async () => {
+      suspendButton.click();
+    });
+
+    await waitForBodyText("Status do usuario atualizado com sucesso.");
+    expect(
+      fetchMock.mock.calls.some(
+        ([path, init]) =>
+          path === "/v1/admin/tenants/tenant-1/users/user-1/status" && init?.method === "PATCH",
       ),
     ).toBe(true);
 

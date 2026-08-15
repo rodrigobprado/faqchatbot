@@ -27,6 +27,7 @@ import {
   refreshAdmin,
   revokeTenantApiKey,
   updateTenant,
+  updateTenantUserStatus,
   updateTenantUserRoles,
   upsertTenantAgentConfig,
   upsertTenantConfig,
@@ -1319,6 +1320,40 @@ export const App = () => {
       }
 
       updateError(error instanceof Error ? error.message : "Falha ao atualizar roles do usuario");
+    }
+  };
+
+  const handleUpdateUserStatus = async (
+    userId: string,
+    status: "active" | "invited" | "suspended",
+  ) => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
+
+    try {
+      await withSessionRetry((accessToken) =>
+        updateTenantUserStatus(accessToken, selectedTenant.id, userId, { status }),
+      );
+      await loadTenantDetails(selectedTenant.id);
+      updateNotice("Status do usuario atualizado com sucesso.");
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        setTenants([]);
+        setTenantAccessById({});
+        setTenantConversationsById({});
+        setTenantSessionsById({});
+        updateError("Sessao expirada. Entre novamente.");
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao atualizar status do usuario");
     }
   };
 
@@ -3125,6 +3160,19 @@ export const App = () => {
                                 </span>
                               ))}
                             </div>
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() =>
+                                void handleUpdateUserStatus(
+                                  user.id,
+                                  user.status === "suspended" ? "active" : "suspended",
+                                )
+                              }
+                              disabled={viewState.loading}
+                            >
+                              {user.status === "suspended" ? "Reativar" : "Suspender"}
+                            </button>
                           </div>
                         </div>
                       );

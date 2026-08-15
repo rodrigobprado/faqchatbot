@@ -165,6 +165,17 @@ export class AdminTenantsController {
     return this.tenantsService.updateUserRoles(request.adminUser!, tenantId, userId, body);
   }
 
+  @Patch(":tenantId/users/:userId/status")
+  @ApiOkResponse({ description: "Updates tenant user status" })
+  updateUserStatus(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Param("userId") userId: string,
+    @Body() body: unknown,
+  ) {
+    return this.tenantsService.updateUserStatus(request.adminUser!, tenantId, userId, body);
+  }
+
   @Get(":tenantId/roles")
   @ApiOkResponse({ description: "Lists tenant roles" })
   listRoles(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {

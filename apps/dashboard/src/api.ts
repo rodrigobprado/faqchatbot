@@ -217,6 +217,10 @@ export type UpdateTenantUserRolesPayload = Readonly<{
   roleSlugs: string[];
 }>;
 
+export type UpdateTenantUserStatusPayload = Readonly<{
+  status: TenantUserRecord["status"];
+}>;
+
 export type CreateTenantApiKeyPayload = Readonly<{
   name: string;
 }>;
@@ -498,6 +502,21 @@ export const updateTenantUserRoles = (
 ): Promise<TenantUserRecord> =>
   requestJson<TenantUserRecord>(
     `/v1/admin/tenants/${tenantId}/users/${userId}/roles`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    accessToken,
+  );
+
+export const updateTenantUserStatus = (
+  accessToken: string,
+  tenantId: string,
+  userId: string,
+  payload: UpdateTenantUserStatusPayload,
+): Promise<TenantUserRecord> =>
+  requestJson<TenantUserRecord>(
+    `/v1/admin/tenants/${tenantId}/users/${userId}/status`,
     {
       method: "PATCH",
       body: JSON.stringify(payload),
