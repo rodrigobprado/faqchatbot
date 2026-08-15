@@ -844,6 +844,11 @@ export const App = () => {
 
   const handleCreateTenantSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!session?.user.roles.includes("platform_admin")) {
+      updateError("Somente platform_admin pode criar tenants.");
+      return;
+    }
+
     setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
 
     try {
@@ -1206,6 +1211,11 @@ export const App = () => {
       return;
     }
 
+    if (!session.user.roles.includes("platform_admin")) {
+      updateError("Somente platform_admin pode excluir tenants.");
+      return;
+    }
+
     try {
       if (typeof window.confirm === "function") {
         try {
@@ -1239,7 +1249,8 @@ export const App = () => {
     }
   };
 
-  const canSubmitTenant = Boolean(tenantForm.publicId.trim() && tenantForm.name.trim() && session);
+  const isPlatformAdmin = Boolean(session?.user.roles.includes("platform_admin"));
+  const canSubmitTenant = Boolean(tenantForm.publicId.trim() && tenantForm.name.trim() && session && isPlatformAdmin);
   const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? tenants[0] ?? null;
   const selectedTenantPlan = selectedTenant ? plans.find((plan) => plan.id === selectedTenant.planId) ?? null : null;
   const totalActiveTenants = tenants.filter((tenant) => tenant.status === "active").length;
@@ -1379,6 +1390,7 @@ export const App = () => {
           <span>Status</span>
           <strong>{session ? "Autenticado" : "Desconectado"}</strong>
           <p>{session ? session.user.email : "Entre para carregar os dados administrativos."}</p>
+          {session ? <small>{isPlatformAdmin ? "Acesso global" : "Acesso restrito"}</small> : null}
         </section>
       </aside>
 
@@ -1406,6 +1418,11 @@ export const App = () => {
 
         {viewState.error ? <div className="banner error">{viewState.error}</div> : null}
         {viewState.notice ? <div className="banner success">{viewState.notice}</div> : null}
+        {session && !isPlatformAdmin ? (
+          <div className="banner warning">
+            Este usuário está em modo restrito. Ações globais, como criar ou excluir tenants, foram bloqueadas.
+          </div>
+        ) : null}
 
         {!session ? (
           <section className="auth-grid" id="overview">
@@ -1729,6 +1746,11 @@ export const App = () => {
                   <div>
                     <p className="eyebrow">Operacao inicial</p>
                     <h2>Criar tenant</h2>
+                    {!isPlatformAdmin ? (
+                      <p className="section-subtitle">
+                        Somente usuários com papel <span className="mono">platform_admin</span> podem criar tenants.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -1803,7 +1825,12 @@ export const App = () => {
                     <h2>{selectedTenant.name}</h2>
                   </div>
                   <div className="header-actions">
-                    <button type="button" className="secondary danger" onClick={handleSuspendTenant}>
+                    <button
+                      type="button"
+                      className="secondary danger"
+                      onClick={handleSuspendTenant}
+                      disabled={!isPlatformAdmin}
+                    >
                       Excluir tenant
                     </button>
                   </div>

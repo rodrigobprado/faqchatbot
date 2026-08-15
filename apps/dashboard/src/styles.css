@@ -203,6 +203,12 @@ h2 {
   color: #166534;
 }
 
+.banner.warning {
+  border-color: rgb(245 158 11 / 0.22);
+  background: rgb(255 251 235 / 0.96);
+  color: #92400e;
+}
+
 .auth-grid,
 .two-column {
   display: grid;

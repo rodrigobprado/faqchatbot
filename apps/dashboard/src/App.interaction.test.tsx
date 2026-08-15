@@ -17,6 +17,14 @@ const adminSession = {
   }
 };
 
+const restrictedSession = {
+  ...adminSession,
+  user: {
+    ...adminSession.user,
+    roles: ["admin"]
+  }
+};
+
 const tenant = {
   id: "tenant-1",
   publicId: "acme",
@@ -438,6 +446,53 @@ describe("App interactions", () => {
         })
       }),
     );
+  });
+
+  it("shows restricted mode for admins without platform_admin", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: restrictedSession, meta: {} }));
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
+    queueTenantDetails(fetchMock);
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    const emailInput = document.querySelector('input[type="email"]') as HTMLInputElement;
+    const passwordInput = document.querySelector('input[type="password"]') as HTMLInputElement;
+    const loginButton = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    fillInput(emailInput, "admin@acme.test");
+    fillInput(passwordInput, "senha-super-secreta");
+
+    await act(async () => {
+      loginButton.click();
+    });
+
+    await flush();
+
+    expect(document.body.textContent).toContain("modo restrito");
+
+    const createSection = document.querySelector("#config") as HTMLElement;
+    const [publicIdInput, nameInput, planSelect, localeInput] = Array.from(
+      createSection.querySelectorAll("input, select"),
+    ) as [HTMLInputElement, HTMLInputElement, HTMLSelectElement, HTMLInputElement];
+
+    fillInput(publicIdInput, "nova-conta");
+    fillInput(nameInput, "Nova Conta");
+    fillInput(planSelect, "starter");
+    fillInput(localeInput, "pt-BR");
+
+    const createButton = Array.from(createSection.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Criar tenant"),
+    ) as HTMLButtonElement;
+
+    expect(createButton.disabled).toBe(true);
   });
 
   it("filters the tenant list by search, status and plan", async () => {
