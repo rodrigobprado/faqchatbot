@@ -1,6 +1,14 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
+const contractsEntry = fileURLToPath(new URL("../../packages/contracts/src/index.js", import.meta.url));
+
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@faqchatbot/contracts": contractsEntry
+    }
+  },
   build: {
     lib: {
       entry: "src/index.ts",
