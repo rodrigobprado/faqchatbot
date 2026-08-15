@@ -1668,7 +1668,7 @@ export const App = () => {
         ) : null}
 
         {session && activeSection === "tenants" ? (
-          <div className="workspace-tabs" aria-label="Navegação de tenants">
+          <div className="workspace-tabs tenant-rail" aria-label="Navegação de tenants">
             {tenantWorkspaces.map((workspace) => (
               <button
                 key={workspace.id}
@@ -1684,7 +1684,8 @@ export const App = () => {
                     workspace.id === "agent")
                 }
               >
-                {workspace.label}
+                <span>{workspace.label}</span>
+                <small>{workspace.description}</small>
               </button>
             ))}
           </div>
