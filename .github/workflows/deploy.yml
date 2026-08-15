@@ -134,6 +134,42 @@ jobs:
             printf 'API_PUBLIC_URL=https://%s\n' "${{ steps.env.outputs.host }}" >> "${BRANCH_DIR}/shared/.env"
           fi
 
+          if grep -q '^JWT_ADMIN_SECRET=' "${BRANCH_DIR}/shared/.env"; then
+            if grep -Eq '^JWT_ADMIN_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+              if grep -q '^JWT_ACCESS_SECRET=' "${BRANCH_DIR}/shared/.env" && ! grep -Eq '^JWT_ACCESS_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+                admin_secret="$(grep '^JWT_ACCESS_SECRET=' "${BRANCH_DIR}/shared/.env" | cut -d= -f2-)"
+              else
+                admin_secret="$(openssl rand -hex 16)"
+              fi
+              sed -i "s#^JWT_ADMIN_SECRET=.*#JWT_ADMIN_SECRET=${admin_secret}#" "${BRANCH_DIR}/shared/.env"
+            fi
+          else
+            if grep -q '^JWT_ACCESS_SECRET=' "${BRANCH_DIR}/shared/.env" && ! grep -Eq '^JWT_ACCESS_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+              admin_secret="$(grep '^JWT_ACCESS_SECRET=' "${BRANCH_DIR}/shared/.env" | cut -d= -f2-)"
+            else
+              admin_secret="$(openssl rand -hex 16)"
+            fi
+            printf 'JWT_ADMIN_SECRET=%s\n' "${admin_secret}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if grep -q '^JWT_ADMIN_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env"; then
+            if grep -Eq '^JWT_ADMIN_REFRESH_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+              if grep -q '^JWT_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env" && ! grep -Eq '^JWT_REFRESH_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+                admin_refresh_secret="$(grep '^JWT_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env" | cut -d= -f2-)"
+              else
+                admin_refresh_secret="$(openssl rand -hex 16)"
+              fi
+              sed -i "s#^JWT_ADMIN_REFRESH_SECRET=.*#JWT_ADMIN_REFRESH_SECRET=${admin_refresh_secret}#" "${BRANCH_DIR}/shared/.env"
+            fi
+          else
+            if grep -q '^JWT_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env" && ! grep -Eq '^JWT_REFRESH_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+              admin_refresh_secret="$(grep '^JWT_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env" | cut -d= -f2-)"
+            else
+              admin_refresh_secret="$(openssl rand -hex 16)"
+            fi
+            printf 'JWT_ADMIN_REFRESH_SECRET=%s\n' "${admin_refresh_secret}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
           if grep -q '^SEED_TENANT_PUBLIC_ID=' "${BRANCH_DIR}/shared/.env"; then
             sed -i "s#^SEED_TENANT_PUBLIC_ID=.*#SEED_TENANT_PUBLIC_ID=demo-${{ steps.env.outputs.branch }}#" "${BRANCH_DIR}/shared/.env"
           else

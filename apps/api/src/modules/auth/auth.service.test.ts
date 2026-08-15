@@ -203,10 +203,12 @@ describe("AuthService", () => {
     await expect(service.login({ email: "x" })).rejects.toThrow("Invalid login payload");
   });
 
-  it("resolves admin token secrets from env and requires them in production", () => {
+  it("resolves admin token secrets from env and falls back to legacy names", () => {
     const previousNodeEnv = process.env.NODE_ENV;
     const previousAdminSecret = process.env.JWT_ADMIN_SECRET;
     const previousRefreshSecret = process.env.JWT_ADMIN_REFRESH_SECRET;
+    const previousAccessSecret = process.env.JWT_ACCESS_SECRET;
+    const previousLegacyRefreshSecret = process.env.JWT_REFRESH_SECRET;
 
     try {
       process.env.NODE_ENV = "test";
@@ -218,15 +220,31 @@ describe("AuthService", () => {
         refreshTokenSecret: "refresh-secret"
       });
 
+      delete process.env.JWT_ADMIN_SECRET;
+      delete process.env.JWT_ADMIN_REFRESH_SECRET;
+      process.env.JWT_ACCESS_SECRET = "legacy-access-secret";
+      process.env.JWT_REFRESH_SECRET = "legacy-refresh-secret";
+
+      expect(createAdminTokenSecrets()).toEqual({
+        accessTokenSecret: "legacy-access-secret",
+        refreshTokenSecret: "legacy-refresh-secret"
+      });
+
       process.env.NODE_ENV = "production";
       delete process.env.JWT_ADMIN_SECRET;
       delete process.env.JWT_ADMIN_REFRESH_SECRET;
+      delete process.env.JWT_ACCESS_SECRET;
+      delete process.env.JWT_REFRESH_SECRET;
 
-      expect(() => createAdminTokenSecrets()).toThrow("JWT_ADMIN_SECRET is required in production");
+      expect(() => createAdminTokenSecrets()).toThrow(
+        "JWT_ADMIN_SECRET or JWT_ACCESS_SECRET is required in production",
+      );
     } finally {
       process.env.NODE_ENV = previousNodeEnv;
       process.env.JWT_ADMIN_SECRET = previousAdminSecret;
       process.env.JWT_ADMIN_REFRESH_SECRET = previousRefreshSecret;
+      process.env.JWT_ACCESS_SECRET = previousAccessSecret;
+      process.env.JWT_REFRESH_SECRET = previousLegacyRefreshSecret;
     }
   });
 });

@@ -40,21 +40,42 @@ const refreshSchema = z.object({
   refreshToken: z.string().min(1)
 });
 
-const resolveTokenSecret = (value: string | undefined, envName: string): string => {
-  if (value && value.trim()) {
-    return value;
+const resolveTokenSecret = (
+  primaryValue: string | undefined,
+  primaryEnvName: string,
+  fallbackValue: string | undefined,
+  fallbackEnvName: string,
+): string => {
+  if (primaryValue && primaryValue.trim()) {
+    return primaryValue;
+  }
+
+  if (fallbackValue && fallbackValue.trim()) {
+    return fallbackValue;
   }
 
   if (process.env.NODE_ENV === "production") {
-    throw new Error(`${envName} is required in production`);
+    throw new Error(
+      `${primaryEnvName} or ${fallbackEnvName} is required in production`,
+    );
   }
 
-  return `dev-${envName.toLowerCase()}-dev-${envName.toLowerCase()}`;
+  return `dev-${primaryEnvName.toLowerCase()}-dev-${primaryEnvName.toLowerCase()}`;
 };
 
 export const createAdminTokenSecrets = () => ({
-  accessTokenSecret: resolveTokenSecret(process.env.JWT_ADMIN_SECRET, "JWT_ADMIN_SECRET"),
-  refreshTokenSecret: resolveTokenSecret(process.env.JWT_ADMIN_REFRESH_SECRET, "JWT_ADMIN_REFRESH_SECRET")
+  accessTokenSecret: resolveTokenSecret(
+    process.env.JWT_ADMIN_SECRET,
+    "JWT_ADMIN_SECRET",
+    process.env.JWT_ACCESS_SECRET,
+    "JWT_ACCESS_SECRET",
+  ),
+  refreshTokenSecret: resolveTokenSecret(
+    process.env.JWT_ADMIN_REFRESH_SECRET,
+    "JWT_ADMIN_REFRESH_SECRET",
+    process.env.JWT_REFRESH_SECRET,
+    "JWT_REFRESH_SECRET",
+  )
 });
 
 export class AuthService {
