@@ -29,14 +29,14 @@ describe("TenantsRepository", () => {
 
     const plan = await plans.create({
       slug: `plan-${randomUUID()}`,
-      name: "Starter"
+      name: "Starter",
     });
 
     const publicId = `tenant-${randomUUID()}`;
     const tenant = await tenants.create({
       publicId,
       name: "Acme Inc",
-      planId: plan.id
+      planId: plan.id,
     });
 
     const found = await tenants.findByPublicId(publicId);
@@ -62,12 +62,12 @@ describe("TenantsRepository", () => {
     const tenantA = await tenants.create({
       publicId: `tenant-${randomUUID()}`,
       name: "Tenant A",
-      planId: plan.id
+      planId: plan.id,
     });
     const tenantB = await tenants.create({
       publicId: `tenant-${randomUUID()}`,
       name: "Tenant B",
-      planId: plan.id
+      planId: plan.id,
     });
 
     await domains.create({ tenantId: tenantA.id, domain: "a.example.com" });
@@ -89,7 +89,7 @@ describe("TenantsRepository", () => {
     const tenant = await tenants.create({
       publicId: `tenant-${randomUUID()}`,
       name: "Tenant A",
-      planId: plan.id
+      planId: plan.id,
     });
 
     await domains.create({ tenantId: tenant.id, domain: domainName });
@@ -98,5 +98,26 @@ describe("TenantsRepository", () => {
 
     expect(found?.tenantId).toBe(tenant.id);
     expect(found?.domain).toBe(domainName);
+  });
+
+  it("deletes a tenant domain by id", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+    const domains = createTenantDomainsRepository(db);
+
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Tenant A",
+      planId: plan.id,
+    });
+
+    const created = await domains.create({ tenantId: tenant.id, domain: "remove.example.com" });
+    const deleted = await domains.delete(created.id);
+    const remaining = await domains.listByTenantId(tenant.id);
+
+    expect(deleted?.id).toBe(created.id);
+    expect(deleted?.tenantId).toBe(tenant.id);
+    expect(remaining).toHaveLength(0);
   });
 });

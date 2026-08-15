@@ -9,7 +9,7 @@ const platformAdmin = (): AdminAccessTokenPayload => ({
   tenantId: randomUUID(),
   roles: ["platform_admin", "admin"],
   issuedAt: 1,
-  expiresAt: 2
+  expiresAt: 2,
 });
 
 const tenantAdmin = (tenantId: string): AdminAccessTokenPayload => ({
@@ -18,7 +18,7 @@ const tenantAdmin = (tenantId: string): AdminAccessTokenPayload => ({
   tenantId,
   roles: ["admin"],
   issuedAt: 1,
-  expiresAt: 2
+  expiresAt: 2,
 });
 
 const createService = () => {
@@ -29,60 +29,61 @@ const createService = () => {
       findByPublicId: vi.fn(),
       list: vi.fn(),
       update: vi.fn(),
-      softDelete: vi.fn()
+      softDelete: vi.fn(),
     },
     tenantDomains: {
       create: vi.fn(),
-      listByTenantId: vi.fn()
+      listByTenantId: vi.fn(),
+      delete: vi.fn(),
     },
     tenantConfigs: {
       findByTenantId: vi.fn(),
-      upsert: vi.fn()
+      upsert: vi.fn(),
     },
     tenantAgentConfigs: {
       findLatestByTenantId: vi.fn(),
-      upsert: vi.fn()
+      upsert: vi.fn(),
     },
     users: {
       create: vi.fn(),
       findById: vi.fn(),
       findByEmail: vi.fn(),
       listByTenantId: vi.fn(),
-      updateStatus: vi.fn()
+      updateStatus: vi.fn(),
     },
     userRoles: {
       assignRole: vi.fn(),
       removeRolesByUserId: vi.fn(),
-      listRoleSlugsByUserId: vi.fn()
+      listRoleSlugsByUserId: vi.fn(),
     },
     roles: {
       create: vi.fn(),
       findByTenantIdAndSlug: vi.fn(),
-      listByTenantId: vi.fn()
+      listByTenantId: vi.fn(),
     },
     apiKeys: {
       create: vi.fn(),
       findById: vi.fn(),
       listByTenantId: vi.fn(),
-      revoke: vi.fn()
+      revoke: vi.fn(),
     },
     visitorSessions: {
       findById: vi.fn(),
-      listByTenantId: vi.fn()
+      listByTenantId: vi.fn(),
     },
     conversations: {
       findById: vi.fn(),
       listByTenantId: vi.fn(),
-      findLatestBySessionId: vi.fn()
+      findLatestBySessionId: vi.fn(),
     },
     messages: {
-      listByConversationId: vi.fn()
+      listByConversationId: vi.fn(),
     },
     plans: {
       findBySlug: vi.fn(),
       findById: vi.fn(),
-      list: vi.fn()
-    }
+      list: vi.fn(),
+    },
   } as const;
 
   return { service: new TenantsService(dependencies), dependencies };
@@ -96,7 +97,7 @@ describe("TenantsService", () => {
       id: "plan-1",
       slug: "starter",
       name: "Starter",
-      limits: { messagesPerMinute: 30, conversationsPerDay: 200 }
+      limits: { messagesPerMinute: 30, conversationsPerDay: 200 },
     });
     dependencies.tenants.create.mockResolvedValue({
       id: "tenant-1",
@@ -105,13 +106,13 @@ describe("TenantsService", () => {
       status: "active",
       planId: "plan-1",
       defaultLocale: "pt-BR",
-      deletedAt: null
+      deletedAt: null,
     });
 
     const created = await service.createTenant(platformAdmin(), {
       publicId: "acme",
       name: "Acme",
-      planSlug: "starter"
+      planSlug: "starter",
     });
 
     expect(created.publicId).toBe("acme");
@@ -119,7 +120,7 @@ describe("TenantsService", () => {
       publicId: "acme",
       name: "Acme",
       planId: "plan-1",
-      defaultLocale: "pt-BR"
+      defaultLocale: "pt-BR",
     });
   });
 
@@ -133,7 +134,7 @@ describe("TenantsService", () => {
         status: "active" as const,
         planId: "plan-1",
         defaultLocale: "pt-BR",
-        deletedAt: null
+        deletedAt: null,
       },
       {
         id: randomUUID(),
@@ -142,8 +143,8 @@ describe("TenantsService", () => {
         status: "inactive" as const,
         planId: "plan-1",
         defaultLocale: "en-US",
-        deletedAt: null
-      }
+        deletedAt: null,
+      },
     ];
 
     dependencies.tenants.list.mockResolvedValue(tenants);
@@ -167,8 +168,8 @@ describe("TenantsService", () => {
         sessionId,
         status: "open",
         startedAt,
-        endedAt: null
-      }
+        endedAt: null,
+      },
     ]);
     dependencies.visitorSessions.findById.mockResolvedValue({
       id: sessionId,
@@ -177,9 +178,9 @@ describe("TenantsService", () => {
       pageContext: {
         currentPage: "/pricing",
         title: "Pricing",
-        url: "https://example.com/pricing"
+        url: "https://example.com/pricing",
       },
-      lastSeenAt
+      lastSeenAt,
     });
     dependencies.messages.listByConversationId.mockResolvedValue([
       {
@@ -191,7 +192,7 @@ describe("TenantsService", () => {
         content: { type: "text", text: "Oi" },
         metadata: null,
         providerMessageId: null,
-        createdAt: new Date("2026-08-14T12:01:00.000Z")
+        createdAt: new Date("2026-08-14T12:01:00.000Z"),
       },
       {
         id: randomUUID(),
@@ -202,8 +203,8 @@ describe("TenantsService", () => {
         content: { type: "text", text: "Olá" },
         metadata: null,
         providerMessageId: null,
-        createdAt: new Date("2026-08-14T12:02:00.000Z")
-      }
+        createdAt: new Date("2026-08-14T12:02:00.000Z"),
+      },
     ]);
 
     await expect(service.listConversations(actor, "tenant-a")).resolves.toEqual([
@@ -213,8 +214,8 @@ describe("TenantsService", () => {
         visitorId: "visitor-1",
         currentPage: "/pricing",
         messageCount: 2,
-        lastMessageAt: "2026-08-14T12:02:00.000Z"
-      })
+        lastMessageAt: "2026-08-14T12:02:00.000Z",
+      }),
     ]);
   });
 
@@ -233,11 +234,11 @@ describe("TenantsService", () => {
           currentPage: "/pricing",
           title: "Pricing",
           url: "https://example.com/pricing",
-          referrer: "https://google.com"
+          referrer: "https://google.com",
         },
         startedAt: new Date("2026-08-14T12:00:00.000Z"),
-        lastSeenAt: new Date("2026-08-14T12:05:00.000Z")
-      }
+        lastSeenAt: new Date("2026-08-14T12:05:00.000Z"),
+      },
     ]);
     dependencies.conversations.findLatestBySessionId.mockResolvedValue({
       id: conversationId,
@@ -245,7 +246,7 @@ describe("TenantsService", () => {
       sessionId,
       status: "open",
       startedAt: new Date("2026-08-14T12:00:00.000Z"),
-      endedAt: null
+      endedAt: null,
     });
 
     await expect(service.listSessions(actor, "tenant-a")).resolves.toEqual([
@@ -255,8 +256,8 @@ describe("TenantsService", () => {
         currentPage: "/pricing",
         referrer: "https://google.com",
         conversationId,
-        conversationStatus: "open"
-      })
+        conversationStatus: "open",
+      }),
     ]);
   });
 
@@ -273,11 +274,11 @@ describe("TenantsService", () => {
         pageContext: {
           currentPage: "/pricing",
           title: "Pricing",
-          url: "https://example.com/pricing"
+          url: "https://example.com/pricing",
         },
         startedAt: new Date("2026-08-14T12:00:00.000Z"),
-        lastSeenAt: null
-      }
+        lastSeenAt: null,
+      },
     ]);
     dependencies.conversations.findLatestBySessionId.mockResolvedValue(null);
 
@@ -286,8 +287,8 @@ describe("TenantsService", () => {
         id: sessionId,
         conversationId: null,
         conversationStatus: null,
-        lastSeenAt: null
-      })
+        lastSeenAt: null,
+      }),
     ]);
   });
 
@@ -304,8 +305,8 @@ describe("TenantsService", () => {
         sessionId,
         status: "closed",
         startedAt: new Date("2026-08-14T12:00:00.000Z"),
-        endedAt: new Date("2026-08-14T12:10:00.000Z")
-      }
+        endedAt: new Date("2026-08-14T12:10:00.000Z"),
+      },
     ]);
     dependencies.visitorSessions.findById.mockResolvedValue(null);
     dependencies.messages.listByConversationId.mockResolvedValue([]);
@@ -316,8 +317,8 @@ describe("TenantsService", () => {
         visitorId: null,
         currentPage: null,
         pageTitle: null,
-        pageUrl: null
-      })
+        pageUrl: null,
+      }),
     ]);
   });
 
@@ -328,14 +329,14 @@ describe("TenantsService", () => {
         id: "plan-1",
         slug: "starter",
         name: "Starter",
-        limits: { messagesPerMinute: 30, conversationsPerDay: 200 }
+        limits: { messagesPerMinute: 30, conversationsPerDay: 200 },
       },
       {
         id: "plan-2",
         slug: "growth",
         name: "Growth",
-        limits: { messagesPerMinute: 60, conversationsPerDay: 500 }
-      }
+        limits: { messagesPerMinute: 60, conversationsPerDay: 500 },
+      },
     ];
 
     dependencies.plans.list.mockResolvedValue(plans);
@@ -354,7 +355,7 @@ describe("TenantsService", () => {
       status: "active" as const,
       planId: "plan-1",
       defaultLocale: "pt-BR",
-      deletedAt: null
+      deletedAt: null,
     };
 
     dependencies.tenants.findById.mockResolvedValue(tenant);
@@ -369,7 +370,7 @@ describe("TenantsService", () => {
     await expect(
       service.createTenant(tenantAdmin("tenant-a"), {
         publicId: "acme",
-        name: "Acme"
+        name: "Acme",
       }),
     ).rejects.toThrow("Platform admin role required");
   });
@@ -391,7 +392,7 @@ describe("TenantsService", () => {
       service.createTenant(platformAdmin(), {
         publicId: "acme",
         name: "Acme",
-        planSlug: "growth"
+        planSlug: "growth",
       }),
     ).rejects.toThrow("Plan growth was not found");
   });
@@ -406,7 +407,7 @@ describe("TenantsService", () => {
       status: "active" as const,
       planId: "plan-1",
       defaultLocale: "pt-BR",
-      deletedAt: null
+      deletedAt: null,
     };
 
     dependencies.tenants.findById.mockResolvedValue(tenant);
@@ -425,22 +426,24 @@ describe("TenantsService", () => {
       status: "active",
       planId: "plan-1",
       defaultLocale: "pt-BR",
-      deletedAt: null
+      deletedAt: null,
     });
     dependencies.plans.findById.mockResolvedValue({
       id: "plan-1",
       slug: "starter",
       name: "Starter",
-      limits: { messagesPerMinute: 50, conversationsPerDay: 400 }
+      limits: { messagesPerMinute: 50, conversationsPerDay: 400 },
     });
-    dependencies.tenantDomains.listByTenantId.mockResolvedValue([{ id: "domain-1", tenantId, domain: "example.com", isVerified: true }]);
+    dependencies.tenantDomains.listByTenantId.mockResolvedValue([
+      { id: "domain-1", tenantId, domain: "example.com", isVerified: true },
+    ]);
     dependencies.tenantConfigs.findByTenantId.mockResolvedValue({
       tenantId,
       theme: "dark",
       primaryColor: "#111111",
       iconUrl: "https://example.com/icon.png",
       initialMessage: "Bem-vindo",
-      placeholder: "Escreva aqui"
+      placeholder: "Escreva aqui",
     });
 
     const config = await service.getPublicConfig("acme");
@@ -463,7 +466,7 @@ describe("TenantsService", () => {
       sessionId,
       status: "open",
       startedAt: new Date("2026-08-14T12:00:00.000Z"),
-      endedAt: null
+      endedAt: null,
     });
     dependencies.visitorSessions.findById.mockResolvedValue({
       id: sessionId,
@@ -472,9 +475,9 @@ describe("TenantsService", () => {
       pageContext: {
         currentPage: "/pricing",
         title: "Pricing",
-        url: "https://example.com/pricing"
+        url: "https://example.com/pricing",
       },
-      lastSeenAt: new Date("2026-08-14T12:05:00.000Z")
+      lastSeenAt: new Date("2026-08-14T12:05:00.000Z"),
     });
     dependencies.messages.listByConversationId.mockResolvedValue([
       {
@@ -486,8 +489,8 @@ describe("TenantsService", () => {
         content: { type: "text", text: "Oi" },
         metadata: null,
         providerMessageId: null,
-        createdAt: new Date("2026-08-14T12:01:00.000Z")
-      }
+        createdAt: new Date("2026-08-14T12:01:00.000Z"),
+      },
     ]);
 
     await expect(service.getConversation(actor, "tenant-a", conversationId)).resolves.toEqual(
@@ -497,9 +500,9 @@ describe("TenantsService", () => {
         messages: [
           expect.objectContaining({
             id: expect.any(String),
-            createdAt: "2026-08-14T12:01:00.000Z"
-          })
-        ]
+            createdAt: "2026-08-14T12:01:00.000Z",
+          }),
+        ],
       }),
     );
   });
@@ -515,13 +518,13 @@ describe("TenantsService", () => {
       status: "active",
       planId: "plan-1",
       defaultLocale: "pt-BR",
-      deletedAt: null
+      deletedAt: null,
     });
     dependencies.plans.findById.mockResolvedValue({
       id: "plan-1",
       slug: "starter",
       name: "Starter",
-      limits: { messagesPerMinute: -1, conversationsPerDay: "x" }
+      limits: { messagesPerMinute: -1, conversationsPerDay: "x" },
     });
     dependencies.tenantDomains.listByTenantId.mockResolvedValue([]);
     dependencies.tenantConfigs.findByTenantId.mockResolvedValue({
@@ -530,7 +533,7 @@ describe("TenantsService", () => {
       primaryColor: undefined as never,
       iconUrl: null,
       initialMessage: "Bem-vindo",
-      placeholder: "Escreva aqui"
+      placeholder: "Escreva aqui",
     });
 
     const config = await service.getPublicConfig("acme");
@@ -545,7 +548,9 @@ describe("TenantsService", () => {
     const { service, dependencies } = createService();
 
     dependencies.tenants.findByPublicId.mockResolvedValueOnce(null);
-    await expect(service.getPublicConfig("missing")).rejects.toThrow("Tenant missing was not found");
+    await expect(service.getPublicConfig("missing")).rejects.toThrow(
+      "Tenant missing was not found",
+    );
 
     dependencies.tenants.findByPublicId.mockResolvedValueOnce({
       id: "tenant-1",
@@ -554,10 +559,12 @@ describe("TenantsService", () => {
       status: "active",
       planId: "plan-1",
       defaultLocale: "pt-BR",
-      deletedAt: null
+      deletedAt: null,
     });
     dependencies.plans.findById.mockResolvedValueOnce(null);
-    await expect(service.getPublicConfig("acme")).rejects.toThrow("Plan for tenant acme was not found");
+    await expect(service.getPublicConfig("acme")).rejects.toThrow(
+      "Plan for tenant acme was not found",
+    );
   });
 
   it("rejects tenant access for admins from another tenant", async () => {
@@ -574,23 +581,28 @@ describe("TenantsService", () => {
     const { service, dependencies } = createService();
     const actor = tenantAdmin("tenant-a");
 
-    await expect(service.createDomain(actor, "tenant-b", {})).rejects.toThrow("Tenant access denied");
+    await expect(service.createDomain(actor, "tenant-b", {})).rejects.toThrow(
+      "Tenant access denied",
+    );
 
     await expect(service.createDomain(actor, "tenant-a", { domain: "" })).rejects.toThrow(
       "Invalid domain payload",
     );
-    await expect(service.upsertTenantConfig(actor, "tenant-a", { theme: "invalid" })).rejects.toThrow(
-      "Invalid tenant config payload",
+    await expect(service.deleteDomain(actor, "tenant-b", "domain-1")).rejects.toThrow(
+      "Tenant access denied",
     );
-    await expect(service.upsertTenantAgentConfig(actor, "tenant-a", { provider: "invalid" })).rejects.toThrow(
-      "Invalid tenant agent config payload",
-    );
-    await expect(service.updateTenant(actor, "tenant-a", { planSlug: "starter", status: "invalid" as never })).rejects.toThrow(
-      "Invalid tenant payload",
-    );
-    await expect(service.inviteUser(actor, "tenant-a", { email: "not-an-email", roleSlug: "viewer" })).rejects.toThrow(
-      "Invalid user payload",
-    );
+    await expect(
+      service.upsertTenantConfig(actor, "tenant-a", { theme: "invalid" }),
+    ).rejects.toThrow("Invalid tenant config payload");
+    await expect(
+      service.upsertTenantAgentConfig(actor, "tenant-a", { provider: "invalid" }),
+    ).rejects.toThrow("Invalid tenant agent config payload");
+    await expect(
+      service.updateTenant(actor, "tenant-a", { planSlug: "starter", status: "invalid" as never }),
+    ).rejects.toThrow("Invalid tenant payload");
+    await expect(
+      service.inviteUser(actor, "tenant-a", { email: "not-an-email", roleSlug: "viewer" }),
+    ).rejects.toThrow("Invalid user payload");
 
     dependencies.tenants.findById.mockResolvedValueOnce({
       id: "tenant-a",
@@ -599,7 +611,7 @@ describe("TenantsService", () => {
       status: "active",
       planId: "plan-1",
       defaultLocale: "pt-BR",
-      deletedAt: null
+      deletedAt: null,
     });
     await expect(service.updateTenant(actor, "tenant-a", { planSlug: "starter" })).rejects.toThrow(
       "Plan starter was not found",
@@ -609,7 +621,7 @@ describe("TenantsService", () => {
       id: "plan-1",
       slug: "starter",
       name: "Starter",
-      limits: { messagesPerMinute: 30, conversationsPerDay: 200 }
+      limits: { messagesPerMinute: 30, conversationsPerDay: 200 },
     });
     dependencies.tenants.findById.mockResolvedValueOnce({
       id: "tenant-a",
@@ -618,7 +630,7 @@ describe("TenantsService", () => {
       status: "active",
       planId: "plan-1",
       defaultLocale: "pt-BR",
-      deletedAt: null
+      deletedAt: null,
     });
     dependencies.tenants.update.mockResolvedValueOnce(null);
     await expect(service.updateTenant(actor, "tenant-a", { planSlug: "starter" })).rejects.toThrow(
@@ -626,7 +638,36 @@ describe("TenantsService", () => {
     );
 
     dependencies.tenants.softDelete.mockResolvedValueOnce(null);
-    await expect(service.deleteTenant(actor, "tenant-a")).rejects.toThrow("Tenant tenant-a was not found");
+    await expect(service.deleteTenant(actor, "tenant-a")).rejects.toThrow(
+      "Tenant tenant-a was not found",
+    );
+
+    dependencies.tenantDomains.delete.mockResolvedValueOnce(null);
+    await expect(service.deleteDomain(actor, "tenant-a", "domain-1")).rejects.toThrow(
+      "Domain domain-1 was not found",
+    );
+  });
+
+  it("deletes a tenant domain for authorized admins", async () => {
+    const { service, dependencies } = createService();
+    const actor = platformAdmin();
+    const tenantId = "tenant-a";
+    const domainId = "domain-1";
+
+    dependencies.tenantDomains.delete.mockResolvedValueOnce({
+      id: domainId,
+      tenantId,
+      domain: "acme.com",
+      isVerified: false,
+    });
+
+    await expect(service.deleteDomain(actor, tenantId, domainId)).resolves.toEqual({
+      id: domainId,
+      tenantId,
+      domain: "acme.com",
+      isVerified: false,
+    });
+    expect(dependencies.tenantDomains.delete).toHaveBeenCalledWith(domainId);
   });
 
   it("manages users, roles and api keys", async () => {
@@ -643,7 +684,7 @@ describe("TenantsService", () => {
       status: "active",
       planId: "plan-1",
       defaultLocale: "pt-BR",
-      deletedAt: null
+      deletedAt: null,
     });
     dependencies.users.listByTenantId.mockResolvedValue([
       {
@@ -653,19 +694,19 @@ describe("TenantsService", () => {
         passwordHash: "hash",
         status: "active",
         createdAt: new Date("2026-08-14T12:00:00.000Z"),
-        updatedAt: new Date("2026-08-14T12:00:00.000Z")
-      }
+        updatedAt: new Date("2026-08-14T12:00:00.000Z"),
+      },
     ]);
     dependencies.userRoles.listRoleSlugsByUserId.mockResolvedValue([{ slug: "admin" }]);
     dependencies.roles.listByTenantId.mockResolvedValue([
-      { id: "role-1", tenantId, slug: "admin", name: "Administrator", createdAt: new Date() }
+      { id: "role-1", tenantId, slug: "admin", name: "Administrator", createdAt: new Date() },
     ]);
     dependencies.roles.findByTenantIdAndSlug.mockResolvedValue({
       id: "role-1",
       tenantId,
       slug: "admin",
       name: "Administrator",
-      createdAt: new Date()
+      createdAt: new Date(),
     });
     dependencies.users.create.mockResolvedValue({
       id: userId,
@@ -673,7 +714,7 @@ describe("TenantsService", () => {
       email: "novo@acme.test",
       passwordHash: "hash",
       status: "invited",
-      createdAt: new Date("2026-08-14T12:00:00.000Z")
+      createdAt: new Date("2026-08-14T12:00:00.000Z"),
     });
     dependencies.users.findById.mockResolvedValue({
       id: userId,
@@ -682,7 +723,7 @@ describe("TenantsService", () => {
       passwordHash: "hash",
       status: "invited",
       createdAt: new Date("2026-08-14T12:00:00.000Z"),
-      updatedAt: new Date("2026-08-14T12:00:00.000Z")
+      updatedAt: new Date("2026-08-14T12:00:00.000Z"),
     });
     dependencies.apiKeys.create.mockResolvedValue({
       id: apiKeyId,
@@ -692,7 +733,7 @@ describe("TenantsService", () => {
       prefix: "fqc_1234",
       lastUsedAt: null,
       revokedAt: null,
-      createdAt: new Date("2026-08-14T12:00:00.000Z")
+      createdAt: new Date("2026-08-14T12:00:00.000Z"),
     });
     dependencies.apiKeys.listByTenantId.mockResolvedValue([
       {
@@ -703,8 +744,8 @@ describe("TenantsService", () => {
         prefix: "fqc_1234",
         lastUsedAt: null,
         revokedAt: null,
-        createdAt: new Date("2026-08-14T12:00:00.000Z")
-      }
+        createdAt: new Date("2026-08-14T12:00:00.000Z"),
+      },
     ]);
     dependencies.apiKeys.findById.mockResolvedValue({
       id: apiKeyId,
@@ -714,7 +755,7 @@ describe("TenantsService", () => {
       prefix: "fqc_1234",
       lastUsedAt: null,
       revokedAt: null,
-      createdAt: new Date("2026-08-14T12:00:00.000Z")
+      createdAt: new Date("2026-08-14T12:00:00.000Z"),
     });
     dependencies.apiKeys.revoke.mockResolvedValue({
       id: apiKeyId,
@@ -724,7 +765,7 @@ describe("TenantsService", () => {
       prefix: "fqc_1234",
       lastUsedAt: null,
       revokedAt: new Date("2026-08-14T12:10:00.000Z"),
-      createdAt: new Date("2026-08-14T12:00:00.000Z")
+      createdAt: new Date("2026-08-14T12:00:00.000Z"),
     });
 
     await expect(service.listUsers(actor, tenantId)).resolves.toEqual([
@@ -735,48 +776,52 @@ describe("TenantsService", () => {
         status: "active",
         roles: ["admin"],
         createdAt: "2026-08-14T12:00:00.000Z",
-        updatedAt: "2026-08-14T12:00:00.000Z"
-      }
+        updatedAt: "2026-08-14T12:00:00.000Z",
+      },
     ]);
 
-    await expect(service.inviteUser(actor, tenantId, { email: "novo@acme.test", roleSlug: "admin" })).resolves.toMatchObject({
+    await expect(
+      service.inviteUser(actor, tenantId, { email: "novo@acme.test", roleSlug: "admin" }),
+    ).resolves.toMatchObject({
       email: "novo@acme.test",
       status: "invited",
-      roles: ["admin"]
+      roles: ["admin"],
     });
 
-    await expect(service.updateUserRoles(actor, tenantId, userId, { roleSlugs: ["admin"] })).resolves.toMatchObject({
+    await expect(
+      service.updateUserRoles(actor, tenantId, userId, { roleSlugs: ["admin"] }),
+    ).resolves.toMatchObject({
       id: userId,
-      roles: ["admin"]
+      roles: ["admin"],
     });
 
     await expect(service.listRoles(actor, tenantId)).resolves.toEqual([
       expect.objectContaining({
         slug: "admin",
-        permissions: expect.arrayContaining(["Criar api keys"])
-      })
+        permissions: expect.arrayContaining(["Criar api keys"]),
+      }),
     ]);
 
     await expect(service.listApiKeys(actor, tenantId)).resolves.toEqual([
       expect.objectContaining({
         id: apiKeyId,
         name: "Key",
-        prefix: "fqc_1234"
-      })
+        prefix: "fqc_1234",
+      }),
     ]);
 
     await expect(service.createApiKey(actor, tenantId, { name: "Key" })).resolves.toEqual(
       expect.objectContaining({
         name: "Key",
         prefix: "fqc_1234",
-        secret: expect.stringMatching(/^fqc_/)
+        secret: expect.stringMatching(/^fqc_/),
       }),
     );
 
     await expect(service.revokeApiKey(actor, tenantId, apiKeyId)).resolves.toEqual(
       expect.objectContaining({
         id: apiKeyId,
-        revokedAt: "2026-08-14T12:10:00.000Z"
+        revokedAt: "2026-08-14T12:10:00.000Z",
       }),
     );
   });
@@ -799,7 +844,7 @@ describe("TenantsService", () => {
       prefix: "fqc_dash",
       lastUsedAt: null,
       revokedAt: null,
-      createdAt: new Date()
+      createdAt: new Date(),
     });
     dependencies.apiKeys.revoke.mockResolvedValueOnce(null);
     await expect(service.revokeApiKey(actor, "tenant-a", apiKeyId)).rejects.toThrow(
@@ -815,18 +860,16 @@ describe("TenantsService", () => {
       { id: "role-1", tenantId, slug: "admin", name: "Administrator", createdAt: new Date() },
       { id: "role-2", tenantId, slug: "editor", name: "Editor", createdAt: new Date() },
       { id: "role-3", tenantId, slug: "viewer", name: "Viewer", createdAt: new Date() },
-      { id: "role-4", tenantId, slug: "operator", name: "Operator", createdAt: new Date() }
+      { id: "role-4", tenantId, slug: "operator", name: "Operator", createdAt: new Date() },
     ];
 
-    dependencies.roles.listByTenantId
-      .mockResolvedValueOnce([])
-      .mockResolvedValue(defaultRoles);
+    dependencies.roles.listByTenantId.mockResolvedValueOnce([]).mockResolvedValue(defaultRoles);
     dependencies.roles.create.mockResolvedValue({
       id: "role-1",
       tenantId,
       slug: "admin",
       name: "Administrator",
-      createdAt: new Date()
+      createdAt: new Date(),
     });
     dependencies.roles.findByTenantIdAndSlug.mockResolvedValue(null);
 
@@ -850,7 +893,7 @@ describe("TenantsService", () => {
       passwordHash: "hash",
       status: "active",
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     });
     dependencies.roles.listByTenantId.mockResolvedValue([]);
     dependencies.roles.create.mockResolvedValue({
@@ -858,19 +901,21 @@ describe("TenantsService", () => {
       tenantId,
       slug: "admin",
       name: "Administrator",
-      createdAt: new Date()
+      createdAt: new Date(),
     });
     dependencies.roles.findByTenantIdAndSlug.mockResolvedValue({
       id: "role-1",
       tenantId,
       slug: "admin",
       name: "Administrator",
-      createdAt: new Date()
+      createdAt: new Date(),
     });
 
-    await expect(service.updateUserRoles(actor, tenantId, "user-1", { roleSlugs: [] })).rejects.toThrow(
-      "Invalid user roles payload",
+    await expect(
+      service.updateUserRoles(actor, tenantId, "user-1", { roleSlugs: [] }),
+    ).rejects.toThrow("Invalid user roles payload");
+    await expect(service.createApiKey(actor, tenantId, {})).rejects.toThrow(
+      "Invalid api key payload",
     );
-    await expect(service.createApiKey(actor, tenantId, {})).rejects.toThrow("Invalid api key payload");
   });
 });

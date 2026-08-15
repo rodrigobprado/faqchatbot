@@ -26,5 +26,13 @@ export const createTenantDomainsRepository = (db: Database) => ({
     return tenantDomain ?? null;
   },
   listByTenantId: async (tenantId: string) =>
-    db.select().from(tenantDomains).where(eq(tenantDomains.tenantId, tenantId))
+    db.select().from(tenantDomains).where(eq(tenantDomains.tenantId, tenantId)),
+  delete: async (id: string) => {
+    const [tenantDomain] = await db
+      .delete(tenantDomains)
+      .where(eq(tenantDomains.id, id))
+      .returning();
+
+    return tenantDomain ?? null;
+  },
 });

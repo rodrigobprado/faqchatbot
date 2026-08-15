@@ -4,6 +4,7 @@ import {
   buildWidgetSnippet,
   createTenantApiKey,
   deleteTenant,
+  deleteTenantDomain,
   createTenantDomain,
   createTenant,
   getPlatformHealth,
@@ -1106,6 +1107,45 @@ export const App = () => {
       }
 
       updateError(error instanceof Error ? error.message : "Falha ao cadastrar dominio");
+    }
+  };
+
+  const handleDeleteDomain = async (domainId: string, domainName: string) => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`Remover dominio ${domainName}? Esta acao nao pode ser desfeita.`)
+    ) {
+      return;
+    }
+
+    setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
+
+    try {
+      await withSessionRetry((accessToken) =>
+        deleteTenantDomain(accessToken, selectedTenant.id, domainId),
+      );
+      await loadTenantDetails(selectedTenant.id);
+      updateNotice("Dominio removido com sucesso.");
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (error instanceof ApiError && error.status === 401) {
+        setSession(null);
+        setTenants([]);
+        setTenantDomains([]);
+        setSelectedTenantId(null);
+        setTenantConversationsById({});
+        setTenantSessionsById({});
+        updateError("Sessao expirada. Entre novamente.");
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao remover dominio");
     }
   };
 
@@ -2366,8 +2406,18 @@ export const App = () => {
                     ) : (
                       safeTenantDomains.map((domain) => (
                         <div className="list-row" key={domain.id}>
-                          <span className="mono">{domain.domain}</span>
-                          <span>{domain.isVerified ? "Verificado" : "Pendente"}</span>
+                          <div>
+                            <strong className="mono">{domain.domain}</strong>
+                            <p>{domain.isVerified ? "Verificado" : "Pendente"}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="secondary danger"
+                            onClick={() => void handleDeleteDomain(domain.id, domain.domain)}
+                            disabled={viewState.loading}
+                          >
+                            Remover
+                          </button>
                         </div>
                       ))
                     )}

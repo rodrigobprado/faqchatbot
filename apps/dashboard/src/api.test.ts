@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWidgetSnippet,
-  deleteTenant,
   createTenant,
   createTenantDomain,
   createTenantApiKey,
+  deleteTenant,
+  deleteTenantDomain,
   getPlatformHealth,
   getTenantAgentConfig,
   getTenantConfig,
@@ -27,7 +28,7 @@ import {
   updateTenantUserRoles,
   upsertTenantConfig,
   upsertTenantAgentConfig,
-  updateTenant
+  updateTenant,
 } from "./api.js";
 
 const session = {
@@ -38,8 +39,8 @@ const session = {
     id: "user-1",
     tenantId: "tenant-1",
     email: "admin@acme.test",
-    roles: ["platform_admin"]
-  }
+    roles: ["platform_admin"],
+  },
 };
 
 const tenant = {
@@ -49,14 +50,14 @@ const tenant = {
   status: "active" as const,
   planId: "plan-starter",
   defaultLocale: "pt-BR",
-  deletedAt: null
+  deletedAt: null,
 };
 
 const domain = {
   id: "domain-1",
   tenantId: "tenant-1",
   domain: "acme.com",
-  isVerified: false
+  isVerified: false,
 };
 
 const config = {
@@ -65,7 +66,7 @@ const config = {
   primaryColor: "#111111",
   iconUrl: "https://example.com/icon.png",
   initialMessage: "Bem-vindo",
-  placeholder: "Escreva aqui"
+  placeholder: "Escreva aqui",
 };
 
 const agentConfig = {
@@ -78,7 +79,7 @@ const agentConfig = {
   routingRules: { fallback: "n8n" },
   timeoutMs: 20000,
   retryPolicy: { attempts: 2 },
-  isActive: true
+  isActive: true,
 };
 
 const user = {
@@ -87,7 +88,7 @@ const user = {
   email: "user@acme.test",
   status: "invited" as const,
   roles: ["viewer"],
-  createdAt: "2026-08-14T12:00:00.000Z"
+  createdAt: "2026-08-14T12:00:00.000Z",
 };
 
 const role = {
@@ -95,7 +96,7 @@ const role = {
   slug: "viewer",
   name: "Viewer",
   description: "Read only",
-  permissions: ["Visualizar conversas"]
+  permissions: ["Visualizar conversas"],
 };
 
 const conversation = {
@@ -111,7 +112,7 @@ const conversation = {
   pageTitle: "Pricing",
   pageUrl: "https://example.com/pricing",
   messageCount: 2,
-  lastMessageAt: "2026-08-14T12:02:00.000Z"
+  lastMessageAt: "2026-08-14T12:02:00.000Z",
 };
 
 const conversationDetail = {
@@ -126,9 +127,9 @@ const conversationDetail = {
       content: { type: "text", text: "Oi" },
       metadata: {},
       providerMessageId: null,
-      createdAt: "2026-08-14T12:01:00.000Z"
-    }
-  ]
+      createdAt: "2026-08-14T12:01:00.000Z",
+    },
+  ],
 };
 
 const sessionRecord = {
@@ -142,7 +143,7 @@ const sessionRecord = {
   pageUrl: "https://example.com/pricing",
   referrer: "https://google.com",
   conversationId: "conversation-1",
-  conversationStatus: "open" as const
+  conversationStatus: "open" as const,
 };
 
 const plan = {
@@ -151,12 +152,12 @@ const plan = {
   name: "Starter",
   limits: {
     messagesPerMinute: 30,
-    conversationsPerDay: 200
+    conversationsPerDay: 200,
   },
   priceCents: 0,
   isActive: true,
   createdAt: "2026-08-14T12:00:00.000Z",
-  updatedAt: "2026-08-14T12:00:00.000Z"
+  updatedAt: "2026-08-14T12:00:00.000Z",
 };
 
 const apiKey = {
@@ -166,7 +167,7 @@ const apiKey = {
   last4: "19ab",
   lastUsedAt: null,
   revokedAt: null,
-  createdAt: "2026-08-14T12:00:00.000Z"
+  createdAt: "2026-08-14T12:00:00.000Z",
 };
 
 const analyticsReport = {
@@ -184,9 +185,9 @@ const analyticsReport = {
       conversationId: "conversation-1",
       eventType: "WidgetSessionStarted",
       payload: { url: "https://example.com/pricing" },
-      createdAt: "2026-08-14T12:00:00.000Z"
-    }
-  ]
+      createdAt: "2026-08-14T12:00:00.000Z",
+    },
+  ],
 };
 
 const auditLog = {
@@ -199,7 +200,7 @@ const auditLog = {
   targetId: "tenant-1",
   correlationId: "corr-1",
   metadata: { correlationId: "corr-1" },
-  createdAt: "2026-08-14T12:00:00.000Z"
+  createdAt: "2026-08-14T12:00:00.000Z",
 };
 
 const systemLog = {
@@ -209,20 +210,20 @@ const systemLog = {
   message: "Background job completed",
   correlationId: "corr-2",
   context: { correlationId: "corr-2" },
-  createdAt: "2026-08-14T12:00:00.000Z"
+  createdAt: "2026-08-14T12:00:00.000Z",
 };
 
 const createdApiKey = {
   ...apiKey,
-  secret: "fqc_1234567890"
+  secret: "fqc_1234567890",
 };
 
 const jsonResponse = (status: number, data: unknown) =>
   new Response(JSON.stringify({ data, meta: { correlationId: "corr-1" } }), {
     status,
     headers: {
-      "Content-Type": "application/json"
-    }
+      "Content-Type": "application/json",
+    },
   });
 
 beforeEach(() => {
@@ -271,9 +272,9 @@ describe("API helpers", () => {
       .mockResolvedValueOnce(jsonResponse(200, createdApiKey))
       .mockResolvedValueOnce(jsonResponse(200, apiKey));
 
-    await expect(loginAdmin({ email: "admin@acme.test", password: "senha-super-secreta" })).resolves.toEqual(
-      session,
-    );
+    await expect(
+      loginAdmin({ email: "admin@acme.test", password: "senha-super-secreta" }),
+    ).resolves.toEqual(session);
     await expect(refreshAdmin("refresh-token-1")).resolves.toEqual(session);
     await expect(listTenants("access-token-1")).resolves.toEqual([tenant]);
     await expect(
@@ -281,7 +282,7 @@ describe("API helpers", () => {
         publicId: "acme",
         name: "Acme",
         planSlug: "starter",
-        defaultLocale: "pt-BR"
+        defaultLocale: "pt-BR",
       }),
     ).resolves.toEqual(tenant);
     await expect(
@@ -289,12 +290,14 @@ describe("API helpers", () => {
         publicId: "acme-2",
         name: "Acme 2",
         defaultLocale: "en-US",
-        status: "inactive"
+        status: "inactive",
       }),
     ).resolves.toEqual(tenant);
     await expect(deleteTenant("access-token-1", "tenant-1")).resolves.toEqual(tenant);
     await expect(listTenantDomains("access-token-1", "tenant-1")).resolves.toEqual([domain]);
-    await expect(createTenantDomain("access-token-1", "tenant-1", "acme.com")).resolves.toEqual(domain);
+    await expect(createTenantDomain("access-token-1", "tenant-1", "acme.com")).resolves.toEqual(
+      domain,
+    );
     await expect(getTenantConfig("access-token-1", "tenant-1")).resolves.toEqual(config);
     await expect(
       upsertTenantConfig("access-token-1", "tenant-1", {
@@ -302,7 +305,7 @@ describe("API helpers", () => {
         primaryColor: "#111111",
         iconUrl: "https://example.com/icon.png",
         initialMessage: "Bem-vindo",
-        placeholder: "Escreva aqui"
+        placeholder: "Escreva aqui",
       }),
     ).resolves.toEqual(config);
     await expect(getTenantAgentConfig("access-token-1", "tenant-1")).resolves.toEqual(agentConfig);
@@ -315,46 +318,54 @@ describe("API helpers", () => {
         routingRules: { fallback: "n8n" },
         timeoutMs: 20000,
         retryPolicy: { attempts: 2 },
-        isActive: true
+        isActive: true,
       }),
     ).resolves.toEqual(agentConfig);
     await expect(listTenantUsers("access-token-1", "tenant-1")).resolves.toEqual([user]);
     await expect(
       inviteTenantUser("access-token-1", "tenant-1", {
         email: "user@acme.test",
-        roleSlug: "viewer"
+        roleSlug: "viewer",
       }),
     ).resolves.toEqual(user);
     await expect(
       updateTenantUserRoles("access-token-1", "tenant-1", "user-1", {
-        roleSlugs: ["viewer"]
+        roleSlugs: ["viewer"],
       }),
     ).resolves.toEqual(user);
     await expect(listTenantRoles("access-token-1", "tenant-1")).resolves.toEqual([role]);
     await expect(listPlans("access-token-1")).resolves.toEqual([plan]);
-    await expect(listTenantConversations("access-token-1", "tenant-1")).resolves.toEqual([conversation]);
-    await expect(getTenantConversation("access-token-1", "tenant-1", "conversation-1")).resolves.toEqual(
-      conversationDetail,
-    );
-    await expect(listTenantSessions("access-token-1", "tenant-1")).resolves.toEqual([sessionRecord]);
+    await expect(listTenantConversations("access-token-1", "tenant-1")).resolves.toEqual([
+      conversation,
+    ]);
+    await expect(
+      getTenantConversation("access-token-1", "tenant-1", "conversation-1"),
+    ).resolves.toEqual(conversationDetail);
+    await expect(listTenantSessions("access-token-1", "tenant-1")).resolves.toEqual([
+      sessionRecord,
+    ]);
     await expect(listTenantApiKeys("access-token-1", "tenant-1")).resolves.toEqual([apiKey]);
-    await expect(listTenantAnalytics("access-token-1", "tenant-1")).resolves.toEqual(analyticsReport);
+    await expect(listTenantAnalytics("access-token-1", "tenant-1")).resolves.toEqual(
+      analyticsReport,
+    );
     await expect(listTenantAuditLogs("access-token-1", "tenant-1")).resolves.toEqual([auditLog]);
     await expect(listTenantSystemLogs("access-token-1", "tenant-1")).resolves.toEqual([systemLog]);
     await expect(
       createTenantApiKey("access-token-1", "tenant-1", {
-        name: "Dashboard key"
+        name: "Dashboard key",
       }),
     ).resolves.toEqual(createdApiKey);
-    await expect(revokeTenantApiKey("access-token-1", "tenant-1", "key-1")).resolves.toEqual(apiKey);
+    await expect(revokeTenantApiKey("access-token-1", "tenant-1", "key-1")).resolves.toEqual(
+      apiKey,
+    );
 
     const health = {
       status: "ok" as const,
       service: "api" as const,
       timestamp: "2026-08-14T12:00:00.000Z",
       checks: {
-        database: "ok" as const
-      }
+        database: "ok" as const,
+      },
     };
 
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, health));
@@ -364,9 +375,23 @@ describe("API helpers", () => {
       "/v1/admin/tenants",
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: "Bearer access-token-1"
-        })
+          Authorization: "Bearer access-token-1",
+        }),
       }),
+    );
+  });
+
+  it("deletes a tenant domain", async () => {
+    const removedDomain = {
+      ...domain,
+      id: "domain-2",
+      domain: "removed.example.com",
+    };
+
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, removedDomain));
+
+    await expect(deleteTenantDomain("access-token-1", "tenant-1", "domain-2")).resolves.toEqual(
+      removedDomain,
     );
   });
 });

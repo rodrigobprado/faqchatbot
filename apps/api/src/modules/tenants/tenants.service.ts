@@ -20,8 +20,8 @@ const tenantPublicConfigSchema = z.object({
   placeholder: z.string().max(120).default("Digite sua mensagem"),
   limits: z.object({
     messagesPerMinute: z.number().int().positive(),
-    conversationsPerDay: z.number().int().positive()
-  })
+    conversationsPerDay: z.number().int().positive(),
+  }),
 });
 
 type TenantPublicResponse = z.infer<typeof tenantPublicConfigSchema>;
@@ -56,14 +56,7 @@ type TenantAgentConfigRecord = Readonly<{
   id: string;
   tenantId: string;
   provider:
-    | "n8n"
-    | "openai_responses"
-    | "langgraph"
-    | "flowise"
-    | "dify"
-    | "crewai"
-    | "mcp"
-    | "custom";
+    "n8n" | "openai_responses" | "langgraph" | "flowise" | "dify" | "crewai" | "mcp" | "custom";
   model: string | null;
   webhookEndpointId: string | null;
   encryptedCredentialsRef: string | null;
@@ -179,19 +172,32 @@ type PlanRecord = Readonly<{
 
 export type TenantsServiceDependencies = Readonly<{
   tenants: {
-    create(input: { publicId: string; name: string; planId: string; defaultLocale?: string }): Promise<TenantRecord>;
+    create(input: {
+      publicId: string;
+      name: string;
+      planId: string;
+      defaultLocale?: string;
+    }): Promise<TenantRecord>;
     findById(id: string): Promise<TenantRecord | null>;
     findByPublicId(publicId: string): Promise<TenantRecord | null>;
     list(): Promise<TenantRecord[]>;
     update(
       id: string,
-      input: Partial<{ publicId: string; name: string; planId: string; defaultLocale: string; status: "active" | "inactive" | "suspended"; deletedAt: Date | null }>,
+      input: Partial<{
+        publicId: string;
+        name: string;
+        planId: string;
+        defaultLocale: string;
+        status: "active" | "inactive" | "suspended";
+        deletedAt: Date | null;
+      }>,
     ): Promise<TenantRecord | null>;
     softDelete(id: string): Promise<TenantRecord | null>;
   };
   tenantDomains: {
     create(input: { tenantId: string; domain: string }): Promise<TenantDomainRecord>;
     listByTenantId(tenantId: string): Promise<TenantDomainRecord[]>;
+    delete(id: string): Promise<TenantDomainRecord | null>;
   };
   tenantConfigs: {
     findByTenantId(tenantId: string): Promise<TenantConfigRecord | null>;
@@ -209,14 +215,7 @@ export type TenantsServiceDependencies = Readonly<{
     upsert(input: {
       tenantId: string;
       provider:
-        | "n8n"
-        | "openai_responses"
-        | "langgraph"
-        | "flowise"
-        | "dify"
-        | "crewai"
-        | "mcp"
-        | "custom";
+        "n8n" | "openai_responses" | "langgraph" | "flowise" | "dify" | "crewai" | "mcp" | "custom";
       model?: string | null;
       webhookEndpointId?: string | null;
       encryptedCredentialsRef?: string | null;
@@ -227,11 +226,19 @@ export type TenantsServiceDependencies = Readonly<{
     }): Promise<TenantAgentConfigRecord>;
   };
   users: {
-    create(input: { tenantId: string; email: string; passwordHash: string; status?: "active" | "invited" | "suspended" }): Promise<TenantUserRecord>;
+    create(input: {
+      tenantId: string;
+      email: string;
+      passwordHash: string;
+      status?: "active" | "invited" | "suspended";
+    }): Promise<TenantUserRecord>;
     findById(id: string): Promise<TenantUserRecord | null>;
     findByEmail(email: string): Promise<TenantUserRecord | null>;
     listByTenantId(tenantId: string): Promise<TenantUserRecord[]>;
-    updateStatus(id: string, status: "active" | "invited" | "suspended"): Promise<TenantUserRecord | null>;
+    updateStatus(
+      id: string,
+      status: "active" | "invited" | "suspended",
+    ): Promise<TenantUserRecord | null>;
   };
   userRoles: {
     assignRole(userId: string, roleId: string): Promise<unknown>;
@@ -240,11 +247,19 @@ export type TenantsServiceDependencies = Readonly<{
   };
   roles: {
     create(input: { tenantId?: string; slug: string; name: string }): Promise<TenantRoleRecord>;
-    findByTenantIdAndSlug(tenantId: string | null | undefined, slug: string): Promise<TenantRoleRecord | null>;
+    findByTenantIdAndSlug(
+      tenantId: string | null | undefined,
+      slug: string,
+    ): Promise<TenantRoleRecord | null>;
     listByTenantId(tenantId: string): Promise<TenantRoleRecord[]>;
   };
   apiKeys: {
-    create(input: { tenantId: string; name: string; hashedKey: string; prefix: string }): Promise<TenantApiKeyRecord>;
+    create(input: {
+      tenantId: string;
+      name: string;
+      hashedKey: string;
+      prefix: string;
+    }): Promise<TenantApiKeyRecord>;
     findById(id: string): Promise<TenantApiKeyRecord | null>;
     listByTenantId(tenantId: string): Promise<TenantApiKeyRecord[]>;
     revoke(id: string): Promise<TenantApiKeyRecord | null>;
@@ -281,7 +296,7 @@ const createTenantSchema = z.object({
   publicId: z.string().min(1).max(120),
   name: z.string().min(1).max(180),
   planSlug: tenantPlanSchema.default("starter"),
-  defaultLocale: z.string().min(2).max(20).default("pt-BR")
+  defaultLocale: z.string().min(2).max(20).default("pt-BR"),
 });
 
 const updateTenantSchema = z.object({
@@ -289,11 +304,11 @@ const updateTenantSchema = z.object({
   name: z.string().min(1).max(180).optional(),
   planSlug: tenantPlanSchema.optional(),
   defaultLocale: z.string().min(2).max(20).optional(),
-  status: z.enum(["active", "inactive", "suspended"]).optional()
+  status: z.enum(["active", "inactive", "suspended"]).optional(),
 });
 
 const createDomainSchema = z.object({
-  domain: z.string().min(1).max(255)
+  domain: z.string().min(1).max(255),
 });
 
 const tenantConfigSchema = z.object({
@@ -301,31 +316,40 @@ const tenantConfigSchema = z.object({
   primaryColor: z.string().min(1).max(20).default("#2563eb"),
   iconUrl: z.string().url().nullable().optional(),
   initialMessage: z.string().min(1).max(500).default("Ola! Como posso ajudar?"),
-  placeholder: z.string().min(1).max(120).default("Digite sua mensagem")
+  placeholder: z.string().min(1).max(120).default("Digite sua mensagem"),
 });
 
 const tenantAgentConfigSchema = z.object({
-  provider: z.enum(["n8n", "openai_responses", "langgraph", "flowise", "dify", "crewai", "mcp", "custom"]),
+  provider: z.enum([
+    "n8n",
+    "openai_responses",
+    "langgraph",
+    "flowise",
+    "dify",
+    "crewai",
+    "mcp",
+    "custom",
+  ]),
   model: z.string().max(120).nullable().optional(),
   webhookEndpointId: z.string().uuid().nullable().optional(),
   encryptedCredentialsRef: z.string().max(255).nullable().optional(),
   routingRules: z.record(z.string(), z.unknown()).default({}),
   timeoutMs: z.number().int().positive().default(15000),
   retryPolicy: z.record(z.string(), z.unknown()).default({}),
-  isActive: z.boolean().default(true)
+  isActive: z.boolean().default(true),
 });
 
 const inviteUserSchema = z.object({
   email: z.string().email().max(255),
-  roleSlug: z.string().min(1).max(80).default("viewer")
+  roleSlug: z.string().min(1).max(80).default("viewer"),
 });
 
 const updateUserRolesSchema = z.object({
-  roleSlugs: z.array(z.string().min(1).max(80)).min(1)
+  roleSlugs: z.array(z.string().min(1).max(80)).min(1),
 });
 
 const createApiKeySchema = z.object({
-  name: z.string().min(1).max(120)
+  name: z.string().min(1).max(120),
 });
 
 const defaultRoleCatalog = [
@@ -339,27 +363,27 @@ const defaultRoleCatalog = [
       "Invitar usuarios",
       "Gerenciar roles",
       "Criar api keys",
-      "Revogar api keys"
-    ]
+      "Revogar api keys",
+    ],
   },
   {
     slug: "editor",
     name: "Editor",
     description: "Atua no atendimento e na operacao cotidiana.",
-    permissions: ["Visualizar conversas", "Responder conversas"]
+    permissions: ["Visualizar conversas", "Responder conversas"],
   },
   {
     slug: "viewer",
     name: "Viewer",
     description: "Acompanha a operacao sem alterar dados.",
-    permissions: ["Visualizar conversas"]
+    permissions: ["Visualizar conversas"],
   },
   {
     slug: "operator",
     name: "Operator",
     description: "Gerencia integracoes e chaves de API.",
-    permissions: ["Visualizar conversas", "Criar api keys", "Revogar api keys"]
-  }
+    permissions: ["Visualizar conversas", "Criar api keys", "Revogar api keys"],
+  },
 ] as const;
 
 const resolvePlan = async (
@@ -374,7 +398,8 @@ const resolvePlan = async (
   return plan;
 };
 
-const isPlatformAdmin = (actor: AdminAccessTokenPayload): boolean => actor.roles.includes("platform_admin");
+const isPlatformAdmin = (actor: AdminAccessTokenPayload): boolean =>
+  actor.roles.includes("platform_admin");
 
 export class TenantsService {
   constructor(private readonly dependencies: TenantsServiceDependencies) {}
@@ -401,7 +426,7 @@ export class TenantsService {
       conversations.map(async (conversation) => {
         const [session, messages] = await Promise.all([
           this.dependencies.visitorSessions.findById(conversation.sessionId),
-          this.dependencies.messages.listByConversationId(conversation.id)
+          this.dependencies.messages.listByConversationId(conversation.id),
         ]);
 
         return this.serializeConversationSummary(conversation, session, messages);
@@ -415,10 +440,13 @@ export class TenantsService {
 
     return Promise.all(
       sessions.map(async (session) => {
-        const conversation = await this.dependencies.conversations.findLatestBySessionId(session.id);
-        const pageContext = typeof session.pageContext === "object" && session.pageContext !== null
-          ? (session.pageContext as Record<string, unknown>)
-          : {};
+        const conversation = await this.dependencies.conversations.findLatestBySessionId(
+          session.id,
+        );
+        const pageContext =
+          typeof session.pageContext === "object" && session.pageContext !== null
+            ? (session.pageContext as Record<string, unknown>)
+            : {};
 
         return {
           id: session.id,
@@ -431,7 +459,7 @@ export class TenantsService {
           pageUrl: typeof pageContext.url === "string" ? pageContext.url : null,
           referrer: typeof pageContext.referrer === "string" ? pageContext.referrer : null,
           conversationId: conversation?.id ?? null,
-          conversationStatus: conversation?.status ?? null
+          conversationStatus: conversation?.status ?? null,
         };
       }),
     );
@@ -446,12 +474,12 @@ export class TenantsService {
 
     const [session, messages] = await Promise.all([
       this.dependencies.visitorSessions.findById(conversation.sessionId),
-      this.dependencies.messages.listByConversationId(conversation.id)
+      this.dependencies.messages.listByConversationId(conversation.id),
     ]);
 
     return {
       ...this.serializeConversationSummary(conversation, session, messages),
-      messages: messages.map((message) => this.serializeMessage(message))
+      messages: messages.map((message) => this.serializeMessage(message)),
     };
   }
 
@@ -464,7 +492,7 @@ export class TenantsService {
       publicId: input.publicId,
       name: input.name,
       planId: plan.id,
-      defaultLocale: input.defaultLocale
+      defaultLocale: input.defaultLocale,
     });
   }
 
@@ -493,7 +521,7 @@ export class TenantsService {
       name: input.name,
       planId: plan?.id,
       defaultLocale: input.defaultLocale,
-      status: input.status
+      status: input.status,
     });
 
     if (!updated) {
@@ -524,6 +552,17 @@ export class TenantsService {
     return this.dependencies.tenantDomains.create({ tenantId, domain: input.domain });
   }
 
+  async deleteDomain(actor: AdminAccessTokenPayload, tenantId: string, domainId: string) {
+    this.assertTenantAccess(actor, tenantId);
+    const domain = await this.dependencies.tenantDomains.delete(domainId);
+
+    if (!domain || domain.tenantId !== tenantId) {
+      throw new NotFoundException(`Domain ${domainId} was not found`);
+    }
+
+    return domain;
+  }
+
   async getTenantConfig(actor: AdminAccessTokenPayload, tenantId: string) {
     this.assertTenantAccess(actor, tenantId);
     return this.dependencies.tenantConfigs.findByTenantId(tenantId);
@@ -538,7 +577,7 @@ export class TenantsService {
       primaryColor: input.primaryColor,
       iconUrl: input.iconUrl ?? null,
       initialMessage: input.initialMessage,
-      placeholder: input.placeholder
+      placeholder: input.placeholder,
     });
   }
 
@@ -547,7 +586,11 @@ export class TenantsService {
     return this.dependencies.tenantAgentConfigs.findLatestByTenantId(tenantId);
   }
 
-  async upsertTenantAgentConfig(actor: AdminAccessTokenPayload, tenantId: string, rawInput: unknown) {
+  async upsertTenantAgentConfig(
+    actor: AdminAccessTokenPayload,
+    tenantId: string,
+    rawInput: unknown,
+  ) {
     this.assertTenantAccess(actor, tenantId);
     const input = this.parseTenantAgentConfigInput(rawInput);
     return this.dependencies.tenantAgentConfigs.upsert({
@@ -559,7 +602,7 @@ export class TenantsService {
       routingRules: input.routingRules,
       timeoutMs: input.timeoutMs,
       retryPolicy: input.retryPolicy,
-      isActive: input.isActive
+      isActive: input.isActive,
     });
   }
 
@@ -573,9 +616,11 @@ export class TenantsService {
         tenantId: user.tenantId,
         email: user.email,
         status: user.status,
-        roles: (await this.dependencies.userRoles.listRoleSlugsByUserId(user.id)).map((role) => role.slug),
+        roles: (await this.dependencies.userRoles.listRoleSlugsByUserId(user.id)).map(
+          (role) => role.slug,
+        ),
         createdAt: user.createdAt?.toISOString?.() ?? undefined,
-        updatedAt: user.updatedAt?.toISOString?.() ?? undefined
+        updatedAt: user.updatedAt?.toISOString?.() ?? undefined,
       })),
     );
   }
@@ -588,7 +633,7 @@ export class TenantsService {
       tenantId,
       email: input.email,
       passwordHash: hashPassword(`invite-${randomUUID()}`),
-      status: "invited"
+      status: "invited",
     });
 
     await this.dependencies.userRoles.assignRole(user.id, role.id);
@@ -599,11 +644,16 @@ export class TenantsService {
       email: user.email,
       status: user.status,
       roles: [role.slug],
-      invitedAt: user.createdAt?.toISOString?.() ?? new Date().toISOString()
+      invitedAt: user.createdAt?.toISOString?.() ?? new Date().toISOString(),
     };
   }
 
-  async updateUserRoles(actor: AdminAccessTokenPayload, tenantId: string, userId: string, rawInput: unknown) {
+  async updateUserRoles(
+    actor: AdminAccessTokenPayload,
+    tenantId: string,
+    userId: string,
+    rawInput: unknown,
+  ) {
     this.assertTenantAccess(actor, tenantId);
     const input = this.parseUpdateUserRolesInput(rawInput);
     const user = await this.dependencies.users.findById(userId);
@@ -624,7 +674,7 @@ export class TenantsService {
       tenantId: user.tenantId,
       email: user.email,
       status: user.status,
-      roles: roles.map((role) => role.slug)
+      roles: roles.map((role) => role.slug),
     };
   }
 
@@ -638,7 +688,7 @@ export class TenantsService {
       slug: role.slug,
       name: role.name,
       description: this.roleDescription(role.slug),
-      permissions: this.rolePermissions(role.slug)
+      permissions: this.rolePermissions(role.slug),
     }));
   }
 
@@ -653,7 +703,7 @@ export class TenantsService {
       last4: apiKey.prefix.slice(-4),
       lastUsedAt: apiKey.lastUsedAt?.toISOString?.() ?? null,
       revokedAt: apiKey.revokedAt?.toISOString?.() ?? null,
-      createdAt: apiKey.createdAt?.toISOString?.() ?? new Date().toISOString()
+      createdAt: apiKey.createdAt?.toISOString?.() ?? new Date().toISOString(),
     }));
   }
 
@@ -667,19 +717,31 @@ export class TenantsService {
       conversationId: event.conversationId,
       eventType: event.eventType,
       payload: event.payload ?? {},
-      createdAt: event.createdAt.toISOString()
+      createdAt: event.createdAt.toISOString(),
     }));
 
     const totals = this.summarizeCounts(events, (event) => event.eventType);
-    const origins = this.summarizeCounts(events, (event) => this.analyticsValue(event.payload, ["origin", "referrer", "source"]));
-    const domains = this.summarizeCounts(events, (event) =>
-      this.analyticsValue(event.payload, ["domain"]) ?? this.hostFromUrl(this.analyticsValue(event.payload, ["url"]))
+    const origins = this.summarizeCounts(events, (event) =>
+      this.analyticsValue(event.payload, ["origin", "referrer", "source"]),
     );
-    const devices = this.summarizeCounts(events, (event) => this.analyticsValue(event.payload, ["deviceType", "device", "platform"]));
-    const resolutions = this.summarizeCounts(events, (event) =>
-      this.analyticsValue(event.payload, ["resolution"]) ?? this.resolutionFromPayload(event.payload)
+    const domains = this.summarizeCounts(
+      events,
+      (event) =>
+        this.analyticsValue(event.payload, ["domain"]) ??
+        this.hostFromUrl(this.analyticsValue(event.payload, ["url"])),
     );
-    const timeline = this.summarizeCounts(events, (event) => event.createdAt.toISOString().slice(0, 10));
+    const devices = this.summarizeCounts(events, (event) =>
+      this.analyticsValue(event.payload, ["deviceType", "device", "platform"]),
+    );
+    const resolutions = this.summarizeCounts(
+      events,
+      (event) =>
+        this.analyticsValue(event.payload, ["resolution"]) ??
+        this.resolutionFromPayload(event.payload),
+    );
+    const timeline = this.summarizeCounts(events, (event) =>
+      event.createdAt.toISOString().slice(0, 10),
+    );
 
     return {
       totalEvents: events.length,
@@ -689,7 +751,7 @@ export class TenantsService {
       deviceCounts: devices,
       resolutionCounts: resolutions,
       timeline,
-      events: normalizedEvents
+      events: normalizedEvents,
     };
   }
 
@@ -699,8 +761,13 @@ export class TenantsService {
 
     return Promise.all(
       logs.map(async (log) => {
-        const actorUser = log.actorUserId ? await this.dependencies.users.findById(log.actorUserId) : null;
-        const correlationId = this.analyticsValue(log.metadata, ["correlationId", "correlation_id"]);
+        const actorUser = log.actorUserId
+          ? await this.dependencies.users.findById(log.actorUserId)
+          : null;
+        const correlationId = this.analyticsValue(log.metadata, [
+          "correlationId",
+          "correlation_id",
+        ]);
 
         return {
           id: log.id,
@@ -712,7 +779,7 @@ export class TenantsService {
           targetId: log.targetId,
           correlationId: correlationId ?? null,
           metadata: log.metadata ?? {},
-          createdAt: log.createdAt.toISOString()
+          createdAt: log.createdAt.toISOString(),
         };
       }),
     );
@@ -729,7 +796,7 @@ export class TenantsService {
       message: log.message,
       correlationId: this.analyticsValue(log.context, ["correlationId", "correlation_id"]) ?? null,
       context: log.context ?? {},
-      createdAt: log.createdAt.toISOString()
+      createdAt: log.createdAt.toISOString(),
     }));
   }
 
@@ -741,7 +808,7 @@ export class TenantsService {
       tenantId,
       name: input.name,
       hashedKey: hashPassword(secret),
-      prefix: secret.slice(0, 8)
+      prefix: secret.slice(0, 8),
     });
 
     return {
@@ -752,7 +819,7 @@ export class TenantsService {
       secret,
       lastUsedAt: created.lastUsedAt?.toISOString?.() ?? null,
       revokedAt: created.revokedAt?.toISOString?.() ?? null,
-      createdAt: created.createdAt?.toISOString?.() ?? new Date().toISOString()
+      createdAt: created.createdAt?.toISOString?.() ?? new Date().toISOString(),
     };
   }
 
@@ -775,7 +842,7 @@ export class TenantsService {
       last4: revoked.prefix.slice(-4),
       lastUsedAt: revoked.lastUsedAt?.toISOString?.() ?? null,
       revokedAt: revoked.revokedAt?.toISOString?.() ?? new Date().toISOString(),
-      createdAt: revoked.createdAt?.toISOString?.() ?? new Date().toISOString()
+      createdAt: revoked.createdAt?.toISOString?.() ?? new Date().toISOString(),
     };
   }
 
@@ -801,20 +868,24 @@ export class TenantsService {
       plan: tenantPlanSchema.parse(plan.slug),
       domain: domains[0]?.domain ?? tenant.publicId,
       locale: tenant.defaultLocale,
-      theme: config?.theme === "light" || config?.theme === "dark" || config?.theme === "auto" ? config.theme : "auto",
+      theme:
+        config?.theme === "light" || config?.theme === "dark" || config?.theme === "auto"
+          ? config.theme
+          : "auto",
       primaryColor: config?.primaryColor ?? "#2563eb",
       iconUrl: config?.iconUrl ?? undefined,
       initialMessage: config?.initialMessage ?? "Ola! Como posso ajudar?",
       placeholder: config?.placeholder ?? "Digite sua mensagem",
-      limits: this.parsePlanLimits(plan.limits)
+      limits: this.parsePlanLimits(plan.limits),
     });
   }
 
   private parsePlanLimits(limits: unknown) {
-    const record = typeof limits === "object" && limits !== null ? (limits as Record<string, unknown>) : {};
+    const record =
+      typeof limits === "object" && limits !== null ? (limits as Record<string, unknown>) : {};
     return {
       messagesPerMinute: this.readPositiveInteger(record.messagesPerMinute, 30),
-      conversationsPerDay: this.readPositiveInteger(record.conversationsPerDay, 200)
+      conversationsPerDay: this.readPositiveInteger(record.conversationsPerDay, 200),
     };
   }
 
@@ -823,9 +894,10 @@ export class TenantsService {
     session: VisitorSessionRecord | null,
     messages: MessageRecord[],
   ) {
-    const pageContext = typeof session?.pageContext === "object" && session.pageContext !== null
-      ? (session.pageContext as Record<string, unknown>)
-      : {};
+    const pageContext =
+      typeof session?.pageContext === "object" && session.pageContext !== null
+        ? (session.pageContext as Record<string, unknown>)
+        : {};
 
     return {
       id: conversation.id,
@@ -840,7 +912,7 @@ export class TenantsService {
       pageTitle: typeof pageContext.title === "string" ? pageContext.title : null,
       pageUrl: typeof pageContext.url === "string" ? pageContext.url : null,
       messageCount: messages.length,
-      lastMessageAt: messages.at(-1)?.createdAt?.toISOString?.() ?? null
+      lastMessageAt: messages.at(-1)?.createdAt?.toISOString?.() ?? null,
     };
   }
 
@@ -854,7 +926,7 @@ export class TenantsService {
       content: message.content,
       metadata: message.metadata ?? {},
       providerMessageId: message.providerMessageId,
-      createdAt: message.createdAt.toISOString()
+      createdAt: message.createdAt.toISOString(),
     };
   }
 
@@ -997,13 +1069,15 @@ export class TenantsService {
 
   private async ensureDefaultRoles(tenantId: string) {
     const existing = await this.dependencies.roles.listByTenantId(tenantId);
-    const missing = defaultRoleCatalog.filter((role) => !existing.some((item) => item.slug === role.slug));
+    const missing = defaultRoleCatalog.filter(
+      (role) => !existing.some((item) => item.slug === role.slug),
+    );
 
     for (const role of missing) {
       await this.dependencies.roles.create({
         tenantId,
         slug: role.slug,
-        name: role.name
+        name: role.name,
       });
     }
   }

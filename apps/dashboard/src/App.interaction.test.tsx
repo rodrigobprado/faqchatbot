@@ -940,6 +940,17 @@ describe("App interactions", () => {
       roles: tenantRoles,
       apiKeys: tenantApiKeys,
     });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { data: createdDomain, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
+    queueTenantDetails(fetchMock, {
+      domains: [],
+      config: updatedWidgetConfig,
+      agentConfig: updatedAgentConfig,
+      users: tenantUsers,
+      roles: tenantRoles,
+      apiKeys: tenantApiKeys,
+    });
 
     await act(async () => {
       root!.render(<App />);
@@ -1055,6 +1066,22 @@ describe("App interactions", () => {
       retryPolicy: { attempts: 3, backoffMs: 500 },
       isActive: false,
     });
+
+    const confirmMock = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmMock);
+
+    await act(async () => {
+      (
+        Array.from(document.querySelectorAll("#domains .list-row button")).find((button) =>
+          button.textContent?.includes("Remover"),
+        ) as HTMLButtonElement
+      ).click();
+    });
+
+    await waitForBodyText("Dominio removido com sucesso.");
+    expect(confirmMock).toHaveBeenCalledWith(
+      "Remover dominio example.com? Esta acao nao pode ser desfeita.",
+    );
   });
 
   it("manages tenant users, roles and api keys through the API", async () => {

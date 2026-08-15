@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type { AdminRequest } from "../auth/admin-auth.guard.js";
 import { AdminAuthGuard } from "../auth/admin-auth.guard.js";
@@ -76,8 +88,22 @@ export class AdminTenantsController {
 
   @Post(":tenantId/domains")
   @ApiOkResponse({ description: "Creates a tenant domain" })
-  createDomain(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+  createDomain(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Body() body: unknown,
+  ) {
     return this.tenantsService.createDomain(request.adminUser!, tenantId, body);
+  }
+
+  @Delete(":tenantId/domains/:domainId")
+  @ApiOkResponse({ description: "Deletes a tenant domain" })
+  deleteDomain(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Param("domainId") domainId: string,
+  ) {
+    return this.tenantsService.deleteDomain(request.adminUser!, tenantId, domainId);
   }
 
   @Get(":tenantId/config")
@@ -88,7 +114,11 @@ export class AdminTenantsController {
 
   @Put(":tenantId/config")
   @ApiOkResponse({ description: "Upserts tenant widget config" })
-  upsertConfig(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+  upsertConfig(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Body() body: unknown,
+  ) {
     return this.tenantsService.upsertTenantConfig(request.adminUser!, tenantId, body);
   }
 
@@ -100,7 +130,11 @@ export class AdminTenantsController {
 
   @Put(":tenantId/agent-config")
   @ApiOkResponse({ description: "Upserts tenant agent config" })
-  upsertAgentConfig(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+  upsertAgentConfig(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Body() body: unknown,
+  ) {
     return this.tenantsService.upsertTenantAgentConfig(request.adminUser!, tenantId, body);
   }
 
@@ -112,7 +146,11 @@ export class AdminTenantsController {
 
   @Post(":tenantId/users")
   @ApiOkResponse({ description: "Invites a tenant user" })
-  inviteUser(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+  inviteUser(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Body() body: unknown,
+  ) {
     return this.tenantsService.inviteUser(request.adminUser!, tenantId, body);
   }
 
@@ -159,7 +197,11 @@ export class AdminTenantsController {
 
   @Post(":tenantId/api-keys")
   @ApiOkResponse({ description: "Creates a tenant api key" })
-  createApiKey(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
+  createApiKey(
+    @Req() request: AdminRequest,
+    @Param("tenantId") tenantId: string,
+    @Body() body: unknown,
+  ) {
     return this.tenantsService.createApiKey(request.adminUser!, tenantId, body);
   }
 
