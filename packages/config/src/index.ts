@@ -13,11 +13,17 @@ export const environmentSchema = z.object({
   S3_REGION: z.string().min(1),
   S3_BUCKET: z.string().min(1),
   S3_ACCESS_KEY_ID: z.string().min(1),
-  S3_SECRET_ACCESS_KEY: z.string().min(1)
+  S3_SECRET_ACCESS_KEY: z.string().min(1),
+  CORS_EXTRA_ORIGINS: z.string().default("")
 });
 
 export type PlatformEnvironment = z.infer<typeof environmentSchema>;
 
 export const parseEnvironment = (input: NodeJS.ProcessEnv): PlatformEnvironment =>
   environmentSchema.parse(input);
+
+export const corsExtraOrigins = (env: PlatformEnvironment): string[] =>
+  env.CORS_EXTRA_ORIGINS.split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
 

@@ -1,5 +1,5 @@
-import { randomBytes, scryptSync } from "node:crypto";
 import { createDatabase } from "./client.js";
+import { hashPassword } from "../auth/password.js";
 import { createPlansRepository } from "./repositories/plans.repository.js";
 import { createTenantsRepository } from "./repositories/tenants.repository.js";
 import { createUsersRepository } from "./repositories/users.repository.js";
@@ -8,13 +8,6 @@ const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to run the seed");
 }
-
-// ponytail: scrypt placeholder for the seed only; Fase 4 (auth) replaces this with Argon2.
-const hashPassword = (password: string): string => {
-  const salt = randomBytes(16).toString("hex");
-  const derivedKey = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${derivedKey}`;
-};
 
 const { db, client } = createDatabase(databaseUrl);
 
@@ -40,7 +33,7 @@ const admin =
   (await users.create({
     tenantId: tenant.id,
     email: adminEmail,
-    passwordHash: hashPassword(process.env.SEED_ADMIN_PASSWORD ?? "change-me-now")
+    passwordHash: await hashPassword(process.env.SEED_ADMIN_PASSWORD ?? "change-me-now")
   }));
 
 process.stdout.write(

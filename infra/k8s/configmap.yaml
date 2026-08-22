@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: faqchatbot-config
+  namespace: faqchatbot
+data:
+  NODE_ENV: "production"
+  API_PORT: "3000"
+  API_PUBLIC_URL: "https://api.faqchatbot.example.com"
+  S3_ENDPOINT: "http://minio.faqchatbot.svc.cluster.local:9000"
+  S3_REGION: "us-east-1"
+  S3_BUCKET: "faqchatbot"

@@ -1,3 +1,4 @@
+import { ADMIN_STORAGE_KEYS } from "@faqchatbot/testing";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
@@ -19,9 +20,9 @@ describe("App", () => {
   });
 
   it("shows the dashboard home for an authenticated admin", async () => {
-    localStorage.setItem("faqchatbot_admin_access_token", "token-1");
+    localStorage.setItem(ADMIN_STORAGE_KEYS.access, "token-1");
     localStorage.setItem(
-      "faqchatbot_admin_user",
+      ADMIN_STORAGE_KEYS.user,
       JSON.stringify({ id: "u1", email: "admin@acme.com", tenantId: "t1" }),
     );
     vi.stubGlobal(

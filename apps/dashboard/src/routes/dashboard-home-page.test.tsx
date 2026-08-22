@@ -1,3 +1,4 @@
+import { ADMIN_STORAGE_KEYS } from "@faqchatbot/testing";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../lib/auth-context.js";
@@ -5,9 +6,9 @@ import { DashboardHomePage } from "./dashboard-home-page.js";
 
 describe("DashboardHomePage", () => {
   beforeEach(() => {
-    localStorage.setItem("faqchatbot_admin_access_token", "token-1");
+    localStorage.setItem(ADMIN_STORAGE_KEYS.access, "token-1");
     localStorage.setItem(
-      "faqchatbot_admin_user",
+      ADMIN_STORAGE_KEYS.user,
       JSON.stringify({ id: "u1", email: "a@b.com", tenantId: "t1" }),
     );
   });

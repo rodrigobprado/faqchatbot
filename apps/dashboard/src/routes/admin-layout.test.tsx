@@ -1,3 +1,4 @@
+import { ADMIN_STORAGE_KEYS } from "@faqchatbot/testing";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -19,9 +20,9 @@ const renderLayout = () =>
 
 describe("AdminLayout", () => {
   beforeEach(() => {
-    localStorage.setItem("faqchatbot_admin_access_token", "token-1");
+    localStorage.setItem(ADMIN_STORAGE_KEYS.access, "token-1");
     localStorage.setItem(
-      "faqchatbot_admin_user",
+      ADMIN_STORAGE_KEYS.user,
       JSON.stringify({ id: "u1", email: "admin@acme.com", tenantId: "t1" }),
     );
   });
@@ -39,6 +40,6 @@ describe("AdminLayout", () => {
 
     screen.getByRole("button", { name: "Sair" }).click();
 
-    expect(localStorage.getItem("faqchatbot_admin_access_token")).toBeNull();
+    expect(localStorage.getItem(ADMIN_STORAGE_KEYS.access)).toBeNull();
   });
 });

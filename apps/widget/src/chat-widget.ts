@@ -1,8 +1,12 @@
 import { LitElement, css, html } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
+import type { ChatMessage, ChatStreamEvent, MessageContent } from "@faqchatbot/contracts";
 import { collectPageContext } from "./page-context.js";
+import { fetchChatHistory, sendChatMessage } from "./chat-client.js";
+import { openChatStream } from "./chat-stream-client.js";
 import { startWidgetSession } from "./session-client.js";
 import { loadStoredSessionIds, saveStoredSessionIds } from "./session-storage.js";
+import { describeMessageContent } from "./message-display.js";
 
 export type ChatWidgetIdentifyPayload = Readonly<{
   id?: string;
@@ -12,9 +16,16 @@ export type ChatWidgetIdentifyPayload = Readonly<{
 
 type WidgetTheme = "light" | "dark" | "auto";
 
+type WidgetChatEntry = Readonly<{
+  id: string;
+  role: "user" | "assistant" | "system";
+  text: string;
+}>;
+
 const DEFAULT_INITIAL_MESSAGE = "Ola! Como posso ajudar?";
 const DEFAULT_PLACEHOLDER = "Digite sua mensagem";
 const DEFAULT_PRIMARY_COLOR = "#2563eb";
+const GENERIC_ERROR_MESSAGE = "Nao foi possivel enviar sua mensagem agora.";
 
 @customElement("faq-chat-widget")
 export class FaqChatWidgetElement extends LitElement {
@@ -36,7 +47,18 @@ export class FaqChatWidgetElement extends LitElement {
   @state()
   private placeholder = DEFAULT_PLACEHOLDER;
 
+  @state()
+  private entries: WidgetChatEntry[] = [];
+
+  @state()
+  private isTyping = false;
+
+  @state()
+  private streamingText = "";
+
   private accessToken: string | null = null;
+  private conversationId: string | null = null;
+  private streamAbortController: AbortController | null = null;
 
   @query(".launcher")
   private launcherButton?: HTMLButtonElement;
@@ -100,6 +122,33 @@ export class FaqChatWidgetElement extends LitElement {
       overflow: auto;
       font-size: 14px;
       line-height: 1.5;
+    }
+
+    .msg {
+      margin: 0 0 10px;
+      max-width: 85%;
+      padding: 8px 12px;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: rgb(148 163 184 / 18%);
+    }
+
+    .msg--user {
+      margin-left: auto;
+      background: var(--faq-primary-color, #2563eb);
+      color: #ffffff;
+    }
+
+    .typing::after {
+      content: "...";
+      animation: faq-typing 1s steps(3, end) infinite;
+    }
+
+    @keyframes faq-typing {
+      50% {
+        opacity: 0.4;
+      }
     }
 
     form {
@@ -182,6 +231,8 @@ export class FaqChatWidgetElement extends LitElement {
         composed: true
       }),
     );
+
+    void this.deliverMessage(normalizedMessage);
   }
 
   identify(payload: ChatWidgetIdentifyPayload) {
@@ -204,6 +255,12 @@ export class FaqChatWidgetElement extends LitElement {
   override connectedCallback() {
     super.connectedCallback();
     void this.connect();
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback();
+    this.streamAbortController?.abort();
+    this.streamAbortController = null;
   }
 
   async connect(): Promise<void> {
@@ -229,10 +286,14 @@ export class FaqChatWidgetElement extends LitElement {
       });
 
       this.accessToken = result.accessToken;
-      this.initialMessage = result.config.initialMessage;
-      this.placeholder = result.config.placeholder;
+      this.conversationId = result.conversationId;
+      this.initialMessage = result.config.initialMessage || DEFAULT_INITIAL_MESSAGE;
+      this.placeholder = result.config.placeholder || DEFAULT_PLACEHOLDER;
       this.applyTheme(result.config.theme, result.config.primaryColor);
       this.isSessionConnected = true;
+
+      await this.loadHistory(result.accessToken, result.conversationId);
+      this.openStream(result.accessToken, result.conversationId);
 
       this.dispatchEvent(new CustomEvent("chat-widget:connect", { bubbles: true, composed: true }));
       this.dispatchEvent(
@@ -259,11 +320,119 @@ export class FaqChatWidgetElement extends LitElement {
     this.style.colorScheme = theme === "auto" ? "light dark" : theme;
   }
 
+  private async loadHistory(accessToken: string, conversationId: string): Promise<void> {
+    try {
+      const messages = await fetchChatHistory(this.apiUrl, accessToken, conversationId);
+      this.entries = messages.map((message, index) => this.toEntry(message, index));
+    } catch {
+      this.entries = [];
+    }
+  }
+
+  private openStream(accessToken: string, conversationId: string): void {
+    this.streamAbortController?.abort();
+    const controller = new AbortController();
+    this.streamAbortController = controller;
+
+    void openChatStream({
+      apiUrl: this.apiUrl,
+      accessToken,
+      conversationId,
+      signal: controller.signal,
+      onEvent: (event) => this.handleStreamEvent(event)
+    }).catch(() => undefined);
+  }
+
+  private handleStreamEvent(event: ChatStreamEvent): void {
+    switch (event.type) {
+      case "typing":
+        this.isTyping = true;
+        break;
+      case "token":
+        this.isTyping = false;
+        this.streamingText = `${this.streamingText}${this.streamingText ? " " : ""}${event.token}`;
+        break;
+      case "message":
+        this.isTyping = false;
+        this.streamingText = "";
+        this.entries = [
+          ...this.entries,
+          {
+            id: event.message.id ?? `assistant-${this.entries.length}`,
+            role: "assistant",
+            text: describeMessageContent(event.message.content as MessageContent)
+          }
+        ];
+        break;
+      case "error":
+        this.isTyping = false;
+        break;
+    }
+  }
+
+  private toEntry(message: ChatMessage, index: number): WidgetChatEntry {
+    if (message.role === "user") {
+      return { id: message.id ?? `user-${index}`, role: "user", text: describeMessageContent(message.content as MessageContent) };
+    }
+
+    return {
+      id: message.id ?? `assistant-${index}`,
+      role: "assistant",
+      text: describeMessageContent(message.content as MessageContent)
+    };
+  }
+
   private handleSubmit(event: SubmitEvent) {
     event.preventDefault();
     this.send(this.draft);
     this.draft = "";
     (event.currentTarget as HTMLFormElement).reset();
+  }
+
+  private appendEntry(entry: WidgetChatEntry): void {
+    this.entries = [...this.entries, entry];
+  }
+
+  private async deliverMessage(text: string): Promise<void> {
+    if (!this.isSessionConnected || !this.accessToken || !this.conversationId) {
+      return;
+    }
+
+    this.appendEntry({ id: `local-${Date.now()}`, role: "user", text });
+    this.isTyping = true;
+
+    try {
+      await sendChatMessage(this.apiUrl, this.accessToken, this.conversationId, text);
+    } catch (error) {
+      this.isTyping = false;
+      this.appendEntry({ id: `error-${Date.now()}`, role: "system", text: GENERIC_ERROR_MESSAGE });
+      this.dispatchEvent(
+        new CustomEvent("chat-widget:error", {
+          detail: { message: error instanceof Error ? error.message : "Unknown error" },
+          bubbles: true,
+          composed: true
+        }),
+      );
+    }
+  }
+
+  private scrollToBottom(): void {
+    const container = this.renderRoot.querySelector(".messages");
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }
+
+  protected override updated(changedProperties: Map<string, unknown>): void {
+    super.updated(changedProperties);
+    if (
+      changedProperties.has("entries") ||
+      changedProperties.has("streamingText") ||
+      changedProperties.has("isTyping") ||
+      changedProperties.has("isOpen")
+    ) {
+      this.scrollToBottom();
+    }
   }
 
   override render() {
@@ -276,7 +445,17 @@ export class FaqChatWidgetElement extends LitElement {
                 x
               </button>
             </header>
-            <main class="messages" aria-live="polite">${this.initialMessage}</main>
+            <div class="messages" role="log" aria-live="polite">
+              <p class="msg msg--assistant">${this.initialMessage}</p>
+              ${this.entries.map(
+                (entry) =>
+                  entry.text
+                    ? html`<p class="msg msg--${entry.role}" data-entry-id=${entry.id}>${entry.text}</p>`
+                    : null,
+              )}
+              ${this.streamingText ? html`<p class="msg msg--assistant">${this.streamingText}</p>` : null}
+              ${this.isTyping ? html`<p class="msg typing">Digitando</p>` : null}
+            </div>
             <form @submit=${this.handleSubmit}>
               <input
                 aria-label="Mensagem"

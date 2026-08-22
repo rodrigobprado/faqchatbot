@@ -1,4 +1,5 @@
 import type { WidgetSessionStartRequest, WidgetSessionStartResponse } from "@faqchatbot/contracts";
+import { unwrapEnvelope } from "./api-response.js";
 
 export const startWidgetSession = async (
   apiUrl: string,
@@ -14,5 +15,5 @@ export const startWidgetSession = async (
     throw new Error(`Failed to start widget session (status ${response.status})`);
   }
 
-  return (await response.json()) as WidgetSessionStartResponse;
+  return unwrapEnvelope<WidgetSessionStartResponse>(await response.json());
 };

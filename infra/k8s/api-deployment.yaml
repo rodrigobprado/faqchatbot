@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: faqchatbot-api
+  namespace: faqchatbot
+  labels:
+    app: faqchatbot-api
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: faqchatbot-api
+  template:
+    metadata:
+      labels:
+        app: faqchatbot-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/rigbie/faqchatbot-api:latest
+          ports:
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: faqchatbot-config
+            - secretRef:
+                name: faqchatbot-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: faqchatbot-api
+  namespace: faqchatbot
+spec:
+  selector:
+    app: faqchatbot-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

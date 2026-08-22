@@ -36,10 +36,10 @@ afterEach(() => {
 });
 
 describe("startWidgetSession", () => {
-  it("posts the request to the API and returns the parsed response", async () => {
+  it("posts the request to the API and returns the unwrapped response", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(response)
+      json: () => Promise.resolve({ data: response })
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -50,6 +50,17 @@ describe("startWidgetSession", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request)
     });
+    expect(result).toEqual(response);
+  });
+
+  it("accepts payloads without the envelope", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(response) }),
+    );
+
+    const result = await startWidgetSession("https://api.example.com", request);
+
     expect(result).toEqual(response);
   });
 

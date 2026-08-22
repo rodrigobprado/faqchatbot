@@ -5,6 +5,7 @@ import { AdminLayout } from "./routes/admin-layout.js";
 import { DashboardHomePage } from "./routes/dashboard-home-page.js";
 import { LoginPage } from "./routes/login-page.js";
 import { PlansPage } from "./routes/plans/plans-page.js";
+import { SystemLogsPage } from "./routes/system-logs-page.js";
 import { TenantAnalyticsPage } from "./routes/tenants/tenant-analytics-page.js";
 import { TenantAuditLogsPage } from "./routes/tenants/tenant-audit-logs-page.js";
 import { TenantConversationsPage } from "./routes/tenants/tenant-conversations-page.js";
@@ -33,6 +34,7 @@ export const App = () => (
           <Route path="/tenants/:id/sessions" element={<TenantSessionsPage />} />
           <Route path="/tenants/:id/audit-logs" element={<TenantAuditLogsPage />} />
           <Route path="/plans" element={<PlansPage />} />
+          <Route path="/logs" element={<SystemLogsPage />} />
           <Route path="/tenants/:id/users" element={<TenantUsersPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

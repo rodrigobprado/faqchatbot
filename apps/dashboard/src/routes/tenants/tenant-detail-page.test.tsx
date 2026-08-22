@@ -1,3 +1,4 @@
+import { ADMIN_STORAGE_KEYS } from "@faqchatbot/testing";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -5,9 +6,9 @@ import { AuthProvider } from "../../lib/auth-context.js";
 import { TenantDetailPage } from "./tenant-detail-page.js";
 
 const setSession = () => {
-  localStorage.setItem("faqchatbot_admin_access_token", "token-1");
+  localStorage.setItem(ADMIN_STORAGE_KEYS.access, "token-1");
   localStorage.setItem(
-    "faqchatbot_admin_user",
+    ADMIN_STORAGE_KEYS.user,
     JSON.stringify({ id: "u1", email: "admin@acme.com", tenantId: "t1" }),
   );
 };

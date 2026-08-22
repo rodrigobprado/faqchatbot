@@ -14,6 +14,7 @@ import { createConversationsRepository } from "../../db/repositories/conversatio
 import { createPermissionsRepository } from "../../db/repositories/permissions.repository.js";
 import { createRolePermissionsRepository } from "../../db/repositories/role-permissions.repository.js";
 import { createRolesRepository } from "../../db/repositories/roles.repository.js";
+import { createSystemLogsRepository } from "../../db/repositories/system-logs.repository.js";
 import { createUserRolesRepository } from "../../db/repositories/user-roles.repository.js";
 import { createUsersRepository } from "../../db/repositories/users.repository.js";
 import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
@@ -167,6 +168,15 @@ export class TenantsService {
   async listAuditLogs(tenantId: string, page: { limit?: number; offset?: number }) {
     await this.get(tenantId);
     return createAuditLogsRepository(this.db).listByTenantId(tenantId, page);
+  }
+
+  listSystemLogs(filter: {
+    tenantId?: string;
+    level?: "debug" | "info" | "warn" | "error";
+    limit?: number;
+    offset?: number;
+  }) {
+    return createSystemLogsRepository(this.db).list(filter);
   }
 
   async listUsers(tenantId: string) {

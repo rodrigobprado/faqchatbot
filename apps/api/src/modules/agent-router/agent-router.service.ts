@@ -9,7 +9,14 @@ import { AnalyticsService } from "../analytics/analytics.service.js";
 import { DATABASE } from "../core/core.module.js";
 import { AgentRoutingError, type AgentAdapter, type AgentRequest, type AgentResponse } from "./agent-adapter.js";
 import { CircuitBreaker } from "./circuit-breaker.js";
+import { CrewAiAdapter } from "./crewai.adapter.js";
+import { CustomAgentAdapter } from "./custom.adapter.js";
+import { DifyAdapter } from "./dify.adapter.js";
+import { FlowiseAdapter } from "./flowise.adapter.js";
+import { LangGraphAdapter } from "./langgraph.adapter.js";
+import { McpServerAdapter } from "./mcp.adapter.js";
 import { N8nAgentAdapter } from "./n8n-agent.adapter.js";
+import { OpenAiResponsesAdapter } from "./openai-responses.adapter.js";
 
 const BREAKER_FAILURE_THRESHOLD = 3;
 const BREAKER_COOLDOWN_MS = 30_000;
@@ -37,9 +44,23 @@ const parseRetryPolicy = (raw: unknown): RetryPolicy => {
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+const buildAdapters = (): ReadonlyMap<AgentProvider, AgentAdapter> => {
+  const adapters: [AgentProvider, AgentAdapter][] = [
+    ["n8n", new N8nAgentAdapter()],
+    ["openai_responses", new OpenAiResponsesAdapter()],
+    ["langgraph", new LangGraphAdapter()],
+    ["flowise", new FlowiseAdapter()],
+    ["dify", new DifyAdapter()],
+    ["crewai", new CrewAiAdapter()],
+    ["mcp", new McpServerAdapter()],
+    ["custom", new CustomAgentAdapter()]
+  ];
+  return new Map(adapters);
+};
+
 @Injectable()
 export class AgentRouterService {
-  private readonly adapters: ReadonlyMap<AgentProvider, AgentAdapter>;
+  private readonly adapters: ReadonlyMap<AgentProvider, AgentAdapter> = buildAdapters();
   private readonly breaker = new CircuitBreaker({
     failureThreshold: BREAKER_FAILURE_THRESHOLD,
     cooldownMs: BREAKER_COOLDOWN_MS
@@ -49,9 +70,7 @@ export class AgentRouterService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly analytics: AnalyticsService,
-  ) {
-    this.adapters = new Map<AgentProvider, AgentAdapter>([["n8n", new N8nAgentAdapter()]]);
-  }
+  ) {}
 
   async route(request: AgentRequest): Promise<AgentResponse> {
     const config = await createTenantAgentConfigsRepository(this.db).findByTenantId(request.tenantId);

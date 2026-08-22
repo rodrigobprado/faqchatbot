@@ -1,0 +1,54 @@
+name: Publish widget to CDN
+
+on:
+  push:
+    tags:
+      - "widget-v*"
+  workflow_dispatch:
+
+env:
+  S3_ENDPOINT: ${{ vars.WIDGET_CDN_ENDPOINT }}
+  S3_BUCKET: ${{ vars.WIDGET_CDN_BUCKET }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build widget
+        run: pnpm --filter @faqchatbot/widget build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.WIDGET_CDN_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.WIDGET_CDN_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.WIDGET_CDN_REGION || 'us-east-1' }}
+
+      - name: Upload hashed bundle and manifest
+        run: |
+          aws s3 cp apps/widget/dist/ "s3://$S3_BUCKET/widget/" \
+            --recursive \
+            --exclude "*" \
+            --include "widget.*.js" \
+            --include "manifest.json" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --endpoint-url "$S3_ENDPOINT"
+
+      - name: Invalidate CDN paths
+        if: ${{ vars.WIDGET_CDN_DISTRIBUTION_ID != '' }}
+        run: echo "Invalidate distribution ${{ vars.WIDGET_CDN_DISTRIBUTION_ID }} path /widget/manifest.json in your provider pipeline."

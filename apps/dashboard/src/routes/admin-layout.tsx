@@ -4,7 +4,8 @@ import { useAuth } from "../lib/auth-context.js";
 export const NAV_ITEMS: readonly { to: string; label: string }[] = [
   { to: "/", label: "Dashboard" },
   { to: "/tenants", label: "Clientes" },
-  { to: "/plans", label: "Planos" }
+  { to: "/plans", label: "Planos" },
+  { to: "/logs", label: "Logs" }
 ];
 
 export const AdminLayout = () => {

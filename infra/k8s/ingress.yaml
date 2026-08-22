@@ -1,0 +1,48 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: faqchatbot
+  namespace: faqchatbot
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-cache: "off"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.faqchatbot.example.com
+        - app.faqchatbot.example.com
+        - cdn.faqchatbot.example.com
+      secretName: faqchatbot-tls
+  rules:
+    - host: api.faqchatbot.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: faqchatbot-api
+                port:
+                  number: 80
+    - host: app.faqchatbot.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: faqchatbot-dashboard
+                port:
+                  number: 80
+    - host: cdn.faqchatbot.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: faqchatbot-widget
+                port:
+                  number: 80

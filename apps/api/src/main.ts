@@ -3,15 +3,21 @@ import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
+import multipart from "@fastify/multipart";
+import { corsExtraOrigins, type PlatformEnvironment } from "@faqchatbot/config";
 import { createLogger } from "@faqchatbot/logger";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import type { RawRequestDefaultExpression, RawServerDefault } from "fastify";
+import { buildCorsOriginValidator } from "./common/dynamic-origin.js";
 import { HttpExceptionFilter } from "./common/http-exception.filter.js";
 import { ResponseEnvelopeInterceptor } from "./common/response-envelope.interceptor.js";
+import type { Database } from "./db/client.js";
+import { createTenantDomainsRepository } from "./db/repositories/tenant-domains.repository.js";
 import { AppModule } from "./modules/app.module.js";
+import { DATABASE, ENV } from "./modules/core/core.module.js";
 
 const bootstrap = async () => {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -30,8 +36,21 @@ const bootstrap = async () => {
   });
 
   await app.register(helmet);
+  await app.register(multipart, {
+    limits: {
+      fileSize: 5 * 1024 * 1024,
+      files: 1
+    }
+  });
+
+  const env = app.get<PlatformEnvironment>(ENV as never);
+  const db = app.get<Database>(DATABASE as never);
+
   await app.register(cors, {
-    origin: true,
+    origin: buildCorsOriginValidator(
+      () => createTenantDomainsRepository(db).listActiveTenantHostnames(),
+      corsExtraOrigins(env),
+    ),
     credentials: true
   });
 
@@ -60,4 +79,3 @@ const bootstrap = async () => {
 };
 
 void bootstrap();
-

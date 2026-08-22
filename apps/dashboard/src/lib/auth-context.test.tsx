@@ -1,3 +1,4 @@
+import { ADMIN_STORAGE_KEYS } from "@faqchatbot/testing";
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "./auth-context.js";
@@ -52,13 +53,13 @@ describe("AuthProvider", () => {
 
     expect(screen.getByTestId("status").textContent).toBe("in");
     expect(screen.getByTestId("email").textContent).toBe("admin@acme.com");
-    expect(localStorage.getItem("faqchatbot_admin_access_token")).toBe("access-1");
+    expect(localStorage.getItem(ADMIN_STORAGE_KEYS.access)).toBe("access-1");
   });
 
   it("restores the session from localStorage on mount", () => {
-    localStorage.setItem("faqchatbot_admin_access_token", "access-2");
+    localStorage.setItem(ADMIN_STORAGE_KEYS.access, "access-2");
     localStorage.setItem(
-      "faqchatbot_admin_user",
+      ADMIN_STORAGE_KEYS.user,
       JSON.stringify({ id: "u2", email: "b@acme.com", tenantId: "t2" }),
     );
 
@@ -73,9 +74,9 @@ describe("AuthProvider", () => {
   });
 
   it("clears the session on logout", async () => {
-    localStorage.setItem("faqchatbot_admin_access_token", "access-3");
+    localStorage.setItem(ADMIN_STORAGE_KEYS.access, "access-3");
     localStorage.setItem(
-      "faqchatbot_admin_user",
+      ADMIN_STORAGE_KEYS.user,
       JSON.stringify({ id: "u3", email: "c@acme.com", tenantId: "t3" }),
     );
 
@@ -89,7 +90,7 @@ describe("AuthProvider", () => {
     });
 
     expect(screen.getByTestId("status").textContent).toBe("out");
-    expect(localStorage.getItem("faqchatbot_admin_access_token")).toBeNull();
+    expect(localStorage.getItem(ADMIN_STORAGE_KEYS.access)).toBeNull();
   });
 
   it("throws when useAuth is used outside the provider", () => {

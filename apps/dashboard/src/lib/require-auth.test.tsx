@@ -1,3 +1,4 @@
+import { ADMIN_STORAGE_KEYS } from "@faqchatbot/testing";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -6,9 +7,9 @@ import { RequireAuth } from "./require-auth.js";
 
 const renderWithRouter = (initialToken: string | null) => {
   if (initialToken) {
-    localStorage.setItem("faqchatbot_admin_access_token", initialToken);
+    localStorage.setItem(ADMIN_STORAGE_KEYS.access, initialToken);
     localStorage.setItem(
-      "faqchatbot_admin_user",
+      ADMIN_STORAGE_KEYS.user,
       JSON.stringify({ id: "u1", email: "a@b.com", tenantId: "t1" }),
     );
   }
