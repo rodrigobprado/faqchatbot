@@ -124,6 +124,25 @@ export const chatMessageSchema = baseMessageSchema.extend({
   content: messageContentSchema
 });
 
+export const chatMessageCreateRequestSchema = z.object({
+  content: messageContentSchema,
+  metadata: z.record(z.string(), z.unknown()).default({})
+});
+
+export const chatMessageExchangeResponseSchema = z.object({
+  conversationId: z.string().uuid(),
+  userMessage: chatMessageSchema,
+  assistantMessage: chatMessageSchema
+});
+
+export const chatMessageHistoryResponseSchema = z.object({
+  conversationId: z.string().uuid(),
+  messages: z.array(chatMessageSchema)
+});
+
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 export type MessageContent = z.infer<typeof messageContentSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
+export type ChatMessageCreateRequest = z.infer<typeof chatMessageCreateRequestSchema>;
+export type ChatMessageExchangeResponse = z.infer<typeof chatMessageExchangeResponseSchema>;
+export type ChatMessageHistoryResponse = z.infer<typeof chatMessageHistoryResponseSchema>;

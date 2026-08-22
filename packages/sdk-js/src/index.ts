@@ -22,13 +22,19 @@ export type LoadChatWidgetOptions = Readonly<{
   windowRef?: Window & { ChatWidget?: ChatWidgetPublicApi };
 }>;
 
+export type WidgetScriptOptions = Readonly<{
+  src: string;
+  agentId: string;
+  async?: boolean;
+  nonce?: string;
+  attributes?: Readonly<Record<string, string>>;
+}>;
+
 declare global {
   interface Window {
     ChatWidget?: ChatWidgetPublicApi;
   }
 }
-
-export const widgetScriptUrl = (apiUrl: string): string => new URL("/widget.js", apiUrl).toString();
 
 type WindowWithWidget = Window & { ChatWidget?: ChatWidgetPublicApi };
 
@@ -37,6 +43,39 @@ const resolveWindow = (options: LoadChatWidgetOptions): WindowWithWidget =>
 
 const resolveDocument = (options: LoadChatWidgetOptions): Document =>
   options.documentRef ?? document;
+
+export const widgetScriptUrl = (apiUrl: string): string => new URL("/widget.js", apiUrl).toString();
+
+const escapeAttribute = (value: string): string =>
+  value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+export const buildWidgetScriptUrl = (options: Pick<WidgetScriptOptions, "src" | "agentId">): string => {
+  const url = new URL(options.src);
+  url.searchParams.set("data-agent", options.agentId);
+  return url.toString();
+};
+
+export const buildWidgetSnippet = (options: WidgetScriptOptions): string => {
+  const url = buildWidgetScriptUrl(options);
+  const attributes = [
+    `src="${escapeAttribute(url)}"`,
+    `data-agent="${escapeAttribute(options.agentId)}"`
+  ];
+
+  if (options.async !== false) {
+    attributes.push("async");
+  }
+
+  if (options.nonce) {
+    attributes.push(`nonce="${escapeAttribute(options.nonce)}"`);
+  }
+
+  for (const [name, value] of Object.entries(options.attributes ?? {})) {
+    attributes.push(`${escapeAttribute(name)}="${escapeAttribute(value)}"`);
+  }
+
+  return `<script ${attributes.join(" ")}></script>`;
+};
 
 export const loadChatWidget = async (options: LoadChatWidgetOptions): Promise<ChatWidgetPublicApi> => {
   const windowRef = resolveWindow(options);

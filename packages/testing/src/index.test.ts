@@ -3,6 +3,9 @@ import {
   ADMIN_STORAGE_KEYS,
   buildChatMessage,
   buildWidgetSessionResponse,
+  createDeferred,
+  createTestId,
+  flushPromises,
   WIDGET_SESSION_IDS
 } from "./index.js";
 
@@ -54,5 +57,42 @@ describe("ADMIN_STORAGE_KEYS", () => {
     expect(ADMIN_STORAGE_KEYS.access).toBe("faqchatbot_admin_access_token");
     expect(ADMIN_STORAGE_KEYS.refresh).toBe("faqchatbot_admin_refresh_token");
     expect(ADMIN_STORAGE_KEYS.user).toBe("faqchatbot_admin_user");
+  });
+});
+
+describe("createDeferred", () => {
+  it("resolves the deferred promise from outside", async () => {
+    const deferred = createDeferred<number>();
+
+    queueMicrotask(() => deferred.resolve(42));
+
+    await expect(deferred.promise).resolves.toBe(42);
+  });
+
+  it("rejects the deferred promise from outside", async () => {
+    const deferred = createDeferred<number>();
+
+    queueMicrotask(() => deferred.reject(new Error("boom")));
+
+    await expect(deferred.promise).rejects.toThrow("boom");
+  });
+});
+
+describe("flushPromises", () => {
+  it("flushes queued microtasks", async () => {
+    let called = false;
+    queueMicrotask(() => {
+      called = true;
+    });
+
+    await flushPromises();
+
+    expect(called).toBe(true);
+  });
+});
+
+describe("createTestId", () => {
+  it("prefixes generated ids", () => {
+    expect(createTestId("row")).toMatch(/^row-[0-9a-f-]{36}$/);
   });
 });

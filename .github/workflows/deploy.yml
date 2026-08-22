@@ -1,0 +1,248 @@
+name: CD faqchatbot
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - develop
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: [self-hosted, linux]
+    env:
+      BASE_DIR: /wwwroot/sites/faqchatbot
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+          run_install: false
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: habilita corepack
+        run: corepack enable
+
+      - name: carrega database para validacao
+        shell: bash
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            main)
+              branch=main
+              ;;
+            staging)
+              branch=staging
+              ;;
+            develop)
+              branch=develop
+              ;;
+            *)
+              branch="${GITHUB_REF_NAME}"
+              ;;
+          esac
+
+          BRANCH_DIR="${BASE_DIR}/${branch}"
+          if [ ! -f "${BRANCH_DIR}/shared/.env" ]; then
+            echo "::error::${BRANCH_DIR}/shared/.env nao encontrado"
+            exit 1
+          fi
+
+          set -a
+          source "${BRANCH_DIR}/shared/.env"
+          set +a
+
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::DATABASE_URL nao definido em ${BRANCH_DIR}/shared/.env"
+            exit 1
+          fi
+
+          echo "DATABASE_URL=${DATABASE_URL}" >> "$GITHUB_ENV"
+
+      - name: instala dependencias
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: valida qualidade
+        run: |
+          corepack pnpm lint
+          corepack pnpm typecheck
+          corepack pnpm test
+          corepack pnpm build
+
+      - name: resolve ambiente
+        id: env
+        shell: bash
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            main)
+              echo "branch=main" >> "$GITHUB_OUTPUT"
+              echo "host=faqchatbot.rigbie.com.br" >> "$GITHUB_OUTPUT"
+              echo "api_port=3010" >> "$GITHUB_OUTPUT"
+              ;;
+            staging)
+              echo "branch=staging" >> "$GITHUB_OUTPUT"
+              echo "host=faqchatbot-staging.rigbie.com.br" >> "$GITHUB_OUTPUT"
+              echo "api_port=3011" >> "$GITHUB_OUTPUT"
+              ;;
+            develop)
+              echo "branch=develop" >> "$GITHUB_OUTPUT"
+              echo "host=faqchatbot-develop.rigbie.com.br" >> "$GITHUB_OUTPUT"
+              echo "api_port=3012" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "branch=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+              echo "host=${GITHUB_REF_NAME}.rigbie.com.br" >> "$GITHUB_OUTPUT"
+              echo "api_port=3010" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: prepara shared
+        shell: bash
+        run: |
+          BRANCH_DIR="${BASE_DIR}/${{ steps.env.outputs.branch }}"
+          SEED_PASSWORD="$(openssl rand -hex 16)"
+          mkdir -p "${BRANCH_DIR}/shared/log" "${BRANCH_DIR}/releases"
+
+          if [ ! -f "${BRANCH_DIR}/shared/.env" ]; then
+            cp .env.example "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if grep -q '^APP_BRANCH=' "${BRANCH_DIR}/shared/.env"; then
+            sed -i "s#^APP_BRANCH=.*#APP_BRANCH=${{ steps.env.outputs.branch }}#" "${BRANCH_DIR}/shared/.env"
+          else
+            printf 'APP_BRANCH=%s\n' "${{ steps.env.outputs.branch }}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if grep -q '^API_PORT=' "${BRANCH_DIR}/shared/.env"; then
+            sed -i "s#^API_PORT=.*#API_PORT=${{ steps.env.outputs.api_port }}#" "${BRANCH_DIR}/shared/.env"
+          else
+            printf 'API_PORT=%s\n' "${{ steps.env.outputs.api_port }}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if grep -q '^API_PUBLIC_URL=' "${BRANCH_DIR}/shared/.env"; then
+            sed -i "s#^API_PUBLIC_URL=.*#API_PUBLIC_URL=https://${{ steps.env.outputs.host }}#" "${BRANCH_DIR}/shared/.env"
+          else
+            printf 'API_PUBLIC_URL=https://%s\n' "${{ steps.env.outputs.host }}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if grep -q '^JWT_ADMIN_SECRET=' "${BRANCH_DIR}/shared/.env"; then
+            if grep -Eq '^JWT_ADMIN_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+              if grep -q '^JWT_ACCESS_SECRET=' "${BRANCH_DIR}/shared/.env" && ! grep -Eq '^JWT_ACCESS_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+                admin_secret="$(grep '^JWT_ACCESS_SECRET=' "${BRANCH_DIR}/shared/.env" | cut -d= -f2-)"
+              else
+                admin_secret="$(openssl rand -hex 16)"
+              fi
+              sed -i "s#^JWT_ADMIN_SECRET=.*#JWT_ADMIN_SECRET=${admin_secret}#" "${BRANCH_DIR}/shared/.env"
+            fi
+          else
+            if grep -q '^JWT_ACCESS_SECRET=' "${BRANCH_DIR}/shared/.env" && ! grep -Eq '^JWT_ACCESS_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+              admin_secret="$(grep '^JWT_ACCESS_SECRET=' "${BRANCH_DIR}/shared/.env" | cut -d= -f2-)"
+            else
+              admin_secret="$(openssl rand -hex 16)"
+            fi
+            printf 'JWT_ADMIN_SECRET=%s\n' "${admin_secret}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if grep -q '^JWT_ADMIN_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env"; then
+            if grep -Eq '^JWT_ADMIN_REFRESH_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+              if grep -q '^JWT_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env" && ! grep -Eq '^JWT_REFRESH_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+                admin_refresh_secret="$(grep '^JWT_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env" | cut -d= -f2-)"
+              else
+                admin_refresh_secret="$(openssl rand -hex 16)"
+              fi
+              sed -i "s#^JWT_ADMIN_REFRESH_SECRET=.*#JWT_ADMIN_REFRESH_SECRET=${admin_refresh_secret}#" "${BRANCH_DIR}/shared/.env"
+            fi
+          else
+            if grep -q '^JWT_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env" && ! grep -Eq '^JWT_REFRESH_SECRET=$' "${BRANCH_DIR}/shared/.env"; then
+              admin_refresh_secret="$(grep '^JWT_REFRESH_SECRET=' "${BRANCH_DIR}/shared/.env" | cut -d= -f2-)"
+            else
+              admin_refresh_secret="$(openssl rand -hex 16)"
+            fi
+            printf 'JWT_ADMIN_REFRESH_SECRET=%s\n' "${admin_refresh_secret}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if grep -q '^SEED_TENANT_PUBLIC_ID=' "${BRANCH_DIR}/shared/.env"; then
+            sed -i "s#^SEED_TENANT_PUBLIC_ID=.*#SEED_TENANT_PUBLIC_ID=demo-${{ steps.env.outputs.branch }}#" "${BRANCH_DIR}/shared/.env"
+          else
+            printf 'SEED_TENANT_PUBLIC_ID=demo-%s\n' "${{ steps.env.outputs.branch }}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if ! grep -q '^SEED_TENANT_NAME=' "${BRANCH_DIR}/shared/.env"; then
+            printf 'SEED_TENANT_NAME="Demo Tenant %s"\n' "${{ steps.env.outputs.branch }}" >> "${BRANCH_DIR}/shared/.env"
+          else
+            sed -i "s#^SEED_TENANT_NAME=.*#SEED_TENANT_NAME=\"Demo Tenant ${{ steps.env.outputs.branch }}\"#" "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if grep -q '^SEED_ADMIN_EMAIL=' "${BRANCH_DIR}/shared/.env"; then
+            sed -i "s#^SEED_ADMIN_EMAIL=.*#SEED_ADMIN_EMAIL=admin+${{ steps.env.outputs.branch }}@faqchatbot.local#" "${BRANCH_DIR}/shared/.env"
+          else
+            printf 'SEED_ADMIN_EMAIL=admin+%s@faqchatbot.local\n' "${{ steps.env.outputs.branch }}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
+          if grep -q '^SEED_ADMIN_PASSWORD=' "${BRANCH_DIR}/shared/.env"; then
+            if grep -Eq '^SEED_ADMIN_PASSWORD=(change-me-now)?$' "${BRANCH_DIR}/shared/.env"; then
+              sed -i "s#^SEED_ADMIN_PASSWORD=.*#SEED_ADMIN_PASSWORD=${SEED_PASSWORD}#" "${BRANCH_DIR}/shared/.env"
+            fi
+          else
+            printf 'SEED_ADMIN_PASSWORD=%s\n' "${SEED_PASSWORD}" >> "${BRANCH_DIR}/shared/.env"
+          fi
+
+      - name: aplica migration e seed
+        shell: bash
+        run: |
+          BRANCH_DIR="${BASE_DIR}/${{ steps.env.outputs.branch }}"
+          set -a
+          source "${BRANCH_DIR}/shared/.env"
+          set +a
+          corepack pnpm --filter @faqchatbot/api db:migrate
+          corepack pnpm --filter @faqchatbot/api db:seed
+
+      - name: publica release
+        shell: bash
+        run: |
+          BRANCH_DIR="${BASE_DIR}/${{ steps.env.outputs.branch }}"
+          RELEASE_DIR="${BRANCH_DIR}/releases/${{ github.run_number }}"
+
+          mkdir -p "${BRANCH_DIR}/releases"
+          sudo rm -Rf "${RELEASE_DIR}"
+          cp -a "${{ github.workspace }}/." "${RELEASE_DIR}/"
+
+          ln -sfn "${BRANCH_DIR}/shared/.env" "${RELEASE_DIR}/.env"
+          ln -sfn "${BRANCH_DIR}/shared/log" "${RELEASE_DIR}/log"
+          ln -sfn "${RELEASE_DIR}" "${BRANCH_DIR}/current"
+
+          sudo chown -R www-data:www-data "${BRANCH_DIR}"
+
+      - name: reinicia serviço
+        shell: bash
+        run: |
+          sudo systemctl restart "faqchatbot@${{ steps.env.outputs.branch }}.service"
+
+      - name: limpa releases antigas
+        shell: bash
+        run: |
+          BRANCH_DIR="${BASE_DIR}/${{ steps.env.outputs.branch }}"
+          cd "${BRANCH_DIR}/releases"
+          ls -1dt */ | tail -n +5 | xargs -r -I{} sudo rm -Rf "{}"
+
+      - name: sonarqube
+        shell: bash
+        env:
+          SONAR_PROJECTKEY: ${{ secrets.SONAR_PROJECTKEY }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey="$SONAR_PROJECTKEY" \
+            -Dsonar.sources=. \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN"

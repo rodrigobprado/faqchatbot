@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { chatMessageSchema } from "./messages.js";
+import {
+  chatMessageCreateRequestSchema,
+  chatMessageExchangeResponseSchema,
+  chatMessageHistoryResponseSchema,
+  chatMessageSchema
+} from "./messages.js";
 
 const conversationId = "00000000-0000-4000-8000-000000000001";
 
@@ -82,5 +87,54 @@ describe("chatMessageSchema", () => {
         }
       }),
     ).toThrow();
+  });
+
+  it("accepts chat message exchange payloads", () => {
+    const response = chatMessageExchangeResponseSchema.parse({
+      conversationId,
+      userMessage: {
+        conversationId,
+        role: "user",
+        content: {
+          type: "text",
+          text: "Ola"
+        }
+      },
+      assistantMessage: {
+        conversationId,
+        role: "assistant",
+        content: {
+          type: "text",
+          text: "Tudo bem"
+        }
+      }
+    });
+
+    expect(response.userMessage.content.type).toBe("text");
+  });
+
+  it("accepts chat message history payloads and request payloads", () => {
+    const history = chatMessageHistoryResponseSchema.parse({
+      conversationId,
+      messages: [
+        {
+          conversationId,
+          role: "user",
+          content: {
+            type: "text",
+            text: "Ola"
+          }
+        }
+      ]
+    });
+    const request = chatMessageCreateRequestSchema.parse({
+      content: {
+        type: "text",
+        text: "Ola"
+      }
+    });
+
+    expect(history.messages).toHaveLength(1);
+    expect(request.content.type).toBe("text");
   });
 });
