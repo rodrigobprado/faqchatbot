@@ -1,26 +1,98 @@
 import { describe, expect, it } from "vitest";
-import { createDeferred, createTestId, flushPromises } from "./index.js";
+import {
+  ADMIN_STORAGE_KEYS,
+  buildChatMessage,
+  buildWidgetSessionResponse,
+  createDeferred,
+  createTestId,
+  flushPromises,
+  WIDGET_SESSION_IDS
+} from "./index.js";
 
-describe("testing package", () => {
-  it("creates a deferred promise", async () => {
-    const deferred = createDeferred<string>();
-    deferred.resolve("ok");
+describe("buildWidgetSessionResponse", () => {
+  it("returns a complete default response", () => {
+    const response = buildWidgetSessionResponse();
 
-    await expect(deferred.promise).resolves.toBe("ok");
+    expect(response.accessToken).toBe("token");
+    expect(response.conversationId).toBe(WIDGET_SESSION_IDS.conversationId);
+    expect(response.config.theme).toBe("auto");
+    expect(response.config.width).toBe(380);
   });
 
-  it("creates a test id with a prefix", () => {
-    expect(createTestId("case")).toMatch(/^case-/);
+  it("applies top-level and nested config overrides", () => {
+    const response = buildWidgetSessionResponse({
+      accessToken: "custom",
+      config: { theme: "dark", primaryColor: "#ff0000" }
+    });
+
+    expect(response.accessToken).toBe("custom");
+    expect(response.config.theme).toBe("dark");
+    expect(response.config.primaryColor).toBe("#ff0000");
+    expect(response.config.placeholder).toBe("Digite sua mensagem");
+  });
+});
+
+describe("buildChatMessage", () => {
+  it("builds a default user text message", () => {
+    const message = buildChatMessage();
+
+    expect(message.role).toBe("user");
+    expect(message.content).toEqual({ type: "text", text: "Ola" });
+    expect(message.conversationId).toBe(WIDGET_SESSION_IDS.conversationId);
   });
 
-  it("flushes microtasks", async () => {
-    let finished = false;
+  it("accepts role and content overrides", () => {
+    const message = buildChatMessage({
+      role: "assistant",
+      content: { type: "markdown", markdown: "**Ola**" }
+    });
+
+    expect(message.role).toBe("assistant");
+    expect(message.content).toEqual({ type: "markdown", markdown: "**Ola**" });
+  });
+});
+
+describe("ADMIN_STORAGE_KEYS", () => {
+  it("matches the keys written by the auth context", () => {
+    expect(ADMIN_STORAGE_KEYS.access).toBe("faqchatbot_admin_access_token");
+    expect(ADMIN_STORAGE_KEYS.refresh).toBe("faqchatbot_admin_refresh_token");
+    expect(ADMIN_STORAGE_KEYS.user).toBe("faqchatbot_admin_user");
+  });
+});
+
+describe("createDeferred", () => {
+  it("resolves the deferred promise from outside", async () => {
+    const deferred = createDeferred<number>();
+
+    queueMicrotask(() => deferred.resolve(42));
+
+    await expect(deferred.promise).resolves.toBe(42);
+  });
+
+  it("rejects the deferred promise from outside", async () => {
+    const deferred = createDeferred<number>();
+
+    queueMicrotask(() => deferred.reject(new Error("boom")));
+
+    await expect(deferred.promise).rejects.toThrow("boom");
+  });
+});
+
+describe("flushPromises", () => {
+  it("flushes queued microtasks", async () => {
+    let called = false;
     queueMicrotask(() => {
-      finished = true;
+      called = true;
     });
 
     await flushPromises();
 
-    expect(finished).toBe(true);
+    expect(called).toBe(true);
+  });
+});
+
+describe("createTestId", () => {
+  it("prefixes generated ids", () => {
+    expect(createTestId("row")).toMatch(/^row-[0-9a-f-]{36}$/);
   });
 });

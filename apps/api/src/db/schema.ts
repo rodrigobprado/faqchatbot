@@ -155,6 +155,20 @@ export const permissions = pgTable("permissions", {
   description: text("description")
 });
 
+export const rolePermissions = pgTable(
+  "role_permissions",
+  {
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => roles.id),
+    permissionId: uuid("permission_id")
+      .notNull()
+      .references(() => permissions.id),
+    createdAt: createdAt()
+  },
+  (table) => [primaryKey({ columns: [table.roleId, table.permissionId] })],
+);
+
 export const users = pgTable(
   "users",
   {
@@ -194,6 +208,7 @@ export const apiKeys = pgTable(
     name: varchar("name", { length: 120 }).notNull(),
     hashedKey: varchar("hashed_key", { length: 255 }).notNull(),
     prefix: varchar("prefix", { length: 20 }).notNull(),
+    last4: varchar("last4", { length: 8 }).notNull().default(""),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     createdAt: createdAt()
@@ -346,6 +361,7 @@ export const systemLogs = pgTable(
     tenantId: uuid("tenant_id").references(() => tenants.id),
     level: systemLogLevelEnum("level").notNull(),
     message: text("message").notNull(),
+    correlationId: varchar("correlation_id", { length: 64 }),
     context: jsonb("context").notNull().default({}),
     createdAt: createdAt()
   },

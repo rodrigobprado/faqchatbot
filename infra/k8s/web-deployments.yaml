@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: faqchatbot-dashboard
+  namespace: faqchatbot
+  labels:
+    app: faqchatbot-dashboard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: faqchatbot-dashboard
+  template:
+    metadata:
+      labels:
+        app: faqchatbot-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: ghcr.io/rigbie/faqchatbot-dashboard:latest
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: faqchatbot-dashboard
+  namespace: faqchatbot
+spec:
+  selector:
+    app: faqchatbot-dashboard
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: faqchatbot-widget
+  namespace: faqchatbot
+  labels:
+    app: faqchatbot-widget
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: faqchatbot-widget
+  template:
+    metadata:
+      labels:
+        app: faqchatbot-widget
+    spec:
+      containers:
+        - name: widget
+          image: ghcr.io/rigbie/faqchatbot-widget:latest
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: faqchatbot-widget
+  namespace: faqchatbot
+spec:
+  selector:
+    app: faqchatbot-widget
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

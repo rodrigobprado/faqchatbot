@@ -24,56 +24,87 @@ afterAll(async () => {
   await client.end();
 });
 
+const createConversation = async () => {
+  const plans = createPlansRepository(db);
+  const tenants = createTenantsRepository(db);
+  const sessions = createVisitorSessionsRepository(db);
+  const conversations = createConversationsRepository(db);
+
+  const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+  const tenant = await tenants.create({
+    publicId: `tenant-${randomUUID()}`,
+    name: "Acme Inc",
+    planId: plan.id
+  });
+  const session = await sessions.create({ tenantId: tenant.id, visitorId: randomUUID(), pageContext: {} });
+  const conversation = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+
+  return { tenant, conversation };
+};
+
 describe("MessagesRepository", () => {
-  it("creates and lists messages by conversation", async () => {
-    const plans = createPlansRepository(db);
-    const tenants = createTenantsRepository(db);
-    const visitorSessions = createVisitorSessionsRepository(db);
-    const conversations = createConversationsRepository(db);
+  it("creates a message and reads it back", async () => {
+    const { tenant, conversation } = await createConversation();
     const messages = createMessagesRepository(db);
 
-    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
-    const tenant = await tenants.create({
-      publicId: `tenant-${randomUUID()}`,
-      name: "Tenant",
-      planId: plan.id
-    });
-    const session = await visitorSessions.create({
-      tenantId: tenant.id,
-      visitorId: randomUUID(),
-      pageContext: {
-        url: "https://example.com",
-        viewport: { width: 1280, height: 720 },
-        timestamp: "2026-08-01T00:00:00.000Z",
-        utm: {}
-      }
-    });
-    const conversation = await conversations.create({
-      tenantId: tenant.id,
-      sessionId: session.id
-    });
-
-    const created = await messages.create({
+    const message = await messages.create({
       tenantId: tenant.id,
       conversationId: conversation.id,
       role: "user",
       type: "text",
-      content: {
-        type: "text",
-        text: "Ola"
-      },
-      metadata: {
-        source: "widget"
-      }
+      content: { type: "text", text: "Ola" }
     });
-    const listed = await messages.listByConversationId(conversation.id);
-    const latest = await messages.findLatestByConversationId(conversation.id);
-    const foundById = await messages.findById(created.id);
 
-    expect(created.id).toBeDefined();
-    expect(foundById?.conversationId).toBe(conversation.id);
-    expect(listed).toHaveLength(1);
-    expect(listed[0]?.id).toBe(foundById?.id);
-    expect(latest?.id).toBe(foundById?.id);
+    expect(message.role).toBe("user");
+    expect(message.content).toEqual({ type: "text", text: "Ola" });
+  });
+
+  it("lists messages for a conversation ordered by creation time", async () => {
+    const { tenant, conversation } = await createConversation();
+    const messages = createMessagesRepository(db);
+
+    const first = await messages.create({
+      tenantId: tenant.id,
+      conversationId: conversation.id,
+      role: "user",
+      type: "text",
+      content: { type: "text", text: "Primeira" }
+    });
+    const second = await messages.create({
+      tenantId: tenant.id,
+      conversationId: conversation.id,
+      role: "assistant",
+      type: "text",
+      content: { type: "text", text: "Segunda" }
+    });
+
+    const history = await messages.listByConversationId(conversation.id);
+
+    expect(history.map((message) => message.id)).toEqual([first.id, second.id]);
+  });
+
+  it("does not mix messages from different conversations", async () => {
+    const { tenant, conversation } = await createConversation();
+    const other = await createConversation();
+    const messages = createMessagesRepository(db);
+
+    await messages.create({
+      tenantId: tenant.id,
+      conversationId: conversation.id,
+      role: "user",
+      type: "text",
+      content: { type: "text", text: "Nesta conversa" }
+    });
+    await messages.create({
+      tenantId: other.tenant.id,
+      conversationId: other.conversation.id,
+      role: "user",
+      type: "text",
+      content: { type: "text", text: "Na outra" }
+    });
+
+    const history = await messages.listByConversationId(conversation.id);
+
+    expect(history).toHaveLength(1);
   });
 });

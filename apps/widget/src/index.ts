@@ -1,9 +1,8 @@
 import "./chat-widget.js";
-import type {
-  ChatWidgetIdentifyPayload,
-  ChatWidgetTheme,
-  FaqChatWidgetElement
-} from "./chat-widget.js";
+import type { ChatWidgetIdentifyPayload, FaqChatWidgetElement } from "./chat-widget.js";
+import { readWidgetConfig } from "./widget-config.js";
+
+declare const __API_URL__: string;
 
 export type ChatWidgetPublicApi = Readonly<{
   open(): void;
@@ -11,7 +10,7 @@ export type ChatWidgetPublicApi = Readonly<{
   toggle(): void;
   send(message: string): void;
   identify(payload: ChatWidgetIdentifyPayload): void;
-  setTheme(theme?: ChatWidgetTheme): void;
+  setTheme(): void;
   destroy(): void;
 }>;
 
@@ -27,7 +26,10 @@ const mount = () => {
     return existing;
   }
 
+  const config = readWidgetConfig(document.currentScript as HTMLScriptElement | null, __API_URL__);
   const element = document.createElement("faq-chat-widget") as FaqChatWidgetElement;
+  element.agentId = config.agentId;
+  element.apiUrl = config.apiUrl;
   document.body.append(element);
   return element;
 };
@@ -40,11 +42,10 @@ window.ChatWidget = Object.freeze({
   toggle: () => element.toggle(),
   send: (message: string) => element.send(message),
   identify: (payload: ChatWidgetIdentifyPayload) => element.identify(payload),
-  setTheme: (theme?: ChatWidgetTheme) => element.setTheme(theme),
+  setTheme: () => element.setTheme(),
   destroy: () => {
-    if (element.isConnected) {
-      element.remove();
-    }
+    element.remove();
     delete window.ChatWidget;
   }
 });
+

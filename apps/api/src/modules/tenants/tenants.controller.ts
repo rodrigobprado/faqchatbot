@@ -3,238 +3,255 @@ import {
   Controller,
   Delete,
   Get,
-  Inject,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
   Put,
+  Query,
   Req,
-  UseGuards,
+  UseGuards
 } from "@nestjs/common";
-import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
-import type { AdminRequest } from "../auth/admin-auth.guard.js";
-import { AdminAuthGuard } from "../auth/admin-auth.guard.js";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import type { FastifyRequest } from "fastify";
+import type { AccessTokenClaims } from "../auth/access-token-claims.js";
+import { RequirePermissions } from "../auth/decorators/require-permissions.decorator.js";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
+import { PermissionsGuard } from "../auth/guards/permissions.guard.js";
+// NestJS's emitDecoratorMetadata needs real (non `import type`) references to
+// resolve ValidationPipe/DI metatypes at runtime for these classes.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import {
+  AnalyticsQueryDto,
+  CreateRoleDto,
+  CreateTenantApiKeyDto,
+  CreateTenantDomainDto,
+  CreateTenantDto,
+  CreateUserDto,
+  PaginationQueryDto,
+  RateLimitPolicyDto,
+  TenantAgentConfigDto,
+  TenantConfigDto,
+  UpdateTenantDto,
+  UpdateTenantUserRolesDto,
+  UpdateTenantUserStatusDto
+} from "./dto/tenants.dto.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import { TenantsService } from "./tenants.service.js";
 
+export type AuthenticatedAdminRequest = FastifyRequest & { user: AccessTokenClaims };
+
 @ApiTags("admin-tenants")
-@UseGuards(AdminAuthGuard)
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller("v1/admin/tenants")
-export class AdminTenantsController {
-  constructor(@Inject(TenantsService) private readonly tenantsService: TenantsService) {}
+export class TenantsController {
+  constructor(private readonly tenantsService: TenantsService) {}
+
+  @Post()
+  @RequirePermissions("tenants:write")
+  create(@Body() body: CreateTenantDto) {
+    return this.tenantsService.create(body);
+  }
 
   @Get()
-  @ApiOkResponse({ description: "Lists tenants visible to the current admin" })
-  list(@Req() request: AdminRequest) {
-    return this.tenantsService.listTenants(request.adminUser!);
+  @RequirePermissions("tenants:read")
+  list() {
+    return this.tenantsService.list();
   }
 
   @Get("plans")
-  @ApiOkResponse({ description: "Lists available plans" })
-  listPlans(@Req() request: AdminRequest) {
-    return this.tenantsService.listPlans(request.adminUser!);
+  @RequirePermissions("tenants:read")
+  listPlans() {
+    return this.tenantsService.listPlans();
   }
 
-  @Get(":tenantId/conversations")
-  @ApiOkResponse({ description: "Lists tenant conversations" })
-  listConversations(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.listConversations(request.adminUser!, tenantId);
+  @Get(":id")
+  @RequirePermissions("tenants:read")
+  get(@Param("id") id: string) {
+    return this.tenantsService.get(id);
   }
 
-  @Get(":tenantId/sessions")
-  @ApiOkResponse({ description: "Lists tenant widget sessions" })
-  listSessions(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.listSessions(request.adminUser!, tenantId);
+  @Patch(":id")
+  @RequirePermissions("tenants:write")
+  update(@Param("id") id: string, @Body() body: UpdateTenantDto) {
+    return this.tenantsService.update(id, body);
   }
 
-  @Get(":tenantId/conversations/:conversationId")
-  @ApiOkResponse({ description: "Gets a tenant conversation with messages" })
-  getConversation(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
+  @Delete(":id")
+  @RequirePermissions("tenants:write")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param("id") id: string) {
+    return this.tenantsService.remove(id);
+  }
+
+  @Post(":id/domains")
+  @RequirePermissions("tenants:write")
+  addDomain(@Param("id") id: string, @Body() body: CreateTenantDomainDto) {
+    return this.tenantsService.addDomain(id, body);
+  }
+
+  @Get(":id/domains")
+  @RequirePermissions("tenants:read")
+  listDomains(@Param("id") id: string) {
+    return this.tenantsService.listDomains(id);
+  }
+
+  @Delete(":id/domains/:domainId")
+  @RequirePermissions("tenants:write")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeDomain(@Param("id") id: string, @Param("domainId") domainId: string) {
+    return this.tenantsService.removeDomain(id, domainId);
+  }
+
+  @Put(":id/config")
+  @RequirePermissions("tenants:write")
+  upsertConfig(@Param("id") id: string, @Body() body: TenantConfigDto) {
+    return this.tenantsService.upsertConfig(id, body);
+  }
+
+  @Get(":id/config")
+  @RequirePermissions("tenants:read")
+  getConfig(@Param("id") id: string) {
+    return this.tenantsService.getConfig(id);
+  }
+
+  @Put(":id/agent-config")
+  @RequirePermissions("tenants:write")
+  upsertAgentConfig(@Param("id") id: string, @Body() body: TenantAgentConfigDto) {
+    return this.tenantsService.upsertAgentConfig(id, body);
+  }
+
+  @Get(":id/agent-config")
+  @RequirePermissions("tenants:read")
+  getAgentConfig(@Param("id") id: string) {
+    return this.tenantsService.getAgentConfig(id);
+  }
+
+  @Get(":id/rate-limits")
+  @RequirePermissions("tenants:read")
+  getRateLimits(@Param("id") id: string) {
+    return this.tenantsService.getRateLimits(id);
+  }
+
+  @Put(":id/rate-limits")
+  @RequirePermissions("tenants:write")
+  upsertRateLimit(@Param("id") id: string, @Body() body: RateLimitPolicyDto) {
+    return this.tenantsService.upsertRateLimit(id, body);
+  }
+
+  @Get(":id/analytics")
+  @RequirePermissions("tenants:read")
+  getAnalytics(@Param("id") id: string, @Query() query: AnalyticsQueryDto) {
+    return this.tenantsService.getAnalytics(id, {
+      from: query.from ? new Date(query.from) : undefined,
+      to: query.to ? new Date(query.to) : undefined
+    });
+  }
+
+  @Get(":id/conversations")
+  @RequirePermissions("tenants:read")
+  listConversations(@Param("id") id: string, @Query() query: PaginationQueryDto) {
+    return this.tenantsService.listConversations(id, query);
+  }
+
+  @Get(":id/sessions")
+  @RequirePermissions("tenants:read")
+  listSessions(@Param("id") id: string, @Query() query: PaginationQueryDto) {
+    return this.tenantsService.listSessions(id, query);
+  }
+
+  @Get(":id/audit-logs")
+  @RequirePermissions("tenants:read")
+  listAuditLogs(@Param("id") id: string, @Query() query: PaginationQueryDto) {
+    return this.tenantsService.listAuditLogs(id, query);
+  }
+
+  @Get(":id/users")
+  @RequirePermissions("tenants:read")
+  listUsers(@Param("id") id: string) {
+    return this.tenantsService.listUsers(id);
+  }
+
+  @Post(":id/users")
+  @RequirePermissions("tenants:write")
+  createUser(@Param("id") id: string, @Body() body: CreateUserDto) {
+    return this.tenantsService.createUser(id, body);
+  }
+
+  @Get(":id/system-logs")
+  @RequirePermissions("tenants:read")
+  listSystemLogs(@Param("id") id: string) {
+    return this.tenantsService.listTenantSystemLogs(id);
+  }
+
+  @Get(":id/conversations/:conversationId")
+  @RequirePermissions("tenants:read")
+  getConversationDetail(
+    @Param("id") id: string,
     @Param("conversationId") conversationId: string,
   ) {
-    return this.tenantsService.getConversation(request.adminUser!, tenantId, conversationId);
+    return this.tenantsService.getConversationDetail(id, conversationId);
   }
 
-  @Post()
-  @ApiOkResponse({ description: "Creates a tenant" })
-  create(@Req() request: AdminRequest, @Body() body: unknown) {
-    return this.tenantsService.createTenant(request.adminUser!, body);
+  @Get(":id/api-keys")
+  @RequirePermissions("tenants:read")
+  listApiKeys(@Req() request: AuthenticatedAdminRequest, @Param("id") id: string) {
+    return this.tenantsService.listApiKeys(id, request.user.sub);
   }
 
-  @Get(":tenantId")
-  @ApiOkResponse({ description: "Gets a tenant" })
-  get(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.getTenant(request.adminUser!, tenantId);
-  }
-
-  @Patch(":tenantId")
-  @ApiOkResponse({ description: "Updates a tenant" })
-  update(@Req() request: AdminRequest, @Param("tenantId") tenantId: string, @Body() body: unknown) {
-    return this.tenantsService.updateTenant(request.adminUser!, tenantId, body);
-  }
-
-  @Delete(":tenantId")
-  @ApiOkResponse({ description: "Deletes a tenant" })
-  remove(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.deleteTenant(request.adminUser!, tenantId);
-  }
-
-  @Get(":tenantId/domains")
-  @ApiOkResponse({ description: "Lists tenant domains" })
-  listDomains(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.listDomains(request.adminUser!, tenantId);
-  }
-
-  @Post(":tenantId/domains")
-  @ApiOkResponse({ description: "Creates a tenant domain" })
-  createDomain(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
-    @Body() body: unknown,
-  ) {
-    return this.tenantsService.createDomain(request.adminUser!, tenantId, body);
-  }
-
-  @Delete(":tenantId/domains/:domainId")
-  @ApiOkResponse({ description: "Deletes a tenant domain" })
-  deleteDomain(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
-    @Param("domainId") domainId: string,
-  ) {
-    return this.tenantsService.deleteDomain(request.adminUser!, tenantId, domainId);
-  }
-
-  @Get(":tenantId/config")
-  @ApiOkResponse({ description: "Gets tenant widget config" })
-  getConfig(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.getTenantConfig(request.adminUser!, tenantId);
-  }
-
-  @Put(":tenantId/config")
-  @ApiOkResponse({ description: "Upserts tenant widget config" })
-  upsertConfig(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
-    @Body() body: unknown,
-  ) {
-    return this.tenantsService.upsertTenantConfig(request.adminUser!, tenantId, body);
-  }
-
-  @Get(":tenantId/agent-config")
-  @ApiOkResponse({ description: "Gets tenant agent config" })
-  getAgentConfig(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.getTenantAgentConfig(request.adminUser!, tenantId);
-  }
-
-  @Put(":tenantId/agent-config")
-  @ApiOkResponse({ description: "Upserts tenant agent config" })
-  upsertAgentConfig(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
-    @Body() body: unknown,
-  ) {
-    return this.tenantsService.upsertTenantAgentConfig(request.adminUser!, tenantId, body);
-  }
-
-  @Get(":tenantId/users")
-  @ApiOkResponse({ description: "Lists tenant users" })
-  listUsers(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.listUsers(request.adminUser!, tenantId);
-  }
-
-  @Post(":tenantId/users")
-  @ApiOkResponse({ description: "Invites a tenant user" })
-  inviteUser(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
-    @Body() body: unknown,
-  ) {
-    return this.tenantsService.inviteUser(request.adminUser!, tenantId, body);
-  }
-
-  @Patch(":tenantId/users/:userId/roles")
-  @ApiOkResponse({ description: "Updates tenant user roles" })
-  updateUserRoles(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
-    @Param("userId") userId: string,
-    @Body() body: unknown,
-  ) {
-    return this.tenantsService.updateUserRoles(request.adminUser!, tenantId, userId, body);
-  }
-
-  @Patch(":tenantId/users/:userId/status")
-  @ApiOkResponse({ description: "Updates tenant user status" })
-  updateUserStatus(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
-    @Param("userId") userId: string,
-    @Body() body: unknown,
-  ) {
-    return this.tenantsService.updateUserStatus(request.adminUser!, tenantId, userId, body);
-  }
-
-  @Get(":tenantId/roles")
-  @ApiOkResponse({ description: "Lists tenant roles" })
-  listRoles(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.listRoles(request.adminUser!, tenantId);
-  }
-
-  @Get(":tenantId/api-keys")
-  @ApiOkResponse({ description: "Lists tenant api keys" })
-  listApiKeys(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.listApiKeys(request.adminUser!, tenantId);
-  }
-
-  @Get(":tenantId/analytics")
-  @ApiOkResponse({ description: "Lists tenant analytics events and aggregates" })
-  listAnalytics(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.listAnalytics(request.adminUser!, tenantId);
-  }
-
-  @Get(":tenantId/audit-logs")
-  @ApiOkResponse({ description: "Lists tenant audit logs" })
-  listAuditLogs(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.listAuditLogs(request.adminUser!, tenantId);
-  }
-
-  @Get(":tenantId/system-logs")
-  @ApiOkResponse({ description: "Lists tenant system logs" })
-  listSystemLogs(@Req() request: AdminRequest, @Param("tenantId") tenantId: string) {
-    return this.tenantsService.listSystemLogs(request.adminUser!, tenantId);
-  }
-
-  @Post(":tenantId/api-keys")
-  @ApiOkResponse({ description: "Creates a tenant api key" })
+  @Post(":id/api-keys")
+  @RequirePermissions("tenants:write")
   createApiKey(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
-    @Body() body: unknown,
+    @Req() request: AuthenticatedAdminRequest,
+    @Param("id") id: string,
+    @Body() body: CreateTenantApiKeyDto,
   ) {
-    return this.tenantsService.createApiKey(request.adminUser!, tenantId, body);
+    return this.tenantsService.createApiKey(id, body.name, request.user.sub);
   }
 
-  @Delete(":tenantId/api-keys/:apiKeyId")
-  @ApiOkResponse({ description: "Revokes a tenant api key" })
+  @Delete(":id/api-keys/:apiKeyId")
+  @RequirePermissions("tenants:write")
   revokeApiKey(
-    @Req() request: AdminRequest,
-    @Param("tenantId") tenantId: string,
+    @Req() request: AuthenticatedAdminRequest,
+    @Param("id") id: string,
     @Param("apiKeyId") apiKeyId: string,
   ) {
-    return this.tenantsService.revokeApiKey(request.adminUser!, tenantId, apiKeyId);
+    return this.tenantsService.revokeApiKey(id, apiKeyId, request.user.sub);
   }
-}
 
-@ApiTags("public-tenants")
-@Controller("v1/widget/public")
-export class PublicTenantsController {
-  constructor(@Inject(TenantsService) private readonly tenantsService: TenantsService) {}
+  @Patch(":id/users/:userId/status")
+  @RequirePermissions("tenants:write")
+  updateUserStatus(
+    @Req() request: AuthenticatedAdminRequest,
+    @Param("id") id: string,
+    @Param("userId") userId: string,
+    @Body() body: UpdateTenantUserStatusDto,
+  ) {
+    return this.tenantsService.updateUserStatus(id, userId, body.status, request.user.sub);
+  }
 
-  @Get(":publicId/config")
-  @ApiOkResponse({ description: "Gets the public widget config for a tenant" })
-  getPublicConfig(@Param("publicId") publicId: string) {
-    return this.tenantsService.getPublicConfig(publicId);
+  @Patch(":id/users/:userId/roles")
+  @RequirePermissions("tenants:write")
+  updateUserRoles(
+    @Req() request: AuthenticatedAdminRequest,
+    @Param("id") id: string,
+    @Param("userId") userId: string,
+    @Body() body: UpdateTenantUserRolesDto,
+  ) {
+    return this.tenantsService.updateUserRoles(id, userId, body.roleSlugs, request.user.sub);
+  }
+
+  @Get(":id/roles")
+  @RequirePermissions("tenants:read")
+  listRoles(@Param("id") id: string) {
+    return this.tenantsService.listRoles(id);
+  }
+
+  @Post(":id/roles")
+  @RequirePermissions("tenants:write")
+  createRole(@Param("id") id: string, @Body() body: CreateRoleDto) {
+    return this.tenantsService.createRole(id, body);
   }
 }

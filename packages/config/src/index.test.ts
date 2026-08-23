@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseEnvironment } from "./index.js";
+import { corsExtraOrigins, parseEnvironment } from "./index.js";
 
 const validEnvironment = {
   DATABASE_URL: "postgresql://user:pass@localhost:5432/app",
@@ -28,6 +28,26 @@ describe("parseEnvironment", () => {
         JWT_ACCESS_SECRET: "short"
       }),
     ).toThrow();
+  });
+});
+
+describe("corsExtraOrigins", () => {
+  it("splits and trims comma-separated origins", () => {
+    const environment = parseEnvironment({
+      ...validEnvironment,
+      CORS_EXTRA_ORIGINS: " http://localhost:5173 , http://localhost:5174 ,"
+    });
+
+    expect(corsExtraOrigins(environment)).toEqual([
+      "http://localhost:5173",
+      "http://localhost:5174"
+    ]);
+  });
+
+  it("returns an empty list when unset", () => {
+    const environment = parseEnvironment(validEnvironment);
+
+    expect(corsExtraOrigins(environment)).toEqual([]);
   });
 });
 

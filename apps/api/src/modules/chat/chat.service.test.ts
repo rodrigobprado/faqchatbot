@@ -1,287 +1,307 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
-import type { WidgetAccessTokenPayload } from "../../auth/widget-token.js";
+import { BadRequestException, ForbiddenException, type MessageEvent } from "@nestjs/common";
+import { and, eq } from "drizzle-orm";
+import { Redis } from "ioredis";
+import type { Sql } from "postgres";
+import { filter, firstValueFrom, take } from "rxjs";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { AgentRouterService } from "../agent-router/agent-router.service.js";
+import { createDatabase, type Database } from "../../db/client.js";
+import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
+import { createPlansRepository } from "../../db/repositories/plans.repository.js";
+import { createTenantAgentConfigsRepository } from "../../db/repositories/tenant-agent-configs.repository.js";
+import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
+import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
+import { createWebhookEndpointsRepository } from "../../db/repositories/webhook-endpoints.repository.js";
+import { analyticsEvents } from "../../db/schema.js";
+import { AnalyticsService } from "../analytics/analytics.service.js";
+import type { WidgetTokenClaims } from "../auth/access-token-claims.js";
+import { RateLimiterService } from "../rate-limit/rate-limiter.service.js";
+import { RateLimitService } from "../rate-limit/rate-limit.service.js";
+import { ChatStreamBroker } from "./chat-stream.broker.js";
 import { ChatService } from "./chat.service.js";
 
-const createActor = (): WidgetAccessTokenPayload => ({
-  scope: "widget",
-  tenantId: randomUUID(),
-  visitorId: randomUUID(),
-  sessionId: randomUUID(),
-  conversationId: randomUUID(),
-  issuedAt: 1,
-  expiresAt: 2
+const databaseUrl = process.env.DATABASE_URL;
+const redisUrl = process.env.REDIS_URL;
+if (!databaseUrl || !redisUrl) {
+  throw new Error("DATABASE_URL and REDIS_URL are required to run repository integration tests");
+}
+
+let db: Database;
+let client: Sql;
+let redis: Redis;
+let rateLimit: RateLimitService;
+
+beforeAll(() => {
+  ({ db, client } = createDatabase(databaseUrl));
+  redis = new Redis(redisUrl);
+  rateLimit = new RateLimitService(new RateLimiterService(redis), db, new AnalyticsService(db));
 });
 
-const createService = () => {
-  const dependencies = {
-    conversations: {
-      findById: vi.fn()
-    },
-    agentRouter: {
-      route: vi.fn()
-    },
-    messages: {
-      create: vi.fn(),
-      listByConversationId: vi.fn()
-    }
-  } as const;
+afterAll(async () => {
+  await client.end();
+  await redis.quit();
+});
 
-  return { service: new ChatService(dependencies), dependencies };
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+const createChatService = () =>
+  new ChatService(
+    db,
+    new ChatStreamBroker(),
+    new AgentRouterService(db, new AnalyticsService(db)),
+    rateLimit,
+    new AnalyticsService(db),
+  );
+
+const createConversationClaims = async (): Promise<WidgetTokenClaims> => {
+  const plans = createPlansRepository(db);
+  const tenants = createTenantsRepository(db);
+  const sessions = createVisitorSessionsRepository(db);
+  const conversations = createConversationsRepository(db);
+
+  const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+  const tenant = await tenants.create({
+    publicId: `tenant-${randomUUID()}`,
+    name: "Acme Inc",
+    planId: plan.id
+  });
+  const visitorId = randomUUID();
+  const session = await sessions.create({ tenantId: tenant.id, visitorId, pageContext: {} });
+  const conversation = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+
+  return {
+    sub: visitorId,
+    tenantId: tenant.id,
+    sessionId: session.id,
+    conversationId: conversation.id,
+    scope: "widget"
+  };
 };
 
-describe("ChatService", () => {
-  it("stores an exchange and returns both messages", async () => {
-    const { service, dependencies } = createService();
-    const actor = createActor();
-    const conversation = {
-      id: actor.conversationId,
-      tenantId: actor.tenantId,
-      sessionId: actor.sessionId,
-      status: "open" as const
-    };
+const configureN8nAgent = async (tenantId: string) => {
+  const webhook = await createWebhookEndpointsRepository(db).create({
+    tenantId,
+    url: "https://n8n.internal.example.com/webhook/acme",
+    secretRef: "top-secret-value"
+  });
+  await createTenantAgentConfigsRepository(db).upsert({
+    tenantId,
+    provider: "n8n",
+    webhookEndpointId: webhook.id,
+    timeoutMs: 5000
+  });
+};
 
-    dependencies.conversations.findById.mockResolvedValue(conversation);
-    dependencies.agentRouter.route.mockResolvedValue({
-      provider: "n8n",
-      model: null,
-      providerMessageId: "n8n-message-1",
-      content: {
-        type: "text",
-        text: "Recebi: Ola"
-      },
-      metadata: {
-        provider: "n8n"
-      }
-    });
-    dependencies.messages.create
-      .mockResolvedValueOnce({
-        id: randomUUID(),
-        tenantId: actor.tenantId,
-        conversationId: actor.conversationId,
-        role: "user",
-        type: "text",
-        content: {
-          type: "text",
-          text: "Ola"
-        },
-        metadata: {},
-        providerMessageId: null,
-        createdAt: new Date("2026-08-01T00:00:00.000Z")
-      })
-      .mockResolvedValueOnce({
-        id: randomUUID(),
-        tenantId: actor.tenantId,
-        conversationId: actor.conversationId,
-        role: "assistant",
-        type: "text",
-        content: {
-          type: "text",
-          text: "Recebi: Ola"
-        },
-        metadata: {},
-        providerMessageId: null,
-        createdAt: new Date("2026-08-01T00:00:01.000Z")
-      });
+describe("ChatService.sendMessage", () => {
+  it("persists the user message and returns it", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
 
-    const response = await service.sendMessage(actor, {
-      content: {
-        type: "text",
-        text: "Ola"
-      }
+    const message = await chatService.sendMessage(claims, {
+      conversationId: claims.conversationId,
+      content: { type: "text", text: "Ola" }
     });
 
-    expect(response.conversationId).toBe(actor.conversationId);
-    expect(response.userMessage.role).toBe("user");
-    expect(response.assistantMessage.role).toBe("assistant");
-    expect(dependencies.agentRouter.route).toHaveBeenCalledWith({
-      tenantId: actor.tenantId,
-      conversationId: actor.conversationId,
-      message: {
-        type: "text",
-        text: "Ola"
-      }
-    });
-    expect(dependencies.messages.create).toHaveBeenCalledTimes(2);
+    expect(message.role).toBe("user");
+    expect(message.conversationId).toBe(claims.conversationId);
+    expect(message.content).toEqual({ type: "text", text: "Ola" });
   });
 
-  it("returns history and SSE frames", async () => {
-    const { service, dependencies } = createService();
-    const actor = createActor();
+  it("sanitizes markdown content before persisting", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
 
-    dependencies.conversations.findById.mockResolvedValue({
-      id: actor.conversationId,
-      tenantId: actor.tenantId,
-      sessionId: actor.sessionId,
-      status: "open"
+    const message = await chatService.sendMessage(claims, {
+      conversationId: claims.conversationId,
+      content: { type: "markdown", markdown: 'Ola <script>alert(1)</script> **mundo**' }
     });
-    dependencies.agentRouter.route.mockResolvedValue({
-      provider: "n8n",
-      model: null,
-      providerMessageId: "n8n-message-2",
-      content: {
-        type: "text",
-        text: "Recebi: Ola"
-      },
-      metadata: {
-        provider: "n8n"
-      }
-    });
-    dependencies.messages.listByConversationId.mockResolvedValue([
-      {
-        id: randomUUID(),
-        tenantId: actor.tenantId,
-        conversationId: actor.conversationId,
-        role: "user",
-        type: "text",
-        content: {
-          type: "text",
-          text: "Ola"
-        },
-        metadata: {},
-        providerMessageId: null,
-        createdAt: new Date("2026-08-01T00:00:00.000Z")
-      }
-    ]);
 
-    const history = await service.getHistory(actor, actor.conversationId);
-    const stream = await service.buildStream(actor, actor.conversationId);
-
-    expect(history.messages).toHaveLength(1);
-    expect(stream).toContain("event: message");
-    expect(stream).toContain("event: done");
+    expect(message.content).toEqual({ type: "markdown", markdown: "Ola  **mundo**" });
   });
 
-  it("handles markdown and rich content inputs", async () => {
-    const { service, dependencies } = createService();
-    const actor = createActor();
-
-    dependencies.conversations.findById.mockResolvedValue({
-      id: actor.conversationId,
-      tenantId: actor.tenantId,
-      sessionId: actor.sessionId,
-      status: "open"
-    });
-    dependencies.agentRouter.route.mockResolvedValue({
-      provider: "n8n",
-      model: null,
-      providerMessageId: "n8n-message-3",
-      content: {
-        type: "text",
-        text: "Recebi seu conteúdo em markdown."
-      },
-      metadata: {
-        provider: "n8n"
-      }
-    });
-    dependencies.messages.create
-      .mockResolvedValueOnce({
-        id: randomUUID(),
-        tenantId: actor.tenantId,
-        conversationId: actor.conversationId,
-        role: "user",
-        type: "markdown",
-        content: {
-          type: "markdown",
-          markdown: "**Ola**"
-        },
-        metadata: {},
-        providerMessageId: null,
-        createdAt: new Date("2026-08-01T00:00:00.000Z")
-      })
-      .mockResolvedValueOnce({
-        id: randomUUID(),
-        tenantId: actor.tenantId,
-        conversationId: actor.conversationId,
-        role: "assistant",
-        type: "text",
-        content: {
-          type: "text",
-          text: "Recebi seu conteúdo em markdown."
-        },
-        metadata: {},
-        providerMessageId: null,
-        createdAt: new Date("2026-08-01T00:00:01.000Z")
-      })
-      .mockResolvedValueOnce({
-        id: randomUUID(),
-        tenantId: actor.tenantId,
-        conversationId: actor.conversationId,
-        role: "user",
-        type: "card",
-        content: {
-          type: "card",
-          title: "Plano"
-        },
-        metadata: {},
-        providerMessageId: null,
-        createdAt: new Date("2026-08-01T00:00:02.000Z")
-      })
-      .mockResolvedValueOnce({
-        id: randomUUID(),
-        tenantId: actor.tenantId,
-        conversationId: actor.conversationId,
-        role: "assistant",
-        type: "text",
-        content: {
-          type: "text",
-          text: "Mensagem recebida."
-        },
-        metadata: {},
-        providerMessageId: null,
-        createdAt: new Date("2026-08-01T00:00:03.000Z")
-      });
-
-    const markdownResponse = await service.sendMessage(actor, {
-      content: {
-        type: "markdown",
-        markdown: "**Ola**"
-      }
-    });
-    const cardResponse = await service.sendMessage(actor, {
-      content: {
-        type: "card",
-        title: "Plano"
-      }
-    });
-
-    expect(markdownResponse.assistantMessage.content.type).toBe("text");
-    expect(cardResponse.assistantMessage.content.type).toBe("text");
-  });
-
-  it("rejects unauthorized conversation access and invalid payloads", async () => {
-    const { service, dependencies } = createService();
-    const actor = createActor();
-
-    dependencies.conversations.findById.mockResolvedValue({
-      id: actor.conversationId,
-      tenantId: randomUUID(),
-      sessionId: actor.sessionId,
-      status: "open"
-    });
+  it("rejects a conversationId that does not match the token", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
 
     await expect(
-      service.getHistory(actor, actor.conversationId),
-    ).rejects.toThrow("Conversation access denied");
+      chatService.sendMessage(claims, {
+        conversationId: randomUUID(),
+        content: { type: "text", text: "Ola" }
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
 
-    dependencies.conversations.findById.mockResolvedValue(null);
-    await expect(service.getHistory(actor, actor.conversationId)).rejects.toThrow(
-      `Conversation ${actor.conversationId} was not found`,
+  it("rejects malformed rich content", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    await expect(
+      chatService.sendMessage(claims, {
+        conversationId: claims.conversationId,
+        content: { type: "card" }
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("streams typing and token events, then persists and emits the assistant reply", async () => {
+    const broker = new ChatStreamBroker();
+    const chatService = new ChatService(
+      db,
+      broker,
+      new AgentRouterService(db, new AnalyticsService(db)),
+      rateLimit,
+      new AnalyticsService(db),
+    );
+    const claims = await createConversationClaims();
+    await configureN8nAgent(claims.tenantId);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ text: "Oi, tudo bem?" }) }),
     );
 
-    dependencies.conversations.findById.mockResolvedValue({
-      id: actor.conversationId,
-      tenantId: actor.tenantId,
-      sessionId: actor.sessionId,
-      status: "closed"
+    const typingEventPromise: Promise<MessageEvent> = firstValueFrom(
+      broker.stream(claims.conversationId).pipe(
+        filter((event) => JSON.parse(event.data as string).type === "typing"),
+        take(1),
+      ),
+    );
+    const messageEventPromise: Promise<MessageEvent> = firstValueFrom(
+      broker.stream(claims.conversationId).pipe(
+        filter((event) => JSON.parse(event.data as string).type === "message"),
+        take(1),
+      ),
+    );
+
+    await chatService.sendMessage(claims, {
+      conversationId: claims.conversationId,
+      content: { type: "text", text: "Ola" }
     });
 
-    await expect(
-      service.sendMessage(actor, { content: { type: "text", text: "Ola" } }),
-    ).rejects.toThrow("Conversation is closed");
+    await typingEventPromise;
+    const messageEvent = await messageEventPromise;
+    const parsed = JSON.parse(messageEvent.data as string);
 
-    await expect(service.sendMessage(actor, { content: { type: "text", text: "" } })).rejects.toThrow(
-      "Invalid chat message payload",
+    expect(parsed.type).toBe("message");
+    expect(parsed.message.role).toBe("assistant");
+    expect(parsed.message.content).toEqual({ type: "text", text: "Oi, tudo bem?" });
+
+    const history = await chatService.getHistory(claims, claims.conversationId);
+    expect(history).toHaveLength(2);
+    expect(history[1]?.role).toBe("assistant");
+  });
+
+  it("emits a generic error event when the agent has no provider configured", async () => {
+    const broker = new ChatStreamBroker();
+    const chatService = new ChatService(
+      db,
+      broker,
+      new AgentRouterService(db, new AnalyticsService(db)),
+      rateLimit,
+      new AnalyticsService(db),
+    );
+    const claims = await createConversationClaims();
+
+    const errorEventPromise: Promise<MessageEvent> = firstValueFrom(
+      broker.stream(claims.conversationId).pipe(
+        filter((event) => JSON.parse(event.data as string).type === "error"),
+        take(1),
+      ),
+    );
+
+    await chatService.sendMessage(claims, {
+      conversationId: claims.conversationId,
+      content: { type: "text", text: "Ola" }
+    });
+
+    const errorEvent = await errorEventPromise;
+    const parsed = JSON.parse(errorEvent.data as string);
+
+    expect(parsed.type).toBe("error");
+    expect(parsed.message).not.toMatch(/webhook|n8n|http/i);
+
+    const history = await chatService.getHistory(claims, claims.conversationId);
+    expect(history).toHaveLength(1);
+  });
+});
+
+describe("ChatService.getHistory", () => {
+  it("rejects a conversationId that does not match the token", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    await expect(chatService.getHistory(claims, randomUUID())).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe("ChatService.stream", () => {
+  it("rejects a conversationId that does not match the token", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    expect(() => chatService.stream(claims, randomUUID())).toThrow(ForbiddenException);
+  });
+});
+
+describe("ChatService.recordButtonClick", () => {
+  it("records a ButtonClicked analytics event for the conversation", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    chatService.recordButtonClick(claims, { conversationId: claims.conversationId, buttonId: "cta-1" });
+
+    await vi.waitFor(async () => {
+      const events = await db
+        .select()
+        .from(analyticsEvents)
+        .where(and(eq(analyticsEvents.tenantId, claims.tenantId), eq(analyticsEvents.eventType, "ButtonClicked")));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.payload).toMatchObject({ type: "ButtonClicked", buttonId: "cta-1" });
+    });
+  });
+
+  it("rejects a conversationId that does not match the token", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    expect(() =>
+      chatService.recordButtonClick(claims, { conversationId: randomUUID(), buttonId: "cta-1" }),
+    ).toThrow(ForbiddenException);
+  });
+});
+
+describe("ChatService.endConversation", () => {
+  it("closes the conversation and records its duration and reason", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    await chatService.endConversation(claims, claims.conversationId, { reason: "resolved" });
+
+    const conversation = await createConversationsRepository(db).findById(claims.conversationId);
+    expect(conversation?.status).toBe("closed");
+    expect(conversation?.endedAt).toBeTruthy();
+
+    await vi.waitFor(async () => {
+      const events = await db
+        .select()
+        .from(analyticsEvents)
+        .where(and(eq(analyticsEvents.tenantId, claims.tenantId), eq(analyticsEvents.eventType, "ConversationEnded")));
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.payload).toMatchObject({ type: "ConversationEnded", reason: "resolved" });
+      expect((events[0]?.payload as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it("rejects a conversationId that does not match the token", async () => {
+    const chatService = createChatService();
+    const claims = await createConversationClaims();
+
+    await expect(chatService.endConversation(claims, randomUUID(), {})).rejects.toBeInstanceOf(
+      ForbiddenException,
     );
   });
 });

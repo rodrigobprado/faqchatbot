@@ -22,46 +22,71 @@ afterAll(async () => {
   await client.end();
 });
 
-describe("VisitorSessionsRepository", () => {
-  it("creates, finds and touches visitor sessions", async () => {
-    const plans = createPlansRepository(db);
-    const tenants = createTenantsRepository(db);
-    const visitorSessions = createVisitorSessionsRepository(db);
+const createTenant = async () => {
+  const plans = createPlansRepository(db);
+  const tenants = createTenantsRepository(db);
+  const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+  return tenants.create({
+    publicId: `tenant-${randomUUID()}`,
+    name: "Acme Inc",
+    planId: plan.id
+  });
+};
 
-    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
-    const tenant = await tenants.create({
-      publicId: `tenant-${randomUUID()}`,
-      name: "Tenant",
-      planId: plan.id
+describe("VisitorSessionsRepository", () => {
+  it("creates a session with the given page context", async () => {
+    const tenant = await createTenant();
+    const sessions = createVisitorSessionsRepository(db);
+    const visitorId = randomUUID();
+
+    const session = await sessions.create({
+      tenantId: tenant.id,
+      visitorId,
+      pageContext: { url: "https://acme.example.com/pricing" }
     });
 
-    const session = await visitorSessions.create({
+    expect(session.tenantId).toBe(tenant.id);
+    expect(session.visitorId).toBe(visitorId);
+    expect(session.pageContext).toEqual({ url: "https://acme.example.com/pricing" });
+  });
+
+  it("returns null for a session id that does not exist", async () => {
+    const sessions = createVisitorSessionsRepository(db);
+
+    const found = await sessions.findById(randomUUID());
+
+    expect(found).toBeNull();
+  });
+
+  it("touches a session, replacing its page context and bumping lastSeenAt", async () => {
+    const tenant = await createTenant();
+    const sessions = createVisitorSessionsRepository(db);
+    const session = await sessions.create({
       tenantId: tenant.id,
       visitorId: randomUUID(),
-      pageContext: {
-        url: "https://example.com",
-        viewport: { width: 1280, height: 720 },
-        timestamp: "2026-08-01T00:00:00.000Z",
-        utm: {}
-      }
+      pageContext: { url: "https://acme.example.com/" }
     });
 
-    const foundById = await visitorSessions.findById(session.id);
-    const foundByTenantAndVisitor = await visitorSessions.findLatestByTenantAndVisitor(
-      tenant.id,
-      session.visitorId
-    );
-    const foundByTenant = await visitorSessions.listByTenantId(tenant.id);
-    const touched = await visitorSessions.touch(session.id, {
-      url: "https://example.com/pricing",
-      viewport: { width: 1280, height: 720 },
-      timestamp: "2026-08-01T00:01:00.000Z",
-      utm: {}
-    });
+    const touched = await sessions.touch(session.id, { url: "https://acme.example.com/checkout" });
 
-    expect(foundById?.id).toBe(session.id);
-    expect(foundByTenantAndVisitor?.id).toBe(session.id);
-    expect(foundByTenant).toHaveLength(1);
-    expect(touched?.pageContext.url).toBe("https://example.com/pricing");
+    expect(touched.id).toBe(session.id);
+    expect(touched.pageContext).toEqual({ url: "https://acme.example.com/checkout" });
+    expect(touched.lastSeenAt.getTime()).toBeGreaterThanOrEqual(session.lastSeenAt.getTime());
+  });
+
+  it("lists sessions for a tenant, most recently seen first, respecting limit and offset", async () => {
+    const tenant = await createTenant();
+    const sessions = createVisitorSessionsRepository(db);
+    const first = await sessions.create({ tenantId: tenant.id, visitorId: randomUUID(), pageContext: {} });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await sessions.create({ tenantId: tenant.id, visitorId: randomUUID(), pageContext: {} });
+
+    const page = await sessions.listByTenantId(tenant.id, { limit: 1, offset: 0 });
+
+    expect(page).toHaveLength(1);
+    expect(page[0]?.id).toBe(second.id);
+
+    const nextPage = await sessions.listByTenantId(tenant.id, { limit: 1, offset: 1 });
+    expect(nextPage[0]?.id).toBe(first.id);
   });
 });

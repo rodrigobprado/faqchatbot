@@ -1,57 +1,53 @@
-import { desc, eq } from "drizzle-orm";
+import { and, count, eq, gte, lte, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { analyticsEvents } from "../schema.js";
 
-export type AnalyticsEventRecord = Readonly<{
-  id: string;
+export type RecordAnalyticsEventInput = {
   tenantId: string;
-  conversationId: string | null;
+  conversationId?: string;
   eventType: string;
   payload: Record<string, unknown>;
-  createdAt: Date;
-}>;
+};
 
-const normalizeAnalyticsEventRecord = (row: Record<string, unknown>): AnalyticsEventRecord => ({
-  id: String(row.id ?? row["id"]),
-  tenantId: String(row.tenantId ?? row["tenant_id"]),
-  conversationId: (row.conversationId ?? row["conversation_id"]) as string | null,
-  eventType: String(row.eventType ?? row["event_type"]),
-  payload: (row.payload as Record<string, unknown> | undefined) ?? {},
-  createdAt: row.createdAt instanceof Date ? row.createdAt : new Date(String(row.createdAt ?? row["created_at"]))
-});
+export type AnalyticsPeriod = { from: Date; to: Date };
 
-export type CreateAnalyticsEventInput = Readonly<{
-  id?: string;
-  tenantId: string;
-  conversationId?: string | null;
-  eventType: string;
-  payload?: Record<string, unknown>;
-}>;
+const inPeriod = (tenantId: string, period: AnalyticsPeriod, eventType?: string) =>
+  and(
+    eq(analyticsEvents.tenantId, tenantId),
+    gte(analyticsEvents.createdAt, period.from),
+    lte(analyticsEvents.createdAt, period.to),
+    eventType ? eq(analyticsEvents.eventType, eventType) : undefined,
+  );
 
 export const createAnalyticsEventsRepository = (db: Database) => ({
-  create: async (input: CreateAnalyticsEventInput) => {
-    const [event] = await db
-      .insert(analyticsEvents)
-      .values({
-        id: input.id,
-        tenantId: input.tenantId,
-        conversationId: input.conversationId ?? null,
-        eventType: input.eventType,
-        payload: input.payload ?? {}
-      })
-      .returning();
+  record: async (input: RecordAnalyticsEventInput) => {
+    const [event] = await db.insert(analyticsEvents).values(input).returning();
 
     if (!event) {
-      throw new Error("Failed to create analytics event");
+      throw new Error("Failed to record analytics event");
     }
 
-    return normalizeAnalyticsEventRecord(event as Record<string, unknown>);
+    return event;
   },
-  listByTenantId: async (tenantId: string) =>
-    db
-      .select()
+  aggregateByEventType: async (tenantId: string, period: AnalyticsPeriod) => {
+    const rows = await db
+      .select({ eventType: analyticsEvents.eventType, count: count() })
       .from(analyticsEvents)
-      .where(eq(analyticsEvents.tenantId, tenantId))
-      .orderBy(desc(analyticsEvents.createdAt))
-      .then((rows) => rows.map((row) => normalizeAnalyticsEventRecord(row as Record<string, unknown>)))
+      .where(inPeriod(tenantId, period))
+      .groupBy(analyticsEvents.eventType);
+
+    return rows.map((row) => ({ eventType: row.eventType, count: Number(row.count) }));
+  },
+  averageDurationMs: async (
+    tenantId: string,
+    eventType: string,
+    period: AnalyticsPeriod,
+  ): Promise<number | null> => {
+    const [row] = await db
+      .select({ avg: sql<string | null>`avg((${analyticsEvents.payload}->>'durationMs')::numeric)` })
+      .from(analyticsEvents)
+      .where(inPeriod(tenantId, period, eventType));
+
+    return row?.avg !== null && row?.avg !== undefined ? Math.round(Number(row.avg)) : null;
+  }
 });

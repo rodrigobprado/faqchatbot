@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { plans } from "../schema.js";
 
@@ -35,9 +35,19 @@ export const createPlansRepository = (db: Database) => ({
     const [plan] = await db.select().from(plans).where(eq(plans.id, id));
     return plan ?? null;
   },
-  list: async () =>
-    db
-      .select()
-      .from(plans)
-      .orderBy(asc(plans.slug))
+  list: async () => {
+    return db.select().from(plans);
+  },
+  update: async (
+    id: string,
+    input: Partial<{ name: string; priceCents: number; limits: Record<string, unknown> }>,
+  ) => {
+    const [plan] = await db.update(plans).set(input).where(eq(plans.id, id)).returning();
+
+    if (!plan) {
+      throw new Error("Failed to update plan");
+    }
+
+    return plan;
+  }
 });

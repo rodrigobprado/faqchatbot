@@ -1,226 +1,153 @@
-import { BadGatewayException, BadRequestException, ServiceUnavailableException } from "@nestjs/common";
-import { createLogger, type PlatformLogger } from "../../common/logger.js";
-import type { AgentAdapter, AgentProvider, AgentRouteInput, AgentRouteResult, TenantAgentConfigRecord } from "./agent-adapter.js";
+import type { AgentProvider } from "@faqchatbot/contracts";
+import { createLogger } from "@faqchatbot/logger";
+import { Inject, Injectable } from "@nestjs/common";
+import type { Database } from "../../db/client.js";
+import { createTenantAgentConfigsRepository } from "../../db/repositories/tenant-agent-configs.repository.js";
+import { createWebhookEndpointsRepository } from "../../db/repositories/webhook-endpoints.repository.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { AnalyticsService } from "../analytics/analytics.service.js";
+import { DATABASE } from "../core/core.module.js";
+import { AgentRoutingError, type AgentAdapter, type AgentRequest, type AgentResponse } from "./agent-adapter.js";
+import { CircuitBreaker } from "./circuit-breaker.js";
+import { CrewAiAdapter } from "./crewai.adapter.js";
+import { CustomAgentAdapter } from "./custom.adapter.js";
+import { DifyAdapter } from "./dify.adapter.js";
+import { FlowiseAdapter } from "./flowise.adapter.js";
+import { LangGraphAdapter } from "./langgraph.adapter.js";
+import { McpServerAdapter } from "./mcp.adapter.js";
+import { N8nAgentAdapter } from "./n8n-agent.adapter.js";
+import { OpenAiResponsesAdapter } from "./openai-responses.adapter.js";
 
-const defaultProvider: AgentProvider = "n8n";
-const defaultRetryAttempts = 3;
-const defaultRetryDelayMs = 50;
-const defaultTimeoutMs = 15_000;
-const defaultFailureThreshold = 3;
-const defaultCircuitCooldownMs = 30_000;
+const BREAKER_FAILURE_THRESHOLD = 3;
+const BREAKER_COOLDOWN_MS = 30_000;
+const DEFAULT_RETRY = { maxAttempts: 1, backoffMs: 200 };
 
-type TenantAgentConfigsRepository = Readonly<{
-  findLatestByTenantId(tenantId: string): Promise<TenantAgentConfigRecord | null>;
-}>;
+type RetryPolicy = typeof DEFAULT_RETRY;
 
-type RouterFailureState = Readonly<{
-  consecutiveFailures: number;
-  openUntil: number | null;
-}>;
-
-export type AgentRouterServiceDependencies = Readonly<{
-  tenantAgentConfigs: TenantAgentConfigsRepository;
-  adapters: Readonly<Record<AgentProvider, AgentAdapter>>;
-  fallbackProvider?: AgentProvider;
-  logger?: PlatformLogger;
-  retryAttempts?: number;
-  retryDelayMs?: number;
-  timeoutMs?: number;
-  failureThreshold?: number;
-  circuitCooldownMs?: number;
-}>;
-
-export class AgentRouterService {
-  private readonly logger: PlatformLogger;
-  private readonly failureState = new Map<AgentProvider, RouterFailureState>();
-
-  constructor(private readonly dependencies: AgentRouterServiceDependencies) {
-    this.logger = dependencies.logger ?? createLogger("agent-router");
+const parseRetryPolicy = (raw: unknown): RetryPolicy => {
+  if (typeof raw !== "object" || raw === null) {
+    return DEFAULT_RETRY;
   }
 
-  async route(input: AgentRouteInput): Promise<AgentRouteResult> {
-    if (!input.tenantId) {
-      throw new BadRequestException("Tenant is required for agent routing");
+  const candidate = raw as { maxAttempts?: unknown; backoffMs?: unknown };
+  return {
+    maxAttempts:
+      typeof candidate.maxAttempts === "number" && candidate.maxAttempts > 0
+        ? candidate.maxAttempts
+        : DEFAULT_RETRY.maxAttempts,
+    backoffMs:
+      typeof candidate.backoffMs === "number" && candidate.backoffMs >= 0
+        ? candidate.backoffMs
+        : DEFAULT_RETRY.backoffMs
+  };
+};
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const buildAdapters = (): ReadonlyMap<AgentProvider, AgentAdapter> => {
+  const adapters: [AgentProvider, AgentAdapter][] = [
+    ["n8n", new N8nAgentAdapter()],
+    ["openai_responses", new OpenAiResponsesAdapter()],
+    ["langgraph", new LangGraphAdapter()],
+    ["flowise", new FlowiseAdapter()],
+    ["dify", new DifyAdapter()],
+    ["crewai", new CrewAiAdapter()],
+    ["mcp", new McpServerAdapter()],
+    ["custom", new CustomAgentAdapter()]
+  ];
+  return new Map(adapters);
+};
+
+@Injectable()
+export class AgentRouterService {
+  private readonly adapters: ReadonlyMap<AgentProvider, AgentAdapter> = buildAdapters();
+  private readonly breaker = new CircuitBreaker({
+    failureThreshold: BREAKER_FAILURE_THRESHOLD,
+    cooldownMs: BREAKER_COOLDOWN_MS
+  });
+  private readonly logger = createLogger("agent-router");
+
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly analytics: AnalyticsService,
+  ) {}
+
+  async route(request: AgentRequest): Promise<AgentResponse> {
+    const config = await createTenantAgentConfigsRepository(this.db).findByTenantId(request.tenantId);
+    if (!config || !config.isActive) {
+      throw new AgentRoutingError("No active agent configured for this tenant");
     }
 
-    const agentConfig = await this.dependencies.tenantAgentConfigs.findLatestByTenantId(input.tenantId);
-    const resolvedProvider = this.resolveProvider(agentConfig?.provider, agentConfig?.isActive ?? false);
-    const adapter = this.resolveAdapter(resolvedProvider);
-    const timeoutMs = this.resolveTimeoutMs(agentConfig?.timeoutMs);
-    const attempts = this.resolveRetryAttempts(agentConfig?.retryPolicy);
-    const startedAt = Date.now();
+    const adapter = this.adapters.get(config.provider);
+    if (!adapter) {
+      throw new AgentRoutingError(`No adapter available for provider "${config.provider}"`);
+    }
 
-    this.ensureCircuitClosed(resolvedProvider);
-    this.loggerForProvider(resolvedProvider).info("agent routing started", {
-      provider: resolvedProvider,
-      tenantId: input.tenantId,
-      conversationId: input.conversationId,
-      timeoutMs,
-      attempts
+    const breakerKey = `${request.tenantId}:${config.provider}`;
+    if (this.breaker.isOpen(breakerKey)) {
+      this.logger.warn("agent_routing_circuit_open", { tenantId: request.tenantId, provider: config.provider });
+      throw new AgentRoutingError("Agent temporarily unavailable");
+    }
+
+    const webhook = config.webhookEndpointId
+      ? await createWebhookEndpointsRepository(this.db).findById(config.webhookEndpointId)
+      : null;
+    const retryPolicy = parseRetryPolicy(config.retryPolicy);
+
+    this.analytics.record({
+      type: "AgentRoutingStarted",
+      tenantId: request.tenantId,
+      conversationId: request.conversationId,
+      occurredAt: new Date().toISOString(),
+      provider: config.provider
     });
 
-    try {
-      const response = await this.executeWithRetry(adapter, {
-        ...input,
-        agentConfig
-      }, attempts, timeoutMs, resolvedProvider);
-      this.recordSuccess(resolvedProvider);
-      this.loggerForProvider(resolvedProvider).info("agent routing completed", {
-        provider: resolvedProvider,
-        tenantId: input.tenantId,
-        conversationId: input.conversationId,
-        durationMs: Date.now() - startedAt
-      });
-      return response;
-    } catch (error) {
-      this.recordFailure(resolvedProvider, error);
-      this.loggerForProvider(resolvedProvider).error("agent routing failed", {
-        provider: resolvedProvider,
-        tenantId: input.tenantId,
-        conversationId: input.conversationId,
-        durationMs: Date.now() - startedAt,
-        errorName: error instanceof Error ? error.name : "Error"
-      });
-      throw new BadGatewayException("Agent provider failed");
-    }
-  }
-
-  private resolveProvider(provider: AgentProvider | undefined, isActive: boolean): AgentProvider {
-    if (provider && isActive && provider in this.dependencies.adapters) {
-      return provider;
-    }
-
-    return this.dependencies.fallbackProvider ?? defaultProvider;
-  }
-
-  private resolveAdapter(provider: AgentProvider): AgentAdapter {
-    const adapter = this.dependencies.adapters[provider];
-    if (!adapter) {
-      throw new BadRequestException(`No agent adapter registered for provider ${provider}`);
-    }
-
-    return adapter;
-  }
-
-  private async executeWithRetry(
-    adapter: AgentAdapter,
-    input: AgentRouteInput,
-    attempts: number,
-    timeoutMs: number,
-    provider: AgentProvider,
-  ): Promise<AgentRouteResult> {
+    const startedAt = Date.now();
     let lastError: unknown;
-
-    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    for (let attempt = 1; attempt <= retryPolicy.maxAttempts; attempt += 1) {
       try {
-        this.loggerForProvider(provider).debug("agent routing attempt", {
-          provider,
+        const response = await adapter.send(request, config, webhook);
+        this.breaker.recordSuccess(breakerKey);
+        this.logger.info("agent_routing_succeeded", {
+          tenantId: request.tenantId,
+          provider: config.provider,
           attempt
         });
-        return await this.withTimeout(adapter.route(input), timeoutMs, provider);
+        this.analytics.record({
+          type: "AgentRoutingCompleted",
+          tenantId: request.tenantId,
+          conversationId: request.conversationId,
+          occurredAt: new Date().toISOString(),
+          provider: config.provider,
+          durationMs: Date.now() - startedAt
+        });
+        return response;
       } catch (error) {
         lastError = error;
-        this.loggerForProvider(provider).warn("agent routing attempt failed", {
-          provider,
+        this.logger.warn("agent_routing_attempt_failed", {
+          tenantId: request.tenantId,
+          provider: config.provider,
           attempt,
-          errorName: error instanceof Error ? error.name : "Error"
+          reason: error instanceof Error ? error.message : "unknown"
         });
 
-        if (attempt < attempts) {
-          await this.delay(this.dependencies.retryDelayMs ?? defaultRetryDelayMs);
+        if (attempt < retryPolicy.maxAttempts) {
+          await delay(retryPolicy.backoffMs);
         }
       }
     }
 
-    throw lastError instanceof Error ? lastError : new Error("Agent provider failed");
-  }
-
-  private withTimeout<T>(promise: Promise<T>, timeoutMs: number, provider: AgentProvider): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error(`Agent provider ${provider} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      promise
-        .then((value) => {
-          clearTimeout(timeout);
-          resolve(value);
-        })
-        .catch((error) => {
-          clearTimeout(timeout);
-          reject(error);
-        });
-    });
-  }
-
-  private resolveTimeoutMs(configTimeoutMs?: number): number {
-    return configTimeoutMs ?? this.dependencies.timeoutMs ?? defaultTimeoutMs;
-  }
-
-  private resolveRetryAttempts(retryPolicy: unknown): number {
-    const configured = this.dependencies.retryAttempts;
-    if (typeof configured === "number" && Number.isInteger(configured) && configured > 0) {
-      return configured;
-    }
-
-    if (typeof retryPolicy === "object" && retryPolicy !== null) {
-      const record = retryPolicy as Record<string, unknown>;
-      const attempts = record.attempts;
-      if (typeof attempts === "number" && Number.isInteger(attempts) && attempts > 0) {
-        return attempts;
-      }
-    }
-
-    return defaultRetryAttempts;
-  }
-
-  private ensureCircuitClosed(provider: AgentProvider) {
-    const state = this.failureState.get(provider);
-    if (!state?.openUntil) {
-      return;
-    }
-
-    if (state.openUntil > Date.now()) {
-      throw new ServiceUnavailableException(`Agent provider ${provider} is temporarily unavailable`);
-    }
-
-    this.failureState.delete(provider);
-  }
-
-  private recordSuccess(provider: AgentProvider) {
-    this.failureState.delete(provider);
-  }
-
-  private recordFailure(provider: AgentProvider, error: unknown) {
-    const current = this.failureState.get(provider) ?? {
-      consecutiveFailures: 0,
-      openUntil: null
-    };
-    const consecutiveFailures = current.consecutiveFailures + 1;
-    const threshold = this.dependencies.failureThreshold ?? defaultFailureThreshold;
-    const openUntil = consecutiveFailures >= threshold
-      ? Date.now() + (this.dependencies.circuitCooldownMs ?? defaultCircuitCooldownMs)
-      : null;
-
-    this.failureState.set(provider, {
-      consecutiveFailures,
-      openUntil
+    this.breaker.recordFailure(breakerKey);
+    this.analytics.record({
+      type: "AgentRoutingFailed",
+      tenantId: request.tenantId,
+      conversationId: request.conversationId,
+      occurredAt: new Date().toISOString(),
+      provider: config.provider,
+      reason: (lastError instanceof Error ? lastError.message : "unknown").slice(0, 500),
+      durationMs: Date.now() - startedAt
     });
 
-    this.loggerForProvider(provider).warn("agent provider failure recorded", {
-      provider,
-      consecutiveFailures,
-      openUntil: openUntil ?? undefined,
-      errorName: error instanceof Error ? error.name : "Error"
-    });
-  }
-
-  private async delay(ms: number) {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  private loggerForProvider(provider: AgentProvider): PlatformLogger {
-    void provider;
-    return this.logger;
+    throw new AgentRoutingError("Agent request failed");
   }
 }

@@ -1,359 +1,144 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import type { Sql } from "postgres";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { createDatabase, type Database } from "../../db/client.js";
+import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
+import { createPlansRepository } from "../../db/repositories/plans.repository.js";
+import { createTenantAgentConfigsRepository } from "../../db/repositories/tenant-agent-configs.repository.js";
+import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
+import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
+import { createWebhookEndpointsRepository } from "../../db/repositories/webhook-endpoints.repository.js";
+import { AnalyticsService } from "../analytics/analytics.service.js";
+import { AgentRoutingError, type AgentRequest } from "./agent-adapter.js";
 import { AgentRouterService } from "./agent-router.service.js";
-import type { AgentAdapter, AgentProvider } from "./agent-adapter.js";
 
-const createAdapter = (provider: AgentProvider): AgentAdapter => ({
-  provider,
-  route: vi.fn(async (input) => ({
-    provider,
-    model: input.agentConfig?.model ?? null,
-    providerMessageId: `${provider}-message`,
-    content: {
-      type: "text",
-      text: `${provider}:${typeof input.message.text === "string" ? input.message.text : "Mensagem recebida."}`
-    },
-    metadata: {
-      provider,
-      conversationId: input.conversationId
-    }
-  }))
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required to run repository integration tests");
+}
+
+let db: Database;
+let client: Sql;
+
+beforeAll(() => {
+  ({ db, client } = createDatabase(databaseUrl));
 });
 
-const createService = () => {
-  const n8nAdapter = createAdapter("n8n");
-  const logger = {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn()
-  };
-  const dependencies = {
-    tenantAgentConfigs: {
-      findLatestByTenantId: vi.fn()
-    },
-    logger,
-    adapters: {
-      n8n: n8nAdapter,
-      openai_responses: createAdapter("openai_responses"),
-      langgraph: createAdapter("langgraph"),
-      flowise: createAdapter("flowise"),
-      dify: createAdapter("dify"),
-      crewai: createAdapter("crewai"),
-      mcp: createAdapter("mcp"),
-      custom: createAdapter("custom")
-    }
-  } as const;
+afterAll(async () => {
+  await client.end();
+});
 
-  return { service: new AgentRouterService(dependencies), dependencies };
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+const createTenantWithAgent = async (overrides: { timeoutMs?: number; retryPolicy?: Record<string, unknown> } = {}) => {
+  const plans = createPlansRepository(db);
+  const tenants = createTenantsRepository(db);
+  const webhooks = createWebhookEndpointsRepository(db);
+  const agentConfigs = createTenantAgentConfigsRepository(db);
+
+  const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+  const tenant = await tenants.create({
+    publicId: `tenant-${randomUUID()}`,
+    name: "Acme Inc",
+    planId: plan.id
+  });
+  const webhook = await webhooks.create({
+    tenantId: tenant.id,
+    url: "https://n8n.internal.example.com/webhook/acme",
+    secretRef: "top-secret-value"
+  });
+  await agentConfigs.upsert({
+    tenantId: tenant.id,
+    provider: "n8n",
+    webhookEndpointId: webhook.id,
+    timeoutMs: overrides.timeoutMs ?? 5000,
+    retryPolicy: overrides.retryPolicy ?? {}
+  });
+
+  return { tenant, webhook };
 };
 
-describe("AgentRouterService", () => {
-  it("rejects requests without a tenant id", async () => {
-    const { service } = createService();
+const buildRequest = async (tenantId: string): Promise<AgentRequest> => {
+  const visitorId = randomUUID();
+  const session = await createVisitorSessionsRepository(db).create({ tenantId, visitorId, pageContext: {} });
+  const conversation = await createConversationsRepository(db).create({ tenantId, sessionId: session.id });
 
-    await expect(
-      service.route({
-        tenantId: "",
-        conversationId: randomUUID(),
-        message: {
-          type: "text",
-          text: "Ola"
-        }
-      })
-    ).rejects.toThrow("Tenant is required for agent routing");
+  return {
+    tenantId,
+    conversationId: conversation.id,
+    visitorId,
+    message: { type: "text", text: "Ola" }
+  };
+};
+
+describe("AgentRouterService.route", () => {
+  it("routes to the n8n adapter configured for the tenant", async () => {
+    const { tenant } = await createTenantWithAgent();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ text: "Oi!" }) }));
+    const router = new AgentRouterService(db, new AnalyticsService(db));
+
+    const response = await router.route(await buildRequest(tenant.id));
+
+    expect(response.content).toEqual({ type: "text", text: "Oi!" });
   });
 
-  it("routes through the provider configured for the tenant", async () => {
-    const { service, dependencies } = createService();
-    const tenantId = randomUUID();
-    const conversationId = randomUUID();
-
-    dependencies.tenantAgentConfigs.findLatestByTenantId.mockResolvedValue({
-      id: randomUUID(),
-      tenantId,
-      provider: "openai_responses",
-      model: "gpt-4.1-mini",
-      webhookEndpointId: null,
-      encryptedCredentialsRef: null,
-      routingRules: {},
-      timeoutMs: 15_000,
-      retryPolicy: {},
-      isActive: true
+  it("throws a safe error when the tenant has no active agent configured", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Acme Inc",
+      planId: plan.id
     });
+    const router = new AgentRouterService(db, new AnalyticsService(db));
 
-    const response = await service.route({
-      tenantId,
-      conversationId,
-      message: {
-        type: "text",
-        text: "Ola"
-      }
-    });
-
-    expect(response.provider).toBe("openai_responses");
-    expect(response.content).toEqual({
-      type: "text",
-      text: "openai_responses:Ola"
-    });
-    expect(dependencies.adapters.openai_responses.route).toHaveBeenCalledTimes(1);
-    expect(dependencies.logger.info).toHaveBeenCalledWith(
-      "agent routing started",
-      expect.objectContaining({
-        provider: "openai_responses",
-        tenantId,
-        conversationId
-      })
-    );
+    await expect(router.route(await buildRequest(tenant.id))).rejects.toBeInstanceOf(AgentRoutingError);
   });
 
-  it("honors a service-level retry override", async () => {
-    const { dependencies } = createService();
-    const tenantId = randomUUID();
-    const conversationId = randomUUID();
+  it("retries a failed webhook call up to the configured attempts", async () => {
+    const { tenant } = await createTenantWithAgent({ retryPolicy: { maxAttempts: 3, backoffMs: 1 } });
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network blip"))
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ text: "Recuperado" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const router = new AgentRouterService(db, new AnalyticsService(db));
 
-    dependencies.tenantAgentConfigs.findLatestByTenantId.mockResolvedValue({
-      id: randomUUID(),
-      tenantId,
-      provider: "openai_responses",
-      model: null,
-      webhookEndpointId: null,
-      encryptedCredentialsRef: null,
-      routingRules: {},
-      timeoutMs: 15_000,
-      retryPolicy: {},
-      isActive: true
-    });
+    const response = await router.route(await buildRequest(tenant.id));
 
-    const routeSpy = vi
-      .spyOn(dependencies.adapters.openai_responses, "route")
-      .mockResolvedValueOnce({
-        provider: "openai_responses",
-        model: null,
-        providerMessageId: "provider-message",
-        content: {
-          type: "text",
-          text: "ok"
-        },
-        metadata: {}
-      });
-
-    const overriddenService = new AgentRouterService({
-      tenantAgentConfigs: dependencies.tenantAgentConfigs,
-      adapters: dependencies.adapters,
-      logger: dependencies.logger,
-      retryAttempts: 4
-    });
-
-    await expect(
-      overriddenService.route({
-        tenantId,
-        conversationId,
-        message: {
-          type: "text",
-          text: "Ola"
-        }
-      })
-    ).resolves.toMatchObject({
-      provider: "openai_responses"
-    });
-
-    expect(routeSpy).toHaveBeenCalledTimes(1);
-    expect(dependencies.logger.info).toHaveBeenCalledWith(
-      "agent routing started",
-      expect.objectContaining({
-        attempts: 4
-      })
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.content).toEqual({ type: "text", text: "Recuperado" });
   });
 
-  it("falls back to n8n when the tenant has no active agent config", async () => {
-    const { service, dependencies } = createService();
-    const tenantId = randomUUID();
-    const conversationId = randomUUID();
+  it("gives up after exhausting retries and throws a safe error", async () => {
+    const { tenant, webhook } = await createTenantWithAgent({ retryPolicy: { maxAttempts: 2, backoffMs: 1 } });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error(`boom at ${webhook.url}`)));
+    const router = new AgentRouterService(db, new AnalyticsService(db));
 
-    dependencies.tenantAgentConfigs.findLatestByTenantId.mockResolvedValue({
-      id: randomUUID(),
-      tenantId,
-      provider: "custom",
-      model: null,
-      webhookEndpointId: null,
-      encryptedCredentialsRef: null,
-      routingRules: {},
-      timeoutMs: 15_000,
-      retryPolicy: {},
-      isActive: false
+    await expect(router.route(await buildRequest(tenant.id))).rejects.toSatisfy((error: unknown) => {
+      expect(error).toBeInstanceOf(AgentRoutingError);
+      expect((error as Error).message).not.toContain(webhook.url);
+      expect((error as Error).message).not.toContain(webhook.secretRef);
+      return true;
     });
-
-    const response = await service.route({
-      tenantId,
-      conversationId,
-      message: {
-        type: "markdown",
-        markdown: "**Ola**"
-      }
-    });
-
-    expect(response.provider).toBe("n8n");
-    expect(response.content).toEqual({
-      type: "text",
-      text: "n8n:Mensagem recebida."
-    });
-    expect(dependencies.adapters.n8n.route).toHaveBeenCalledTimes(1);
   });
 
-  it("retries failed providers and eventually recovers", async () => {
-    const { service, dependencies } = createService();
-    const tenantId = randomUUID();
-    const conversationId = randomUUID();
-    const provider = dependencies.adapters.openai_responses;
-    const failure = new Error("provider down");
+  it("opens the circuit breaker after repeated failures for the same tenant", async () => {
+    const { tenant } = await createTenantWithAgent({ retryPolicy: { maxAttempts: 1 } });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("down")));
+    const router = new AgentRouterService(db, new AnalyticsService(db));
 
-    dependencies.tenantAgentConfigs.findLatestByTenantId.mockResolvedValue({
-      id: randomUUID(),
-      tenantId,
-      provider: "openai_responses",
-      model: "gpt-4.1-mini",
-      webhookEndpointId: null,
-      encryptedCredentialsRef: null,
-      routingRules: { attempts: 2 },
-      timeoutMs: 15_000,
-      retryPolicy: { attempts: 2 },
-      isActive: true
-    });
+    for (let i = 0; i < 3; i += 1) {
+      await expect(router.route(await buildRequest(tenant.id))).rejects.toBeInstanceOf(AgentRoutingError);
+    }
 
-    vi.mocked(provider.route)
-      .mockRejectedValueOnce(failure)
-      .mockResolvedValueOnce({
-        provider: "openai_responses",
-        model: "gpt-4.1-mini",
-        providerMessageId: "provider-message",
-        content: {
-          type: "text",
-          text: "ok"
-        },
-        metadata: {}
-      });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
 
-    await expect(
-      service.route({
-        tenantId,
-        conversationId,
-        message: {
-          type: "text",
-          text: "Ola"
-        }
-      })
-    ).resolves.toMatchObject({
-      provider: "openai_responses",
-      content: {
-        type: "text",
-        text: "ok"
-      }
-    });
-
-    expect(provider.route).toHaveBeenCalledTimes(2);
-    expect(dependencies.logger.warn).toHaveBeenCalledWith(
-      "agent routing attempt failed",
-      expect.objectContaining({
-        provider: "openai_responses",
-        attempt: 1
-      })
-    );
-  });
-
-  it("opens the circuit after repeated failures", async () => {
-    const { service, dependencies } = createService();
-    const tenantId = randomUUID();
-    const conversationId = randomUUID();
-
-    dependencies.tenantAgentConfigs.findLatestByTenantId.mockResolvedValue({
-      id: randomUUID(),
-      tenantId,
-      provider: "openai_responses",
-      model: null,
-      webhookEndpointId: null,
-      encryptedCredentialsRef: null,
-      routingRules: { attempts: 1 },
-      timeoutMs: 15_000,
-      retryPolicy: { attempts: 1 },
-      isActive: true
-    });
-
-    vi.mocked(dependencies.adapters.openai_responses.route).mockRejectedValue(new Error("provider down"));
-
-    await expect(
-      service.route({
-        tenantId,
-        conversationId,
-        message: {
-          type: "text",
-          text: "Ola"
-        }
-      })
-    ).rejects.toThrow("Agent provider failed");
-
-    await expect(
-      service.route({
-        tenantId,
-        conversationId,
-        message: {
-          type: "text",
-          text: "Ola"
-        }
-      })
-    ).rejects.toThrow("Agent provider failed");
-
-    await expect(
-      service.route({
-        tenantId,
-        conversationId,
-        message: {
-          type: "text",
-          text: "Ola"
-        }
-      })
-    ).rejects.toThrow("Agent provider failed");
-
-    await expect(
-      service.route({
-        tenantId,
-        conversationId,
-        message: {
-          type: "text",
-          text: "Ola"
-        }
-      })
-    ).rejects.toThrow("temporarily unavailable");
-  });
-
-  it("expires an open circuit when the cool-down passes", async () => {
-    const { service, dependencies } = createService();
-    const tenantId = randomUUID();
-    const conversationId = randomUUID();
-    const failureState = (service as unknown as {
-      failureState: Map<AgentProvider, { consecutiveFailures: number; openUntil: number | null }>;
-    }).failureState;
-
-    dependencies.tenantAgentConfigs.findLatestByTenantId.mockResolvedValue(null);
-    failureState.set("n8n", {
-      consecutiveFailures: 3,
-      openUntil: Date.now() - 1
-    });
-
-    await expect(
-      service.route({
-        tenantId,
-        conversationId,
-        message: {
-          type: "text",
-          text: "Ola"
-        }
-      })
-    ).resolves.toMatchObject({
-      provider: "n8n"
-    });
-
-    expect(failureState.has("n8n")).toBe(false);
+    await expect(router.route(await buildRequest(tenant.id))).rejects.toBeInstanceOf(AgentRoutingError);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

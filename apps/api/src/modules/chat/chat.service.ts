@@ -1,272 +1,169 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
-import { z } from "zod";
-import type { WidgetAccessTokenPayload } from "../../auth/widget-token.js";
-import type { AgentRouterService } from "../agent-router/agent-router.service.js";
+import type { ChatMessage, MessageContent } from "@faqchatbot/contracts";
+import { messageContentSchema } from "@faqchatbot/contracts";
+import { BadRequestException, ForbiddenException, Inject, Injectable, type MessageEvent } from "@nestjs/common";
+import type { Observable } from "rxjs";
+import type { Database } from "../../db/client.js";
+import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
+import { createMessagesRepository } from "../../db/repositories/messages.repository.js";
+import type { messages } from "../../db/schema.js";
+import type { WidgetTokenClaims } from "../auth/access-token-claims.js";
+import { DATABASE } from "../core/core.module.js";
+// NestJS resolves these constructor-injected classes via emitDecoratorMetadata,
+// which needs a real (non `import type`) reference.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { AgentRouterService } from "../agent-router/agent-router.service.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { AnalyticsService } from "../analytics/analytics.service.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { RateLimitService } from "../rate-limit/rate-limit.service.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { ChatStreamBroker } from "./chat-stream.broker.js";
+import { sanitizeMessageContent } from "./markdown-sanitizer.js";
 
-const httpUrlSchema = z
-  .string()
-  .refine((value) => {
-    try {
-      return ["http:", "https:"].includes(new URL(value).protocol);
-    } catch {
-      return false;
-    }
-  }, {
-    message: "URL must use http or https"
-  });
+const TOKEN_DELAY_MS = 15;
+const GENERIC_ASSISTANT_ERROR = "Nao foi possivel obter uma resposta no momento.";
 
-const messageRoleSchema = z.enum(["user", "assistant", "system"]);
+type MessageRow = typeof messages.$inferSelect;
 
-const baseMessageSchema = z.object({
-  id: z.string().uuid().optional(),
-  conversationId: z.string().uuid(),
-  tenantId: z.string().uuid().optional(),
-  role: messageRoleSchema,
-  createdAt: z.string().datetime().optional(),
-  metadata: z.record(z.string(), z.unknown()).default({})
-});
-
-const textMessageContentSchema = z.object({
-  type: z.literal("text"),
-  text: z.string().min(1).max(16000)
-});
-
-const markdownMessageContentSchema = z.object({
-  type: z.literal("markdown"),
-  markdown: z.string().min(1).max(16000)
-});
-
-const mediaMessageContentSchema = z.object({
-  type: z.enum(["image", "video", "audio", "file"]),
-  url: httpUrlSchema,
-  title: z.string().max(120).optional(),
-  mimeType: z.string().max(120).optional(),
-  sizeBytes: z.number().int().nonnegative().optional()
-});
-
-const buttonSchema = z.object({
-  id: z.string().min(1).max(80),
-  label: z.string().min(1).max(80),
-  value: z.string().max(500).optional(),
-  url: httpUrlSchema.optional()
-});
-
-const cardMessageContentSchema = z.object({
-  type: z.literal("card"),
-  title: z.string().min(1).max(120),
-  description: z.string().max(1000).optional(),
-  imageUrl: httpUrlSchema.optional(),
-  buttons: z.array(buttonSchema).max(6).default([])
-});
-
-const chatMessageContentSchema = z.discriminatedUnion("type", [
-  textMessageContentSchema,
-  markdownMessageContentSchema,
-  mediaMessageContentSchema,
-  cardMessageContentSchema
-]);
-
-const chatMessageCreateRequestSchema = z.object({
-  content: chatMessageContentSchema,
-  metadata: z.record(z.string(), z.unknown()).default({})
-});
-
-const chatMessageSchema = baseMessageSchema.extend({
-  content: chatMessageContentSchema
-});
-
-const chatMessageExchangeResponseSchema = z.object({
-  conversationId: z.string().uuid(),
-  userMessage: chatMessageSchema,
-  assistantMessage: chatMessageSchema
-});
-
-const chatMessageHistoryResponseSchema = z.object({
-  conversationId: z.string().uuid(),
-  messages: z.array(chatMessageSchema)
-});
-
-type ChatMessage = z.infer<typeof chatMessageSchema>;
-type ChatMessageCreateRequest = z.infer<typeof chatMessageCreateRequestSchema>;
-
-type ConversationRecord = Readonly<{
-  id: string;
-  tenantId: string;
-  sessionId: string;
-  status: "open" | "closed";
-}>;
-
-type MessageRecord = Readonly<{
-  id: string;
-  tenantId: string;
+export type SendMessageInput = {
   conversationId: string;
-  role: "user" | "assistant" | "system";
-  type: string;
   content: unknown;
-  metadata: Record<string, unknown> | null;
-  providerMessageId: string | null;
-  createdAt: Date;
-}>;
+};
 
-export type ChatServiceDependencies = Readonly<{
-  conversations: {
-    findById(id: string): Promise<ConversationRecord | null>;
-  };
-  agentRouter: AgentRouterService;
-  messages: {
-    create(input: {
-      id?: string;
-      tenantId: string;
-      conversationId: string;
-      role: "user" | "assistant" | "system";
-      type: string;
-      content: Record<string, unknown>;
-      metadata?: Record<string, unknown>;
-      providerMessageId?: string | null;
-    }): Promise<MessageRecord>;
-    listByConversationId(conversationId: string): Promise<MessageRecord[]>;
-  };
-  analyticsEvents?: {
-    create(input: {
-      tenantId: string;
-      conversationId?: string | null;
-      eventType: string;
-      payload?: Record<string, unknown>;
-    }): Promise<unknown>;
-  };
-}>;
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+const toChatMessage = (row: MessageRow): ChatMessage => ({
+  id: row.id,
+  conversationId: row.conversationId,
+  tenantId: row.tenantId,
+  role: row.role,
+  createdAt: row.createdAt.toISOString(),
+  metadata: row.metadata as Record<string, unknown>,
+  content: row.content as MessageContent
+});
+
+@Injectable()
 export class ChatService {
-  constructor(private readonly dependencies: ChatServiceDependencies) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly broker: ChatStreamBroker,
+    private readonly agentRouter: AgentRouterService,
+    private readonly rateLimit: RateLimitService,
+    private readonly analytics: AnalyticsService,
+  ) {}
 
-  async sendMessage(actor: WidgetAccessTokenPayload, rawInput: unknown) {
-    const input = this.parseCreateInput(rawInput);
-    const conversation = await this.loadConversation(actor, actor.conversationId);
-    const userMessage = await this.dependencies.messages.create({
-      tenantId: actor.tenantId,
-      conversationId: conversation.id,
+  async sendMessage(claims: WidgetTokenClaims, input: SendMessageInput): Promise<ChatMessage> {
+    this.assertOwnsConversation(claims, input.conversationId);
+
+    await this.rateLimit.enforce("visitor", claims.sub, claims.tenantId);
+    await this.rateLimit.enforce("conversation", claims.conversationId, claims.tenantId);
+
+    const parsed = messageContentSchema.safeParse(input.content);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid message content");
+    }
+
+    const sanitizedContent = sanitizeMessageContent(parsed.data);
+    const messagesRepository = createMessagesRepository(this.db);
+    const userMessage = await messagesRepository.create({
+      tenantId: claims.tenantId,
+      conversationId: claims.conversationId,
       role: "user",
-      type: input.content.type,
-      content: input.content,
-      metadata: input.metadata
-    });
-    await this.recordAnalyticsEvent({
-      tenantId: actor.tenantId,
-      conversationId: conversation.id,
-      eventType: "WidgetMessageSent",
-      payload: {
-        role: "user",
-        messageType: input.content.type,
-        messageId: userMessage.id
-      }
-    });
-    const assistantRoute = await this.dependencies.agentRouter.route({
-      tenantId: actor.tenantId,
-      conversationId: conversation.id,
-      message: input.content
-    });
-    const assistantMessage = await this.dependencies.messages.create({
-      tenantId: actor.tenantId,
-      conversationId: conversation.id,
-      role: "assistant",
-      type: String(assistantRoute.content.type ?? "text"),
-      content: assistantRoute.content,
-      metadata: {
-        replyToMessageId: userMessage.id,
-        source: "platform",
-        provider: assistantRoute.provider,
-        providerMessageId: assistantRoute.providerMessageId,
-        ...assistantRoute.metadata
-      }
-    });
-    await this.recordAnalyticsEvent({
-      tenantId: actor.tenantId,
-      conversationId: conversation.id,
-      eventType: "WidgetReplyCreated",
-      payload: {
-        role: "assistant",
-        messageType: String(assistantRoute.content.type ?? "text"),
-        messageId: assistantMessage.id,
-        provider: assistantRoute.provider
-      }
+      type: sanitizedContent.type,
+      content: sanitizedContent
     });
 
-    return chatMessageExchangeResponseSchema.parse({
-      conversationId: conversation.id,
-      userMessage: this.serializeMessage(userMessage),
-      assistantMessage: this.serializeMessage(assistantMessage)
+    void this.streamAssistantReply(claims, sanitizedContent);
+
+    return toChatMessage(userMessage);
+  }
+
+  async getHistory(claims: WidgetTokenClaims, conversationId: string): Promise<ChatMessage[]> {
+    this.assertOwnsConversation(claims, conversationId);
+
+    const rows = await createMessagesRepository(this.db).listByConversationId(conversationId);
+    return rows.map(toChatMessage);
+  }
+
+  stream(claims: WidgetTokenClaims, conversationId: string): Observable<MessageEvent> {
+    this.assertOwnsConversation(claims, conversationId);
+
+    return this.broker.stream(conversationId);
+  }
+
+  recordButtonClick(claims: WidgetTokenClaims, input: { conversationId: string; buttonId: string }): void {
+    this.assertOwnsConversation(claims, input.conversationId);
+
+    this.analytics.record({
+      type: "ButtonClicked",
+      tenantId: claims.tenantId,
+      occurredAt: new Date().toISOString(),
+      conversationId: claims.conversationId,
+      buttonId: input.buttonId
     });
   }
 
-  async getHistory(actor: WidgetAccessTokenPayload, conversationId: string) {
-    const conversation = await this.loadConversation(actor, conversationId);
-    const messages = await this.dependencies.messages.listByConversationId(conversation.id);
+  async endConversation(
+    claims: WidgetTokenClaims,
+    conversationId: string,
+    input: { reason?: "resolved" | "abandoned" },
+  ): Promise<void> {
+    this.assertOwnsConversation(claims, conversationId);
 
-    return chatMessageHistoryResponseSchema.parse({
-      conversationId: conversation.id,
-      messages: messages.map((message) => this.serializeMessage(message))
+    const endedAt = new Date();
+    const conversation = await createConversationsRepository(this.db).close(conversationId, endedAt);
+
+    this.analytics.record({
+      type: "ConversationEnded",
+      tenantId: claims.tenantId,
+      occurredAt: endedAt.toISOString(),
+      conversationId,
+      reason: input.reason,
+      durationMs: endedAt.getTime() - conversation.startedAt.getTime()
     });
   }
 
-  async buildStream(actor: WidgetAccessTokenPayload, conversationId: string) {
-    const history = await this.getHistory(actor, conversationId);
-    const frames = [
-      "retry: 3000\n\n",
-      ...history.messages.map((message) => `event: message\ndata: ${JSON.stringify(message)}\n\n`),
-      `event: done\ndata: ${JSON.stringify({ conversationId: history.conversationId, total: history.messages.length })}\n\n`
-    ];
-
-    return frames.join("");
+  private assertOwnsConversation(claims: WidgetTokenClaims, conversationId: string): void {
+    if (claims.conversationId !== conversationId) {
+      throw new ForbiddenException("Token does not grant access to this conversation");
+    }
   }
 
-  private parseCreateInput(rawInput: unknown): ChatMessageCreateRequest {
+  private async streamAssistantReply(claims: WidgetTokenClaims, userContent: MessageContent): Promise<void> {
+    const { tenantId, conversationId } = claims;
+    this.broker.emit(conversationId, { type: "typing" });
+
+    let replyContent: MessageContent;
     try {
-      return chatMessageCreateRequestSchema.parse(rawInput);
+      const response = await this.agentRouter.route({
+        tenantId,
+        conversationId,
+        visitorId: claims.sub,
+        message: userContent
+      });
+      replyContent = response.content;
     } catch {
-      throw new BadRequestException("Invalid chat message payload");
-    }
-  }
-
-  private async loadConversation(actor: WidgetAccessTokenPayload, conversationId: string): Promise<ConversationRecord> {
-    const conversation = await this.dependencies.conversations.findById(conversationId);
-    if (!conversation) {
-      throw new NotFoundException(`Conversation ${conversationId} was not found`);
-    }
-
-    if (conversation.tenantId !== actor.tenantId || conversation.sessionId !== actor.sessionId) {
-      throw new ForbiddenException("Conversation access denied");
-    }
-
-    if (conversation.status !== "open") {
-      throw new ForbiddenException("Conversation is closed");
-    }
-
-    return conversation;
-  }
-
-  private serializeMessage(message: MessageRecord): ChatMessage {
-    return chatMessageSchema.parse({
-      ...message,
-      createdAt: message.createdAt.toISOString(),
-      metadata: message.metadata ?? {},
-      content: message.content
-    });
-  }
-
-  private async recordAnalyticsEvent(input: {
-    tenantId: string;
-    conversationId?: string | null;
-    eventType: string;
-    payload?: Record<string, unknown>;
-  }) {
-    if (!this.dependencies.analyticsEvents) {
+      this.broker.emit(conversationId, { type: "error", message: GENERIC_ASSISTANT_ERROR });
       return;
     }
 
-    try {
-      await this.dependencies.analyticsEvents.create(input);
-    } catch {
-      // Analytics must never block the chat flow.
+    if (replyContent.type === "text" || replyContent.type === "markdown") {
+      const text = replyContent.type === "text" ? replyContent.text : replyContent.markdown;
+      for (const token of text.split(" ")) {
+        await delay(TOKEN_DELAY_MS);
+        this.broker.emit(conversationId, { type: "token", token });
+      }
     }
+
+    const sanitizedReply = sanitizeMessageContent(replyContent);
+    const assistantMessage = await createMessagesRepository(this.db).create({
+      tenantId,
+      conversationId,
+      role: "assistant",
+      type: sanitizedReply.type,
+      content: sanitizedReply
+    });
+
+    this.broker.emit(conversationId, { type: "message", message: toChatMessage(assistantMessage) });
   }
 }

@@ -1,31 +1,26 @@
 import { createDatabase } from "./client.js";
+import { hashPassword } from "../auth/password.js";
+import { createPermissionsRepository } from "./repositories/permissions.repository.js";
 import { createPlansRepository } from "./repositories/plans.repository.js";
 import { createRolesRepository } from "./repositories/roles.repository.js";
-import { createTenantDomainsRepository } from "./repositories/tenant-domains.repository.js";
+import { createRolePermissionsRepository } from "./repositories/role-permissions.repository.js";
 import { createTenantsRepository } from "./repositories/tenants.repository.js";
 import { createUserRolesRepository } from "./repositories/user-roles.repository.js";
 import { createUsersRepository } from "./repositories/users.repository.js";
-import { hashPassword } from "../auth/password.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to run the seed");
 }
 
-const branch = process.env.APP_BRANCH ?? "main";
-const tenantPublicId = process.env.SEED_TENANT_PUBLIC_ID ?? `demo-${branch}`;
-const tenantName = process.env.SEED_TENANT_NAME ?? `Demo Tenant ${branch}`;
-const tenantDomain = process.env.SEED_TENANT_DOMAIN ?? "localhost";
-const adminEmail = process.env.SEED_ADMIN_EMAIL ?? `admin+${branch}@faqchatbot.local`;
-const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "change-me-now";
-
 const { db, client } = createDatabase(databaseUrl);
 
 const plans = createPlansRepository(db);
 const tenants = createTenantsRepository(db);
-const tenantDomains = createTenantDomainsRepository(db);
 const users = createUsersRepository(db);
-const roles = createRolesRepository(db);
+const permissionsRepo = createPermissionsRepository(db);
+const rolesRepo = createRolesRepository(db);
+const rolePermissions = createRolePermissionsRepository(db);
 const userRoles = createUserRolesRepository(db);
 
 const plan =
@@ -37,47 +32,46 @@ const plan =
   }));
 
 const tenant =
-  (await tenants.findByPublicId(tenantPublicId)) ??
-  (await tenants.create({ publicId: tenantPublicId, name: tenantName, planId: plan.id }));
+  (await tenants.findByPublicId("demo")) ??
+  (await tenants.create({ publicId: "demo", name: "Demo Tenant", planId: plan.id }));
 
-const existingDomains = await tenantDomains.listByTenantId(tenant.id);
-if (!existingDomains.some((domain) => domain.domain === tenantDomain)) {
-  await tenantDomains.create({ tenantId: tenant.id, domain: tenantDomain });
-}
-
+const adminEmail = "admin@faqchatbot.local";
 const admin =
   (await users.findByEmail(adminEmail)) ??
   (await users.create({
     tenantId: tenant.id,
     email: adminEmail,
-    passwordHash: hashPassword(adminPassword)
+    passwordHash: await hashPassword(process.env.SEED_ADMIN_PASSWORD ?? "change-me-now")
   }));
 
-const adminRole =
-  (await roles.findByTenantIdAndSlug(tenant.id, "admin")) ??
-  (await roles.create({
-    tenantId: tenant.id,
-    slug: "admin",
-    name: "Administrator"
-  }));
+const PERMISSION_SLUGS = ["tenants:read", "tenants:write"] as const;
+const permissionIds: string[] = [];
+
+for (const slug of PERMISSION_SLUGS) {
+  const existing = await permissionsRepo.findBySlug(slug);
+  permissionIds.push(existing?.id ?? (await permissionsRepo.create({ slug, description: `Seeded ${slug}` })).id);
+}
 
 const platformAdminRole =
-  (await roles.findByTenantIdAndSlug(null, "platform_admin")) ??
-  (await roles.create({
-    slug: "platform_admin",
-    name: "Platform Administrator"
-  }));
+  (await rolesRepo.findBySlugForTenant(tenant.id, "platform_admin")) ??
+  (await rolesRepo.create({ tenantId: tenant.id, slug: "platform_admin", name: "Platform Admin" }));
 
-await userRoles.assignRole(admin.id, adminRole.id);
-await userRoles.assignRole(admin.id, platformAdminRole.id);
+for (const permissionId of permissionIds) {
+  await rolePermissions.assign(platformAdminRole.id, permissionId).catch(() => undefined);
+}
+
+const adminRoleSlugs = await userRoles.listRoleSlugsByUserId(admin.id);
+if (!adminRoleSlugs.includes("platform_admin")) {
+  await userRoles.assign(admin.id, platformAdminRole.id);
+}
 
 process.stdout.write(
   `${JSON.stringify(
     {
-      branch,
       plan: plan.slug,
       tenant: tenant.publicId,
-      admin: admin.email
+      admin: admin.email,
+      roles: await userRoles.listRoleSlugsByUserId(admin.id)
     },
     null,
     2,

@@ -1,178 +1,123 @@
-import { randomUUID } from "node:crypto";
-import { BadRequestException, UnauthorizedException } from "@nestjs/common";
-import { z } from "zod";
-import {
-  createAdminAccessToken,
-  createAdminRefreshToken,
-  decodeAdminRefreshToken,
-  type AdminAccessTokenPayload
-} from "../../auth/admin-token.js";
+import type { AdminLoginResponse, RefreshTokenResponse } from "@faqchatbot/contracts";
+import type { PlatformEnvironment } from "@faqchatbot/config";
+import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+// NestJS resolves this constructor-injected class via emitDecoratorMetadata,
+// which needs a real (non `import type`) reference.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { JwtService } from "@nestjs/jwt";
 import { verifyPassword } from "../../auth/password.js";
+import type { Database } from "../../db/client.js";
+import { createAuditLogsRepository } from "../../db/repositories/audit-logs.repository.js";
+import { createRolePermissionsRepository } from "../../db/repositories/role-permissions.repository.js";
+import { createUserRolesRepository } from "../../db/repositories/user-roles.repository.js";
+import { createUsersRepository } from "../../db/repositories/users.repository.js";
+import type { AccessTokenClaims } from "./access-token-claims.js";
+import { DATABASE, ENV } from "../core/core.module.js";
 
-type UserRecord = Readonly<{
-  id: string;
+const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
+const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+type RefreshTokenClaims = {
+  sub: string;
   tenantId: string;
-  email: string;
-  passwordHash: string;
-  status: string;
-}>;
-
-export type AuthServiceDependencies = Readonly<{
-  users: {
-    findByEmail(email: string): Promise<UserRecord | null>;
-    findById(id: string): Promise<UserRecord | null>;
-  };
-  userRoles: {
-    listRoleSlugsByUserId(userId: string): Promise<Array<Readonly<{ slug: string }>>>;
-  };
-  accessTokenSecret: string;
-  refreshTokenSecret: string;
-  accessTokenTtlSeconds: number;
-  refreshTokenTtlSeconds: number;
-}>;
-
-const loginSchema = z.object({
-  email: z.string().email().max(255),
-  password: z.string().min(8).max(256)
-});
-
-const refreshSchema = z.object({
-  refreshToken: z.string().min(1)
-});
-
-const resolveTokenSecret = (
-  primaryValue: string | undefined,
-  primaryEnvName: string,
-  fallbackValue: string | undefined,
-  fallbackEnvName: string,
-): string => {
-  if (primaryValue && primaryValue.trim()) {
-    return primaryValue;
-  }
-
-  if (fallbackValue && fallbackValue.trim()) {
-    return fallbackValue;
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      `${primaryEnvName} or ${fallbackEnvName} is required in production`,
-    );
-  }
-
-  return `dev-${primaryEnvName.toLowerCase()}-dev-${primaryEnvName.toLowerCase()}`;
+  scope: "admin_refresh";
 };
 
-export const createAdminTokenSecrets = () => ({
-  accessTokenSecret: resolveTokenSecret(
-    process.env.JWT_ADMIN_SECRET,
-    "JWT_ADMIN_SECRET",
-    process.env.JWT_ACCESS_SECRET,
-    "JWT_ACCESS_SECRET",
-  ),
-  refreshTokenSecret: resolveTokenSecret(
-    process.env.JWT_ADMIN_REFRESH_SECRET,
-    "JWT_ADMIN_REFRESH_SECRET",
-    process.env.JWT_REFRESH_SECRET,
-    "JWT_REFRESH_SECRET",
-  )
-});
-
+@Injectable()
 export class AuthService {
-  constructor(private readonly dependencies: AuthServiceDependencies) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    @Inject(ENV) private readonly env: PlatformEnvironment,
+    private readonly jwtService: JwtService,
+  ) {}
 
-  async login(rawInput: unknown) {
-    const input = this.parseLoginInput(rawInput);
-    const user = await this.dependencies.users.findByEmail(input.email);
+  async login(email: string, password: string): Promise<AdminLoginResponse> {
+    const users = createUsersRepository(this.db);
+    const user = await users.findByEmail(email);
+    const passwordMatches = user ? await verifyPassword(user.passwordHash, password) : false;
 
-    if (!user || user.status !== "active") {
-      throw new UnauthorizedException("Invalid credentials");
+    if (!user || user.status !== "active" || !passwordMatches) {
+      throw new UnauthorizedException("Invalid email or password");
     }
 
-    if (!verifyPassword(input.password, user.passwordHash)) {
-      throw new UnauthorizedException("Invalid credentials");
-    }
+    const { roleSlugs, permissionSlugs } = await this.resolveGrants(user.id);
 
-    return this.issueTokens(user);
-  }
-
-  async refresh(rawInput: unknown) {
-    const input = this.parseRefreshInput(rawInput);
-    const payload = this.decodeRefreshToken(input.refreshToken);
-    const user = await this.dependencies.users.findById(payload.userId);
-
-    if (!user || user.status !== "active" || user.tenantId !== payload.tenantId) {
-      throw new UnauthorizedException("Invalid refresh token");
-    }
-
-    return this.issueTokens(user);
-  }
-
-  private parseLoginInput(rawInput: unknown) {
-    try {
-      return loginSchema.parse(rawInput);
-    } catch {
-      throw new BadRequestException("Invalid login payload");
-    }
-  }
-
-  private parseRefreshInput(rawInput: unknown) {
-    try {
-      return refreshSchema.parse(rawInput);
-    } catch {
-      throw new BadRequestException("Invalid refresh payload");
-    }
-  }
-
-  private decodeRefreshToken(token: string) {
-    const payload = decodeAdminRefreshToken(token, this.dependencies.refreshTokenSecret);
-
-    if (payload.scope !== "admin_refresh") {
-      throw new UnauthorizedException("Invalid refresh token");
-    }
-
-    if (payload.expiresAt <= Math.floor(Date.now() / 1000)) {
-      throw new UnauthorizedException("Refresh token expired");
-    }
-
-    return payload;
-  }
-
-  private async issueTokens(user: UserRecord) {
-    const roles = await this.dependencies.userRoles.listRoleSlugsByUserId(user.id);
-    const roleSlugs = roles.map((role) => role.slug);
-    const issuedAt = Math.floor(Date.now() / 1000);
-    const accessExpiresAt = issuedAt + this.dependencies.accessTokenTtlSeconds;
-    const refreshExpiresAt = issuedAt + this.dependencies.refreshTokenTtlSeconds;
-    const accessTokenPayload: AdminAccessTokenPayload = {
-      scope: "admin",
-      userId: user.id,
+    const auditLogs = createAuditLogsRepository(this.db);
+    await auditLogs.create({
       tenantId: user.tenantId,
-      roles: roleSlugs,
-      issuedAt,
-      expiresAt: accessExpiresAt
-    };
+      actorUserId: user.id,
+      action: "auth.login",
+      targetType: "user",
+      targetId: user.id
+    });
 
     return {
-      accessToken: createAdminAccessToken(accessTokenPayload, this.dependencies.accessTokenSecret),
-      refreshToken: createAdminRefreshToken(
-        {
-          scope: "admin_refresh",
-          userId: user.id,
-          tenantId: user.tenantId,
-          issuedAt,
-          expiresAt: refreshExpiresAt,
-          nonce: randomUUID()
-        },
-        this.dependencies.refreshTokenSecret,
-      ),
-      expiresInSeconds: this.dependencies.accessTokenTtlSeconds,
-      user: {
-        id: user.id,
-        tenantId: user.tenantId,
-        email: user.email,
-        roles: roleSlugs
-      }
+      accessToken: this.signAccessToken(user.id, user.tenantId, roleSlugs, permissionSlugs),
+      refreshToken: this.signRefreshToken(user.id, user.tenantId),
+      expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
+      user: { id: user.id, email: user.email, tenantId: user.tenantId, roles: roleSlugs }
     };
+  }
+
+  async refresh(refreshToken: string): Promise<RefreshTokenResponse> {
+    const claims = await this.verifyRefreshToken(refreshToken);
+
+    const users = createUsersRepository(this.db);
+    const user = await users.findById(claims.sub);
+
+    if (!user || user.status !== "active") {
+      throw new UnauthorizedException("User is no longer active");
+    }
+
+    const { roleSlugs, permissionSlugs } = await this.resolveGrants(user.id);
+
+    return {
+      accessToken: this.signAccessToken(user.id, user.tenantId, roleSlugs, permissionSlugs),
+      expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS
+    };
+  }
+
+  private async resolveGrants(userId: string) {
+    const userRoles = createUserRolesRepository(this.db);
+    const rolePermissions = createRolePermissionsRepository(this.db);
+
+    const [roleSlugs, permissionSlugs] = await Promise.all([
+      userRoles.listRoleSlugsByUserId(userId),
+      rolePermissions.listPermissionSlugsByUserId(userId)
+    ]);
+
+    return { roleSlugs, permissionSlugs };
+  }
+
+  private async verifyRefreshToken(refreshToken: string): Promise<RefreshTokenClaims> {
+    try {
+      const claims = await this.jwtService.verifyAsync<RefreshTokenClaims>(refreshToken, {
+        secret: this.env.JWT_REFRESH_SECRET
+      });
+
+      if (claims.scope !== "admin_refresh") {
+        throw new Error("wrong scope");
+      }
+
+      return claims;
+    } catch {
+      throw new UnauthorizedException("Invalid or expired refresh token");
+    }
+  }
+
+  private signAccessToken(userId: string, tenantId: string, roles: string[], permissions: string[]): string {
+    const claims: AccessTokenClaims = { sub: userId, tenantId, roles, permissions, scope: "admin" };
+    return this.jwtService.sign(claims, {
+      secret: this.env.JWT_ACCESS_SECRET,
+      expiresIn: ACCESS_TOKEN_TTL_SECONDS
+    });
+  }
+
+  private signRefreshToken(userId: string, tenantId: string): string {
+    const claims: RefreshTokenClaims = { sub: userId, tenantId, scope: "admin_refresh" };
+    return this.jwtService.sign(claims, {
+      secret: this.env.JWT_REFRESH_SECRET,
+      expiresIn: REFRESH_TOKEN_TTL_SECONDS
+    });
   }
 }

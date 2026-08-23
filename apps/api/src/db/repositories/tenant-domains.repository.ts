@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../client.js";
-import { tenantDomains } from "../schema.js";
+import { tenantDomains, tenants } from "../schema.js";
 
 export type CreateTenantDomainInput = {
   tenantId: string;
@@ -17,22 +17,18 @@ export const createTenantDomainsRepository = (db: Database) => ({
 
     return domain;
   },
-  findByDomain: async (domain: string) => {
-    const [tenantDomain] = await db
-      .select()
-      .from(tenantDomains)
-      .where(eq(tenantDomains.domain, domain));
-
-    return tenantDomain ?? null;
-  },
   listByTenantId: async (tenantId: string) =>
     db.select().from(tenantDomains).where(eq(tenantDomains.tenantId, tenantId)),
-  delete: async (id: string) => {
-    const [tenantDomain] = await db
-      .delete(tenantDomains)
-      .where(eq(tenantDomains.id, id))
-      .returning();
-
-    return tenantDomain ?? null;
+  remove: async (id: string) => {
+    const [domain] = await db.delete(tenantDomains).where(eq(tenantDomains.id, id)).returning();
+    return domain ?? null;
   },
+  listActiveTenantHostnames: async (): Promise<string[]> => {
+    const rows = await db
+      .selectDistinct({ domain: tenantDomains.domain })
+      .from(tenantDomains)
+      .innerJoin(tenants, eq(tenants.id, tenantDomains.tenantId))
+      .where(eq(tenants.status, "active"));
+    return rows.map((row) => row.domain.toLowerCase());
+  }
 });

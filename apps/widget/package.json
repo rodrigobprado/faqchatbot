@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && node ./scripts/check-bundle-size.mjs",
     "dev": "vite --host 0.0.0.0 --port 5173",
     "test": "vitest run --coverage",
+    "test:e2e": "vite build && playwright test",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -14,6 +15,9 @@
     "lit": "^3.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@faqchatbot/testing": "workspace:*",
+    "@playwright/test": "^1.62.1",
     "@vitejs/plugin-legacy": "^7.1.0",
     "jsdom": "^26.1.0",
     "vite": "^7.0.6",

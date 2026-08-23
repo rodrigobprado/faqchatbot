@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Exemplo de integracao do widget</title>
+  </head>
+  <body>
+    <h1>Site do cliente</h1>
+    <p>O widget carrega abaixo com o script unico.</p>
+
+    <!-- Instalacao basica -->
+    <script
+      src="https://cdn.faqchatbot.example.com/widget.js"
+      data-agent="demo"
+      data-api-url="http://localhost:3000"
+      defer
+    ></script>
+
+    <script>
+      // API publica opcional (idempotente)
+      window.addEventListener("load", () => {
+        const widget = window.ChatWidget;
+        if (!widget) return;
+
+        // Eventos publicos via DOM (bubbles/composed)
+        document.addEventListener("chat-widget:open", () => console.log("aberto"));
+        document.addEventListener("chat-widget:message", (e) => console.log("mensagem", e.detail.message));
+        document.addEventListener("chat-widget:error", (e) => console.warn("erro", e.detail.message));
+
+        // Exemplo: identificar o visitante apos login no site hospedeiro
+        window.ChatWidget.identify({ id: "crm-123", nome: "Maria", email: "maria@exemplo.com" });
+
+        // window.ChatWidget.open();
+        // window.ChatWidget.send("Ola!");
+        // window.ChatWidget.destroy();
+      });
+    </script>
+  </body>
+</html>

@@ -1,37 +1,56 @@
 import "reflect-metadata";
 
+import { randomUUID } from "node:crypto";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
+import multipart from "@fastify/multipart";
+import { corsExtraOrigins, type PlatformEnvironment } from "@faqchatbot/config";
+import { createLogger } from "@faqchatbot/logger";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import { randomUUID } from "node:crypto";
-import { HttpExceptionFilter } from "./common/filters/http-exception.filter.js";
-import { ResponseEnvelopeInterceptor } from "./common/interceptors/response-envelope.interceptor.js";
-import { createCorsOriginResolver } from "./common/cors.js";
+import type { RawRequestDefaultExpression, RawServerDefault } from "fastify";
+import { buildCorsOriginValidator } from "./common/dynamic-origin.js";
+import { HttpExceptionFilter } from "./common/http-exception.filter.js";
+import { ResponseEnvelopeInterceptor } from "./common/response-envelope.interceptor.js";
+import type { Database } from "./db/client.js";
+import { createTenantDomainsRepository } from "./db/repositories/tenant-domains.repository.js";
 import { AppModule } from "./modules/app.module.js";
+import { DATABASE, ENV } from "./modules/core/core.module.js";
 
 const bootstrap = async () => {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: true }),
+    new FastifyAdapter({
+      logger: true,
+      genReqId: (request: RawRequestDefaultExpression<RawServerDefault>) => {
+        const incoming = request.headers["x-correlation-id"];
+        return typeof incoming === "string" && incoming.length > 0 ? incoming : randomUUID();
+      }
+    }),
   );
 
-  const fastify = app.getHttpAdapter().getInstance();
-  fastify.addHook("onRequest", (request, reply, done) => {
-    const headerId = request.headers["x-correlation-id"];
-    const correlationId =
-      typeof headerId === "string" && headerId.trim() ? headerId : randomUUID();
-
-    (request as typeof request & { correlationId?: string }).correlationId = correlationId;
-    reply.header("x-correlation-id", correlationId);
-    done();
+  app.getHttpAdapter().getInstance().addHook("onSend", async (request, reply) => {
+    reply.header("x-correlation-id", request.id);
   });
 
   await app.register(helmet);
+  await app.register(multipart, {
+    limits: {
+      fileSize: 5 * 1024 * 1024,
+      files: 1
+    }
+  });
+
+  const env = app.get<PlatformEnvironment>(ENV as never);
+  const db = app.get<Database>(DATABASE as never);
+
   await app.register(cors, {
-    origin: createCorsOriginResolver(process.env.CORS_ORIGINS),
+    origin: buildCorsOriginValidator(
+      () => createTenantDomainsRepository(db).listActiveTenantHostnames(),
+      corsExtraOrigins(env),
+    ),
     credentials: true
   });
 
@@ -42,7 +61,8 @@ const bootstrap = async () => {
       transform: true
     }),
   );
-  app.useGlobalFilters(new HttpExceptionFilter());
+
+  app.useGlobalFilters(new HttpExceptionFilter(createLogger("api")));
   app.useGlobalInterceptors(new ResponseEnvelopeInterceptor());
 
   const config = new DocumentBuilder()

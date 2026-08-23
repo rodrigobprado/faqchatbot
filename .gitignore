@@ -6,3 +6,14 @@ coverage/
 .env.local
 *.log
 
+# Kubernetes secrets preenchidos (somente o template *.example.yaml pode ser versionado)
+infra/k8s/secrets.yaml
+
+# Backups de banco
+backups/
+*.dump
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

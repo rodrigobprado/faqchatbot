@@ -1,40 +1,16 @@
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { visitorSessions } from "../schema.js";
 
-export type PageContext = Readonly<{
-  url: string;
-  title?: string;
-  language?: string;
-  referrer?: string;
-  utm: Record<string, string>;
-  viewport: Readonly<{
-    width: number;
-    height: number;
-  }>;
-  userAgent?: string;
-  currentPage?: string;
-  timestamp: string;
-}>;
-
-export type CreateVisitorSessionInput = Readonly<{
-  id?: string;
+export type CreateVisitorSessionInput = {
   tenantId: string;
   visitorId: string;
-  pageContext: PageContext;
-}>;
+  pageContext: Record<string, unknown>;
+};
 
 export const createVisitorSessionsRepository = (db: Database) => ({
   create: async (input: CreateVisitorSessionInput) => {
-    const [session] = await db
-      .insert(visitorSessions)
-      .values({
-        id: input.id,
-        tenantId: input.tenantId,
-        visitorId: input.visitorId,
-        pageContext: input.pageContext
-      })
-      .returning();
+    const [session] = await db.insert(visitorSessions).values(input).returning();
 
     if (!session) {
       throw new Error("Failed to create visitor session");
@@ -46,32 +22,26 @@ export const createVisitorSessionsRepository = (db: Database) => ({
     const [session] = await db.select().from(visitorSessions).where(eq(visitorSessions.id, id));
     return session ?? null;
   },
-  listByTenantId: async (tenantId: string) =>
-    db
-      .select()
-      .from(visitorSessions)
-      .where(eq(visitorSessions.tenantId, tenantId))
-      .orderBy(desc(visitorSessions.lastSeenAt), desc(visitorSessions.startedAt)),
-  findLatestByTenantAndVisitor: async (tenantId: string, visitorId: string) => {
-    const [session] = await db
-      .select()
-      .from(visitorSessions)
-      .where(and(eq(visitorSessions.tenantId, tenantId), eq(visitorSessions.visitorId, visitorId)))
-      .orderBy(desc(visitorSessions.lastSeenAt))
-      .limit(1);
-
-    return session ?? null;
-  },
-  touch: async (id: string, pageContext: PageContext) => {
+  touch: async (id: string, pageContext: Record<string, unknown>) => {
     const [session] = await db
       .update(visitorSessions)
-      .set({
-        pageContext,
-        lastSeenAt: new Date()
-      })
+      .set({ pageContext, lastSeenAt: new Date() })
       .where(eq(visitorSessions.id, id))
       .returning();
 
-    return session ?? null;
+    if (!session) {
+      throw new Error("Failed to update visitor session");
+    }
+
+    return session;
+  },
+  listByTenantId: async (tenantId: string, { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}) => {
+    return db
+      .select()
+      .from(visitorSessions)
+      .where(eq(visitorSessions.tenantId, tenantId))
+      .orderBy(desc(visitorSessions.lastSeenAt))
+      .limit(limit)
+      .offset(offset);
   }
 });

@@ -1,4 +1,4 @@
-.PHONY: install dev lint typecheck test build verify infra-up infra-down
+.PHONY: install dev lint typecheck test build verify infra-up infra-down widget-build widget-serve
 
 install:
 	corepack pnpm install
@@ -26,4 +26,10 @@ infra-up:
 
 infra-down:
 	docker compose down
+
+widget-build:
+	corepack pnpm --filter @faqchatbot/widget build
+
+widget-serve: widget-build
+	npx --yes serve apps/widget/dist -l 4173
 

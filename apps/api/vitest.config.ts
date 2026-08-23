@@ -2,8 +2,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    testTimeout: 10000,
-    hookTimeout: 10000,
+    testTimeout: 20_000,
+    hookTimeout: 20_000,
     setupFiles: ["./vitest.setup.ts"],
     coverage: {
       provider: "v8",

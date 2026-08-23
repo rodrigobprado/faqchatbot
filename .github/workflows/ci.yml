@@ -1,11 +1,13 @@
-name: CI faqchatbot
+name: CI
 
 on:
   pull_request:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
-  validate:
+  verify:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -17,42 +19,72 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U faqchatbot -d faqchatbot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-cmd "pg_isready -U faqchatbot -d faqchatbot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://faqchatbot:faqchatbot@localhost:5432/faqchatbot
-
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-access-secret-value-123
+      JWT_WIDGET_SECRET: ci-widget-secret-value-123
+      JWT_REFRESH_SECRET: ci-refresh-secret-value-123
+      S3_ENDPOINT: http://localhost:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: faqchatbot-ci
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      CORS_EXTRA_ORIGINS: http://localhost:5173,http://localhost:5174
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: setup pnpm
+      - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.14.0
-          run_install: false
 
-      - name: setup node
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: 24
           cache: pnpm
 
-      - name: habilita corepack
-        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
 
-      - name: instala dependencias
-        run: corepack pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
 
-      - name: prepara database
-        run: corepack pnpm --filter @faqchatbot/api db:migrate
+      - name: Typecheck
+        run: pnpm typecheck
 
-      - name: valida qualidade
-        run: |
-          corepack pnpm lint
-          corepack pnpm typecheck
-          corepack pnpm test
-          corepack pnpm build
-          corepack pnpm audit
+      - name: Migrate database
+        run: pnpm --filter @faqchatbot/api run db:migrate
+
+      - name: Test
+        run: pnpm test
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @faqchatbot/widget exec playwright install --with-deps chromium
+
+      - name: E2E tests (widget)
+        run: pnpm --filter @faqchatbot/widget run test:e2e
+
+      - name: E2E tests (dashboard login)
+        run: pnpm --filter @faqchatbot/dashboard run test:e2e
+
+      - name: Build
+        run: pnpm build
+
+      - name: Audit
+        run: pnpm audit --audit-level high

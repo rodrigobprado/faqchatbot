@@ -3,19 +3,32 @@ import type { Database } from "../client.js";
 import { roles, userRoles } from "../schema.js";
 
 export const createUserRolesRepository = (db: Database) => ({
-  assignRole: async (userId: string, roleId: string) => {
-    const [row] = await db.insert(userRoles).values({ userId, roleId }).onConflictDoNothing().returning();
-    return row ?? null;
+  assign: async (userId: string, roleId: string) => {
+    const [assignment] = await db.insert(userRoles).values({ userId, roleId }).returning();
+
+    if (!assignment) {
+      throw new Error("Failed to assign role to user");
+    }
+
+    return assignment;
   },
-  removeRolesByUserId: async (userId: string) => {
+  replaceRoles: async (userId: string, roleIds: readonly string[]) => {
     await db.delete(userRoles).where(eq(userRoles.userId, userId));
+    if (roleIds.length === 0) {
+      return [];
+    }
+    return db
+      .insert(userRoles)
+      .values(roleIds.map((roleId) => ({ userId, roleId })))
+      .returning();
   },
-  listRoleSlugsByUserId: async (userId: string) =>
-    db
-      .select({
-        slug: roles.slug
-      })
+  listRoleSlugsByUserId: async (userId: string) => {
+    const rows = await db
+      .select({ slug: roles.slug })
       .from(userRoles)
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
-      .where(eq(userRoles.userId, userId))
+      .where(eq(userRoles.userId, userId));
+
+    return rows.map((row) => row.slug);
+  }
 });

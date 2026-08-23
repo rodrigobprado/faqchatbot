@@ -1,49 +1,51 @@
-import { randomUUID } from "node:crypto";
-import type { AgentAdapter, AgentRouteInput, AgentRouteResult } from "./agent-adapter.js";
-
-const describeIncomingMessage = (message: Readonly<Record<string, unknown>>): string => {
-  const type = typeof message.type === "string" ? message.type : "unknown";
-
-  if (type === "text") {
-    const text = typeof message.text === "string" ? message.text.trim() : "";
-    return text ? `Recebi: ${text}` : "Mensagem recebida.";
-  }
-
-  if (type === "markdown") {
-    return "Recebi seu conteúdo em markdown.";
-  }
-
-  if (type === "card") {
-    const title = typeof message.title === "string" ? message.title.trim() : "";
-    return title ? `Recebi seu card: ${title}` : "Recebi seu card.";
-  }
-
-  return "Mensagem recebida.";
-};
+import {
+  AgentRoutingError,
+  type AgentAdapter,
+  type AgentRequest,
+  type AgentResponse,
+  type TenantAgentConfigRow,
+  type WebhookEndpointRow
+} from "./agent-adapter.js";
+import { normalizeN8nRequest, normalizeN8nResponse } from "./n8n-payload.js";
 
 export class N8nAgentAdapter implements AgentAdapter {
   readonly provider = "n8n" as const;
 
-  async route(input: AgentRouteInput): Promise<AgentRouteResult> {
-    const model =
-      typeof input.agentConfig?.model === "string" && input.agentConfig.model.trim()
-        ? input.agentConfig.model
-        : null;
+  async send(
+    request: AgentRequest,
+    config: TenantAgentConfigRow,
+    webhook: WebhookEndpointRow | null,
+  ): Promise<AgentResponse> {
+    if (!webhook) {
+      throw new AgentRoutingError("No webhook configured for this tenant");
+    }
 
-    return {
-      provider: this.provider,
-      model,
-      providerMessageId: randomUUID(),
-      content: {
-        type: "text",
-        text: describeIncomingMessage(input.message)
-      },
-      metadata: {
-        provider: this.provider,
-        tenantId: input.tenantId,
-        conversationId: input.conversationId,
-        routedBy: "agent-router"
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+
+    try {
+      const response = await fetch(webhook.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Secret": webhook.secretRef
+        },
+        body: JSON.stringify(normalizeN8nRequest(request)),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new AgentRoutingError(`n8n webhook responded with status ${response.status}`);
       }
-    };
+
+      return { content: normalizeN8nResponse(await response.json()) };
+    } catch (error) {
+      if (error instanceof AgentRoutingError) {
+        throw error;
+      }
+      throw new AgentRoutingError("Failed to reach the n8n webhook");
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }

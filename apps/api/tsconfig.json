@@ -8,7 +8,8 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "isolatedModules": false,
-    "types": ["node", "vitest"]
+    "types": ["node", "vitest"],
+    "paths": {}
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]

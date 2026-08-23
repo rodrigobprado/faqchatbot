@@ -1,64 +1,71 @@
 import { describe, expect, it, vi } from "vitest";
+import type { WidgetTokenClaims } from "../auth/access-token-claims.js";
+import type { AuthenticatedWidgetRequest } from "../auth/guards/widget-jwt.guard.js";
 import { ChatController } from "./chat.controller.js";
+import type { ChatService } from "./chat.service.js";
+
+const claims: WidgetTokenClaims = {
+  sub: "visitor-1",
+  tenantId: "tenant-1",
+  sessionId: "session-1",
+  conversationId: "conversation-1",
+  scope: "widget"
+};
 
 describe("ChatController", () => {
-  it("forwards send and history calls to the service", async () => {
-    const service = {
-      sendMessage: vi.fn().mockResolvedValue({ exchange: true }),
-      getHistory: vi.fn().mockResolvedValue({ messages: [] }),
-      buildStream: vi.fn().mockResolvedValue("event: done\ndata: {}\n\n")
-    } as unknown as ConstructorParameters<typeof ChatController>[0];
+  it("delegates sendMessage to ChatService with the authenticated claims", async () => {
+    const sendMessage = vi.fn().mockResolvedValue({ id: "message-1" });
+    const controller = new ChatController({ sendMessage } as unknown as ChatService);
+    const request = { user: claims } as AuthenticatedWidgetRequest;
+    const body = { conversationId: claims.conversationId, content: { type: "text", text: "Ola" } };
 
-    const controller = new ChatController(service);
-    const widgetUser = {
-      conversationId: "00000000-0000-4000-8000-000000000001"
-    };
-    const request = {
-      widgetUser
-    } as never;
+    const result = await controller.sendMessage(request, body);
 
-    await expect(controller.send(request, { content: { type: "text", text: "Ola" } })).resolves.toEqual({
-      exchange: true
-    });
-    await expect(controller.history(request, "00000000-0000-4000-8000-000000000001")).resolves.toEqual({
-      messages: []
-    });
-    expect(service.sendMessage).toHaveBeenCalledWith(widgetUser, { content: { type: "text", text: "Ola" } });
-    expect(service.getHistory).toHaveBeenCalledWith(widgetUser, "00000000-0000-4000-8000-000000000001");
+    expect(sendMessage).toHaveBeenCalledWith(claims, body);
+    expect(result).toEqual({ id: "message-1" });
   });
 
-  it("writes SSE payloads directly to the response", async () => {
-    const service = {
-      sendMessage: vi.fn(),
-      getHistory: vi.fn(),
-      buildStream: vi.fn().mockResolvedValue("event: done\ndata: {}\n\n")
-    } as unknown as ConstructorParameters<typeof ChatController>[0];
+  it("delegates stream to ChatService", () => {
+    const stream = vi.fn().mockReturnValue("observable");
+    const controller = new ChatController({ stream } as unknown as ChatService);
+    const request = { user: claims } as AuthenticatedWidgetRequest;
 
-    const controller = new ChatController(service);
-    const widgetUser = {
-      conversationId: "00000000-0000-4000-8000-000000000001"
-    };
-    const reply = {
-      raw: {
-        setHeader: vi.fn(),
-        end: vi.fn(),
-        statusCode: 0
-      }
-    } as never;
+    const result = controller.stream(request, claims.conversationId);
 
-    await controller.stream(
-      {
-        widgetUser
-      } as never,
-      "00000000-0000-4000-8000-000000000001",
-      reply,
-    );
+    expect(stream).toHaveBeenCalledWith(claims, claims.conversationId);
+    expect(result).toBe("observable");
+  });
 
-    expect(service.buildStream).toHaveBeenCalledWith(
-      widgetUser,
-      "00000000-0000-4000-8000-000000000001"
-    );
-    expect(reply.raw.setHeader).toHaveBeenCalledWith("Content-Type", "text/event-stream; charset=utf-8");
-    expect(reply.raw.end).toHaveBeenCalledWith("event: done\ndata: {}\n\n");
+  it("delegates history to ChatService", async () => {
+    const getHistory = vi.fn().mockResolvedValue([]);
+    const controller = new ChatController({ getHistory } as unknown as ChatService);
+    const request = { user: claims } as AuthenticatedWidgetRequest;
+
+    const result = await controller.history(request, claims.conversationId);
+
+    expect(getHistory).toHaveBeenCalledWith(claims, claims.conversationId);
+    expect(result).toEqual([]);
+  });
+
+  it("delegates buttonClicked to ChatService", () => {
+    const recordButtonClick = vi.fn();
+    const controller = new ChatController({ recordButtonClick } as unknown as ChatService);
+    const request = { user: claims } as AuthenticatedWidgetRequest;
+    const body = { conversationId: claims.conversationId, buttonId: "cta-1" };
+
+    controller.buttonClicked(request, body);
+
+    expect(recordButtonClick).toHaveBeenCalledWith(claims, body);
+  });
+
+  it("delegates endConversation to ChatService", async () => {
+    const endConversation = vi.fn().mockResolvedValue(undefined);
+    const controller = new ChatController({ endConversation } as unknown as ChatService);
+    const request = { user: claims } as AuthenticatedWidgetRequest;
+    const body = { reason: "resolved" as const };
+
+    await controller.endConversation(request, claims.conversationId, body);
+
+    expect(endConversation).toHaveBeenCalledWith(claims, claims.conversationId, body);
   });
 });

@@ -1,34 +1,16 @@
 import { Module } from "@nestjs/common";
+import { JwtModule } from "@nestjs/jwt";
 import { AgentRouterModule } from "../agent-router/agent-router.module.js";
-import { AgentRouterService } from "../agent-router/agent-router.service.js";
-import { DatabaseModule } from "../../db/database.module.js";
-import { DatabaseService } from "../../db/database.service.js";
-import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
-import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
-import { createMessagesRepository } from "../../db/repositories/messages.repository.js";
+import { AnalyticsModule } from "../analytics/analytics.module.js";
+import { WidgetJwtGuard } from "../auth/guards/widget-jwt.guard.js";
+import { RateLimitModule } from "../rate-limit/rate-limit.module.js";
+import { ChatStreamBroker } from "./chat-stream.broker.js";
 import { ChatController } from "./chat.controller.js";
 import { ChatService } from "./chat.service.js";
-import { WidgetAuthGuard } from "./widget-auth.guard.js";
 
 @Module({
-  imports: [DatabaseModule, AgentRouterModule],
+  imports: [JwtModule.register({}), AgentRouterModule, RateLimitModule, AnalyticsModule],
   controllers: [ChatController],
-  providers: [
-    WidgetAuthGuard,
-    {
-      provide: ChatService,
-      inject: [DatabaseService, AgentRouterService],
-      useFactory: (databaseService: DatabaseService, agentRouter: AgentRouterService) => {
-        const { db } = databaseService;
-
-        return new ChatService({
-          conversations: createConversationsRepository(db),
-          agentRouter,
-          messages: createMessagesRepository(db),
-          analyticsEvents: createAnalyticsEventsRepository(db)
-        });
-      }
-    }
-  ]
+  providers: [ChatService, ChatStreamBroker, WidgetJwtGuard]
 })
 export class ChatModule {}

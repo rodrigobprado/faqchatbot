@@ -56,7 +56,7 @@ describe("UsersRepository", () => {
     expect(found).toBeNull();
   });
 
-  it("lists users by tenant and updates their status", async () => {
+  it("finds a user by id", async () => {
     const plans = createPlansRepository(db);
     const tenants = createTenantsRepository(db);
     const users = createUsersRepository(db);
@@ -67,19 +67,44 @@ describe("UsersRepository", () => {
       name: "Tenant",
       planId: plan.id
     });
-
-    const user = await users.create({
+    const created = await users.create({
       tenantId: tenant.id,
-      email: `invite-${randomUUID()}@example.com`,
-      passwordHash: "salt:hash",
-      status: "invited"
+      email: `admin-${randomUUID()}@example.com`,
+      passwordHash: "salt:derivedkey"
     });
 
-    const listed = await users.listByTenantId(tenant.id);
-    const updated = await users.updateStatus(user.id, "active");
+    const found = await users.findById(created.id);
 
-    expect(listed).toHaveLength(1);
-    expect(listed[0]?.status).toBe("invited");
-    expect(updated?.status).toBe("active");
+    expect(found?.email).toBe(created.email);
+  });
+
+  it("returns null for an id that does not exist", async () => {
+    const users = createUsersRepository(db);
+
+    const found = await users.findById(randomUUID());
+
+    expect(found).toBeNull();
+  });
+
+  it("lists users for a tenant", async () => {
+    const plans = createPlansRepository(db);
+    const tenants = createTenantsRepository(db);
+    const users = createUsersRepository(db);
+
+    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+    const tenant = await tenants.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Tenant",
+      planId: plan.id
+    });
+    const user = await users.create({
+      tenantId: tenant.id,
+      email: `admin-${randomUUID()}@example.com`,
+      passwordHash: "salt:derivedkey"
+    });
+
+    const list = await users.listByTenantId(tenant.id);
+
+    expect(list.some((row) => row.id === user.id)).toBe(true);
   });
 });

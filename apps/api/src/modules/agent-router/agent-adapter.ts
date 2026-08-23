@@ -1,42 +1,24 @@
-export type AgentProvider =
-  | "n8n"
-  | "openai_responses"
-  | "langgraph"
-  | "flowise"
-  | "dify"
-  | "crewai"
-  | "mcp"
-  | "custom";
+import type { AgentProvider, MessageContent } from "@faqchatbot/contracts";
+import type { tenantAgentConfigs, webhookEndpoints } from "../../db/schema.js";
 
-export type TenantAgentConfigRecord = Readonly<{
-  id: string;
-  tenantId: string;
-  provider: AgentProvider;
-  model: string | null;
-  webhookEndpointId: string | null;
-  encryptedCredentialsRef: string | null;
-  routingRules: unknown;
-  timeoutMs: number;
-  retryPolicy: unknown;
-  isActive: boolean;
-}>;
+export type TenantAgentConfigRow = typeof tenantAgentConfigs.$inferSelect;
+export type WebhookEndpointRow = typeof webhookEndpoints.$inferSelect;
 
-export type AgentRouteInput = Readonly<{
+export type AgentRequest = {
   tenantId: string;
   conversationId: string;
-  message: Readonly<Record<string, unknown>>;
-  agentConfig?: TenantAgentConfigRecord | null;
-}>;
+  visitorId: string;
+  message: MessageContent;
+};
 
-export type AgentRouteResult = Readonly<{
-  provider: AgentProvider;
-  model: string | null;
-  providerMessageId: string;
-  content: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-}>;
+export type AgentResponse = {
+  content: MessageContent;
+  providerMessageId?: string;
+};
+
+export class AgentRoutingError extends Error {}
 
 export interface AgentAdapter {
   readonly provider: AgentProvider;
-  route(input: AgentRouteInput): Promise<AgentRouteResult>;
+  send(request: AgentRequest, config: TenantAgentConfigRow, webhook: WebhookEndpointRow | null): Promise<AgentResponse>;
 }

@@ -10,7 +10,10 @@ export const widgetSessionStartedEventSchema = baseEventSchema.extend({
   type: z.literal("WidgetSessionStarted"),
   visitorId: z.string().uuid(),
   sessionId: z.string().uuid(),
-  conversationId: z.string().uuid()
+  conversationId: z.string().uuid(),
+  origin: z.string().max(255).optional(),
+  pageUrl: z.string().max(2048).optional(),
+  device: z.enum(["desktop", "mobile", "tablet", "unknown"]).optional()
 });
 
 export const conversationStartedEventSchema = baseEventSchema.extend({
@@ -31,11 +34,19 @@ export const agentRoutingStartedEventSchema = baseEventSchema.extend({
   provider: agentProviderSchema
 });
 
+export const agentRoutingCompletedEventSchema = baseEventSchema.extend({
+  type: z.literal("AgentRoutingCompleted"),
+  conversationId: z.string().uuid(),
+  provider: agentProviderSchema,
+  durationMs: z.number().int().nonnegative()
+});
+
 export const agentRoutingFailedEventSchema = baseEventSchema.extend({
   type: z.literal("AgentRoutingFailed"),
   conversationId: z.string().uuid(),
   provider: agentProviderSchema,
-  reason: z.string().max(500)
+  reason: z.string().max(500),
+  durationMs: z.number().int().nonnegative().optional()
 });
 
 export const assistantMessageStreamedEventSchema = baseEventSchema.extend({
@@ -47,7 +58,8 @@ export const assistantMessageStreamedEventSchema = baseEventSchema.extend({
 export const conversationEndedEventSchema = baseEventSchema.extend({
   type: z.literal("ConversationEnded"),
   conversationId: z.string().uuid(),
-  reason: z.string().max(200).optional()
+  reason: z.enum(["resolved", "abandoned"]).optional(),
+  durationMs: z.number().int().nonnegative().optional()
 });
 
 export const buttonClickedEventSchema = baseEventSchema.extend({
@@ -78,6 +90,7 @@ export const internalEventSchema = z.discriminatedUnion("type", [
   conversationStartedEventSchema,
   messageReceivedEventSchema,
   agentRoutingStartedEventSchema,
+  agentRoutingCompletedEventSchema,
   agentRoutingFailedEventSchema,
   assistantMessageStreamedEventSchema,
   conversationEndedEventSchema,

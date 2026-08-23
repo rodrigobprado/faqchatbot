@@ -23,39 +23,90 @@ afterAll(async () => {
   await client.end();
 });
 
+const createSession = async () => {
+  const plans = createPlansRepository(db);
+  const tenants = createTenantsRepository(db);
+  const sessions = createVisitorSessionsRepository(db);
+  const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
+  const tenant = await tenants.create({
+    publicId: `tenant-${randomUUID()}`,
+    name: "Acme Inc",
+    planId: plan.id
+  });
+  const session = await sessions.create({
+    tenantId: tenant.id,
+    visitorId: randomUUID(),
+    pageContext: {}
+  });
+
+  return { tenant, session };
+};
+
 describe("ConversationsRepository", () => {
-  it("creates and finds conversations by session", async () => {
-    const plans = createPlansRepository(db);
-    const tenants = createTenantsRepository(db);
-    const visitorSessions = createVisitorSessionsRepository(db);
+  it("creates an open conversation tied to a session", async () => {
+    const { tenant, session } = await createSession();
     const conversations = createConversationsRepository(db);
 
-    const plan = await plans.create({ slug: `plan-${randomUUID()}`, name: "Starter" });
-    const tenant = await tenants.create({
-      publicId: `tenant-${randomUUID()}`,
-      name: "Tenant",
-      planId: plan.id
-    });
-    const session = await visitorSessions.create({
-      tenantId: tenant.id,
-      visitorId: randomUUID(),
-      pageContext: {
-        url: "https://example.com",
-        viewport: { width: 1280, height: 720 },
-        timestamp: "2026-08-01T00:00:00.000Z",
-        utm: {}
-      }
-    });
+    const conversation = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
 
-    const conversation = await conversations.create({
-      tenantId: tenant.id,
-      sessionId: session.id
-    });
+    expect(conversation.tenantId).toBe(tenant.id);
+    expect(conversation.sessionId).toBe(session.id);
+    expect(conversation.status).toBe("open");
+  });
 
-    const foundById = await conversations.findById(conversation.id);
-    const foundBySession = await conversations.findLatestBySessionId(session.id);
+  it("returns null for a conversation id that does not exist", async () => {
+    const conversations = createConversationsRepository(db);
 
-    expect(foundById?.id).toBe(conversation.id);
-    expect(foundBySession?.sessionId).toBe(session.id);
+    const found = await conversations.findById(randomUUID());
+
+    expect(found).toBeNull();
+  });
+
+  it("finds the most recent open conversation for a session", async () => {
+    const { tenant, session } = await createSession();
+    const conversations = createConversationsRepository(db);
+    await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+    const second = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+
+    const found = await conversations.findLatestOpenBySessionId(session.id);
+
+    expect(found?.id).toBe(second.id);
+  });
+
+  it("returns null when the session has no open conversation", async () => {
+    const { session } = await createSession();
+    const conversations = createConversationsRepository(db);
+
+    const found = await conversations.findLatestOpenBySessionId(session.id);
+
+    expect(found).toBeNull();
+  });
+
+  it("lists conversations for a tenant, most recent first, respecting limit and offset", async () => {
+    const { tenant, session } = await createSession();
+    const conversations = createConversationsRepository(db);
+    const first = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+
+    const page = await conversations.listByTenantId(tenant.id, { limit: 1, offset: 0 });
+
+    expect(page).toHaveLength(1);
+    expect(page[0]?.id).toBe(second.id);
+
+    const nextPage = await conversations.listByTenantId(tenant.id, { limit: 1, offset: 1 });
+    expect(nextPage[0]?.id).toBe(first.id);
+  });
+
+  it("closes an open conversation and stamps its end time", async () => {
+    const { tenant, session } = await createSession();
+    const conversations = createConversationsRepository(db);
+    const conversation = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
+    const endedAt = new Date();
+
+    const closed = await conversations.close(conversation.id, endedAt);
+
+    expect(closed.status).toBe("closed");
+    expect(closed.endedAt?.toISOString()).toBe(endedAt.toISOString());
   });
 });
