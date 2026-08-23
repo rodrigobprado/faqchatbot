@@ -171,6 +171,31 @@ describe("FaqChatWidgetElement session bootstrap", () => {
       conversationId: "33333333-3333-3333-3333-333333333333"
     });
 
+    element.open();
+    await element.updateComplete;
+    expect(element.shadowRoot?.querySelector(".messages")?.textContent?.trim()).toBe("Bem-vindo!");
+    expect(element.shadowRoot?.querySelector("header span")?.textContent?.trim()).toBe("Acme Inc");
+
+    element.remove();
+  });
+
+  it("falls back to the default header title without a tenant name", async () => {
+    const element = await createElement();
+    element.agentId = "acme";
+    element.apiUrl = "https://api.example.com";
+    startWidgetSessionMock.mockResolvedValue(
+      buildResponse({ tenant: { id: "44444444-4444-4444-4444-444444444444", publicId: "acme", name: "" } }),
+    );
+    fetchChatHistoryMock.mockResolvedValue([]);
+    openChatStreamMock.mockResolvedValue(undefined);
+
+    await element.connect();
+    await element.updateComplete;
+    element.open();
+    await element.updateComplete;
+
+    expect(element.shadowRoot?.querySelector("header span")?.textContent?.trim()).toBe("Assistente");
+
     element.remove();
   });
 

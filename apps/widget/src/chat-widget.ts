@@ -45,6 +45,9 @@ export class FaqChatWidgetElement extends LitElement {
   private initialMessage = DEFAULT_INITIAL_MESSAGE;
 
   @state()
+  private tenantName = "";
+
+  @state()
   private placeholder = DEFAULT_PLACEHOLDER;
 
   @state()
@@ -288,6 +291,7 @@ export class FaqChatWidgetElement extends LitElement {
       this.accessToken = result.accessToken;
       this.conversationId = result.conversationId;
       this.initialMessage = result.config.initialMessage || DEFAULT_INITIAL_MESSAGE;
+      this.tenantName = result.tenant?.name || "";
       this.placeholder = result.config.placeholder || DEFAULT_PLACEHOLDER;
       this.applyTheme(result.config.theme, result.config.primaryColor);
       this.isSessionConnected = true;
@@ -440,7 +444,7 @@ export class FaqChatWidgetElement extends LitElement {
       ${this.isOpen
         ? html`<section class="panel" aria-label="Chat" @keydown=${this.handleKeydown}>
             <header>
-              <span>Assistente</span>
+              <span>${this.tenantName || "Assistente"}</span>
               <button class="close" type="button" aria-label="Fechar chat" @click=${this.close}>
                 x
               </button>
