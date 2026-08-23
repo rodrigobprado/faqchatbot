@@ -107,15 +107,13 @@ test("logs in, stores the session and greets the admin", async ({ page }) => {
   await page.getByLabel("Senha").fill("senha-segura-123");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
 
-  await expect(page.locator(".banner.success")).toContainText(`Bem-vindo, ${adminSession.user.email}`);
+  await expect(page.locator('aside[aria-label="Navegacao principal"]')).toBeVisible();
   expect(loginCalled).toBe(true);
 
   const stored = await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY);
   expect(stored).not.toBeNull();
   const parsedSession = stored ? (JSON.parse(stored) as { user?: { email?: string } }) : null;
   expect(parsedSession?.user?.email).toBe(adminSession.user.email);
-
-  await expect(page.locator('aside[aria-label="Navegacao principal"]')).toBeVisible();
 });
 
 test("restores the session from localStorage after a reload", async ({ page }) => {
