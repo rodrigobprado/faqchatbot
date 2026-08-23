@@ -16,6 +16,9 @@ permissions:
 
 jobs:
   codeql:
+    # Code scanning exige GitHub Advanced Security, que a organizacao
+    # ainda nao possui. O job roda e reporta, mas nao bloqueia o PR.
+    continue-on-error: true
     runs-on: ubuntu-latest
     strategy:
       matrix:
