@@ -69,6 +69,9 @@ jobs:
       - name: E2E tests (widget)
         run: pnpm --filter @faqchatbot/widget run test:e2e
 
+      - name: E2E tests (dashboard login)
+        run: pnpm --filter @faqchatbot/dashboard run test:e2e
+
       - name: Build
         run: pnpm build
 
