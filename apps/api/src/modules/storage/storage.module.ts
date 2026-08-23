@@ -1,5 +1,6 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import type { PlatformEnvironment } from "@faqchatbot/config";
+import { JwtModule } from "@nestjs/jwt";
 import { Module, type Provider } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
 import { PermissionsGuard } from "../auth/guards/permissions.guard.js";
@@ -25,7 +26,7 @@ const presignerProvider: Provider = {
 };
 
 @Module({
-  imports: [],
+  imports: [JwtModule.register({})],
   controllers: [FilesController],
   providers: [StorageService, s3ClientProvider, presignerProvider, JwtAuthGuard, PermissionsGuard],
   exports: [StorageService]

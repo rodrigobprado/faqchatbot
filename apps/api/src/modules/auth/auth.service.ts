@@ -55,7 +55,7 @@ export class AuthService {
       accessToken: this.signAccessToken(user.id, user.tenantId, roleSlugs, permissionSlugs),
       refreshToken: this.signRefreshToken(user.id, user.tenantId),
       expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
-      user: { id: user.id, email: user.email, tenantId: user.tenantId }
+      user: { id: user.id, email: user.email, tenantId: user.tenantId, roles: roleSlugs }
     };
   }
 

@@ -69,7 +69,7 @@ describe("AuthService.login", () => {
 
     const result = await authService.login(email, password);
 
-    expect(result.user).toEqual({ id: user.id, email, tenantId: user.tenantId });
+    expect(result.user).toEqual({ id: user.id, email, tenantId: user.tenantId, roles: ["admin"] });
     expect(result.expiresInSeconds).toBeGreaterThan(0);
     expect(result.accessToken).not.toBe(result.refreshToken);
   });

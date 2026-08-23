@@ -25,7 +25,7 @@ class ViewportDto {
 }
 
 class PageContextDto implements PageContext {
-  @IsUrl()
+  @IsUrl({ require_tld: false })
   url!: string;
 
   @IsOptional()

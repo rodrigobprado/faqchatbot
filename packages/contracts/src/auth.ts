@@ -12,7 +12,8 @@ export const adminLoginResponseSchema = z.object({
   user: z.object({
     id: z.string().uuid(),
     email: z.string().email(),
-    tenantId: z.string().uuid()
+    tenantId: z.string().uuid(),
+    roles: z.array(z.string()).default([])
   })
 });
 
