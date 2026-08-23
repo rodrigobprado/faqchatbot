@@ -110,8 +110,10 @@ test("logs in, stores the session and greets the admin", async ({ page }) => {
   await expect(page.locator('aside[aria-label="Navegacao principal"]')).toBeVisible();
   expect(loginCalled).toBe(true);
 
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY), { timeout: 5_000 })
+    .not.toBeNull();
   const stored = await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY);
-  expect(stored).not.toBeNull();
   const parsedSession = stored ? (JSON.parse(stored) as { user?: { email?: string } }) : null;
   expect(parsedSession?.user?.email).toBe(adminSession.user.email);
 });
