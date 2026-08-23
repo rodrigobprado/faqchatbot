@@ -5,12 +5,16 @@ import type {
   TenantConfigRequest,
   UpdateTenantRequest
 } from "@faqchatbot/contracts";
+import { createHash, randomBytes } from "node:crypto";
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { hashPassword } from "../../auth/password.js";
 import type { Database } from "../../db/client.js";
 import { createAnalyticsEventsRepository, type AnalyticsPeriod } from "../../db/repositories/analytics-events.repository.js";
+import { createApiKeysRepository } from "../../db/repositories/api-keys.repository.js";
 import { createAuditLogsRepository } from "../../db/repositories/audit-logs.repository.js";
 import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
+import { createMessagesRepository } from "../../db/repositories/messages.repository.js";
+import { createPlansRepository } from "../../db/repositories/plans.repository.js";
 import { createPermissionsRepository } from "../../db/repositories/permissions.repository.js";
 import { createRolePermissionsRepository } from "../../db/repositories/role-permissions.repository.js";
 import { createRolesRepository } from "../../db/repositories/roles.repository.js";
@@ -179,21 +183,247 @@ export class TenantsService {
     return createSystemLogsRepository(this.db).list(filter);
   }
 
+  async listTenantSystemLogs(tenantId: string) {
+    await this.get(tenantId);
+    return createSystemLogsRepository(this.db).list({ tenantId });
+  }
+
+  listPlans() {
+    return createPlansRepository(this.db).list();
+  }
+
+  async listApiKeys(tenantId: string, actorUserId?: string | null) {
+    await this.get(tenantId);
+    const keys = await createApiKeysRepository(this.db).listByTenantId(tenantId);
+    void actorUserId;
+    return keys.map((key) => ({
+      id: key.id,
+      name: key.name,
+      prefix: key.prefix,
+      last4: key.last4,
+      lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
+      revokedAt: key.revokedAt?.toISOString() ?? null,
+      createdAt: key.createdAt.toISOString()
+    }));
+  }
+
+  async createApiKey(tenantId: string, name: string, actorUserId: string | null) {
+    await this.get(tenantId);
+
+    const secret = `fqc_${randomBytes(24).toString("hex")}`;
+    const prefix = secret.slice(0, 12);
+    const hashedKey = createHash("sha256").update(secret).digest("hex");
+
+    const key = await createApiKeysRepository(this.db).create({
+      tenantId,
+      name,
+      hashedKey,
+      prefix,
+      last4: secret.slice(-4)
+    });
+
+    await createAuditLogsRepository(this.db).create({
+      tenantId,
+      actorUserId,
+      action: "api_key.created",
+      targetType: "api_key",
+      targetId: key.id,
+      metadata: { name }
+    });
+
+    return {
+      id: key.id,
+      name: key.name,
+      prefix: key.prefix,
+      last4: key.last4,
+      lastUsedAt: null,
+      revokedAt: null,
+      createdAt: key.createdAt.toISOString(),
+      secret
+    };
+  }
+
+  async revokeApiKey(tenantId: string, apiKeyId: string, actorUserId: string | null) {
+    await this.get(tenantId);
+
+    const existing = await createApiKeysRepository(this.db).findByIdAndTenantId(apiKeyId, tenantId);
+    if (!existing) {
+      throw new NotFoundException("API key not found");
+    }
+
+    const revoked = await createApiKeysRepository(this.db).revoke(apiKeyId);
+
+    if (!revoked) {
+      throw new NotFoundException("API key not found");
+    }
+
+    await createAuditLogsRepository(this.db).create({
+      tenantId,
+      actorUserId,
+      action: "api_key.revoked",
+      targetType: "api_key",
+      targetId: revoked.id,
+      metadata: { name: revoked.name }
+    });
+
+    return {
+      id: revoked.id,
+      name: revoked.name,
+      prefix: revoked.prefix,
+      last4: revoked.last4,
+      lastUsedAt: revoked.lastUsedAt?.toISOString() ?? null,
+      revokedAt: revoked.revokedAt?.toISOString() ?? null,
+      createdAt: revoked.createdAt.toISOString()
+    };
+  }
+
+  async getConversationDetail(tenantId: string, conversationId: string) {
+    await this.get(tenantId);
+
+    const conversation = await createConversationsRepository(this.db).findByIdAndTenantId(
+      conversationId,
+      tenantId,
+    );
+
+    if (!conversation) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    const [session] = [await createVisitorSessionsRepository(this.db).findById(conversation.sessionId)];
+    const messages = await createMessagesRepository(this.db).listByConversationAndTenantId(
+      conversationId,
+      tenantId,
+    );
+
+    const pageContext = (session?.pageContext ?? {}) as {
+      url?: unknown;
+      title?: unknown;
+    };
+
+    return {
+      id: conversation.id,
+      tenantId: conversation.tenantId,
+      sessionId: conversation.sessionId,
+      status: conversation.status,
+      startedAt: conversation.startedAt.toISOString(),
+      endedAt: conversation.endedAt?.toISOString() ?? null,
+      visitorId: session?.visitorId ?? null,
+      lastSeenAt: session?.lastSeenAt?.toISOString() ?? null,
+      currentPage: typeof pageContext.url === "string" ? pageContext.url : null,
+      pageTitle: typeof pageContext.title === "string" ? pageContext.title : null,
+      pageUrl: typeof pageContext.url === "string" ? pageContext.url : null,
+      messageCount: messages.length,
+      messages: messages.map((message) => ({
+        id: message.id,
+        tenantId: message.tenantId,
+        role: message.role,
+        type: message.type,
+        content: message.content,
+        createdAt: message.createdAt.toISOString()
+      }))
+    };
+  }
+
+  async updateUserStatus(
+    tenantId: string,
+    userId: string,
+    status: "active" | "invited" | "suspended",
+    actorUserId: string | null,
+  ) {
+    await this.get(tenantId);
+
+    const user = await createUsersRepository(this.db).findByIdAndTenantId(userId, tenantId);
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    const updated = await createUsersRepository(this.db).updateStatus(userId, status);
+
+    if (!updated) {
+      throw new NotFoundException("User not found");
+    }
+
+    await createAuditLogsRepository(this.db).create({
+      tenantId,
+      actorUserId,
+      action: "user.status_changed",
+      targetType: "user",
+      targetId: userId,
+      metadata: { status }
+    });
+
+    return this.toTenantUserRecord(updated.id, updated);
+  }
+
+  async updateUserRoles(tenantId: string, userId: string, roleSlugs: readonly string[], actorUserId: string | null) {
+    await this.get(tenantId);
+
+    const user = await createUsersRepository(this.db).findByIdAndTenantId(userId, tenantId);
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    const roles = createRolesRepository(this.db);
+    const roleIds: string[] = [];
+    for (const slug of roleSlugs) {
+      const role = await roles.findBySlugForTenant(tenantId, slug);
+      if (!role) {
+        throw new NotFoundException(`Role "${slug}" not found`);
+      }
+      roleIds.push(role.id);
+    }
+
+    await createUserRolesRepository(this.db).replaceRoles(userId, roleIds);
+
+    await createAuditLogsRepository(this.db).create({
+      tenantId,
+      actorUserId,
+      action: "user.roles_changed",
+      targetType: "user",
+      targetId: userId,
+      metadata: { roleSlugs }
+    });
+
+    return this.toTenantUserRecord(userId, user);
+  }
+
+  private async toTenantUserRecord(
+    userId: string,
+    fallback: { id: string; tenantId: string; email: string; status: string },
+  ) {
+    const roles = await createUserRolesRepository(this.db).listRoleSlugsByUserId(userId);
+
+    return {
+      id: fallback.id,
+      tenantId: fallback.tenantId,
+      email: fallback.email,
+      status: fallback.status as "active" | "invited" | "suspended",
+      roles,
+      invitedAt: null,
+      createdAt: null,
+      updatedAt: null
+    };
+  }
+
   async listUsers(tenantId: string) {
     await this.get(tenantId);
     const users = await createUsersRepository(this.db).listByTenantId(tenantId);
     const userRoles = createUserRolesRepository(this.db);
 
     return Promise.all(
-      users.map(async (user) => ({
-        id: user.id,
-        tenantId: user.tenantId,
-        email: user.email,
-        status: user.status,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-        roleSlugs: await userRoles.listRoleSlugsByUserId(user.id)
-      })),
+      users.map(async (user) => {
+        const roleSlugs = await userRoles.listRoleSlugsByUserId(user.id);
+        return {
+          id: user.id,
+          tenantId: user.tenantId,
+          email: user.email,
+          status: user.status,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+          roleSlugs,
+          roles: roleSlugs
+        };
+      }),
     );
   }
 

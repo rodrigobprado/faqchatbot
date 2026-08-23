@@ -10,9 +10,12 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import type { FastifyRequest } from "fastify";
+import type { AccessTokenClaims } from "../auth/access-token-claims.js";
 import { RequirePermissions } from "../auth/decorators/require-permissions.decorator.js";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
 import { PermissionsGuard } from "../auth/guards/permissions.guard.js";
@@ -22,6 +25,7 @@ import { PermissionsGuard } from "../auth/guards/permissions.guard.js";
 import {
   AnalyticsQueryDto,
   CreateRoleDto,
+  CreateTenantApiKeyDto,
   CreateTenantDomainDto,
   CreateTenantDto,
   CreateUserDto,
@@ -29,10 +33,14 @@ import {
   RateLimitPolicyDto,
   TenantAgentConfigDto,
   TenantConfigDto,
-  UpdateTenantDto
+  UpdateTenantDto,
+  UpdateTenantUserRolesDto,
+  UpdateTenantUserStatusDto
 } from "./dto/tenants.dto.js";
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import { TenantsService } from "./tenants.service.js";
+
+export type AuthenticatedAdminRequest = FastifyRequest & { user: AccessTokenClaims };
 
 @ApiTags("admin-tenants")
 @ApiBearerAuth()
@@ -51,6 +59,12 @@ export class TenantsController {
   @RequirePermissions("tenants:read")
   list() {
     return this.tenantsService.list();
+  }
+
+  @Get("plans")
+  @RequirePermissions("tenants:read")
+  listPlans() {
+    return this.tenantsService.listPlans();
   }
 
   @Get(":id")
@@ -164,6 +178,69 @@ export class TenantsController {
   @RequirePermissions("tenants:write")
   createUser(@Param("id") id: string, @Body() body: CreateUserDto) {
     return this.tenantsService.createUser(id, body);
+  }
+
+  @Get(":id/system-logs")
+  @RequirePermissions("tenants:read")
+  listSystemLogs(@Param("id") id: string) {
+    return this.tenantsService.listTenantSystemLogs(id);
+  }
+
+  @Get(":id/conversations/:conversationId")
+  @RequirePermissions("tenants:read")
+  getConversationDetail(
+    @Param("id") id: string,
+    @Param("conversationId") conversationId: string,
+  ) {
+    return this.tenantsService.getConversationDetail(id, conversationId);
+  }
+
+  @Get(":id/api-keys")
+  @RequirePermissions("tenants:read")
+  listApiKeys(@Req() request: AuthenticatedAdminRequest, @Param("id") id: string) {
+    return this.tenantsService.listApiKeys(id, request.user.sub);
+  }
+
+  @Post(":id/api-keys")
+  @RequirePermissions("tenants:write")
+  createApiKey(
+    @Req() request: AuthenticatedAdminRequest,
+    @Param("id") id: string,
+    @Body() body: CreateTenantApiKeyDto,
+  ) {
+    return this.tenantsService.createApiKey(id, body.name, request.user.sub);
+  }
+
+  @Delete(":id/api-keys/:apiKeyId")
+  @RequirePermissions("tenants:write")
+  revokeApiKey(
+    @Req() request: AuthenticatedAdminRequest,
+    @Param("id") id: string,
+    @Param("apiKeyId") apiKeyId: string,
+  ) {
+    return this.tenantsService.revokeApiKey(id, apiKeyId, request.user.sub);
+  }
+
+  @Patch(":id/users/:userId/status")
+  @RequirePermissions("tenants:write")
+  updateUserStatus(
+    @Req() request: AuthenticatedAdminRequest,
+    @Param("id") id: string,
+    @Param("userId") userId: string,
+    @Body() body: UpdateTenantUserStatusDto,
+  ) {
+    return this.tenantsService.updateUserStatus(id, userId, body.status, request.user.sub);
+  }
+
+  @Patch(":id/users/:userId/roles")
+  @RequirePermissions("tenants:write")
+  updateUserRoles(
+    @Req() request: AuthenticatedAdminRequest,
+    @Param("id") id: string,
+    @Param("userId") userId: string,
+    @Body() body: UpdateTenantUserRolesDto,
+  ) {
+    return this.tenantsService.updateUserRoles(id, userId, body.roleSlugs, request.user.sub);
   }
 
   @Get(":id/roles")

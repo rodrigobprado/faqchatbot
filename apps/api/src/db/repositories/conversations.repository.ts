@@ -21,6 +21,14 @@ export const createConversationsRepository = (db: Database) => ({
     const [conversation] = await db.select().from(conversations).where(eq(conversations.id, id));
     return conversation ?? null;
   },
+  findByIdAndTenantId: async (id: string, tenantId: string) => {
+    const [conversation] = await db
+      .select()
+      .from(conversations)
+      .where(and(eq(conversations.id, id), eq(conversations.tenantId, tenantId)))
+      .limit(1);
+    return conversation ?? null;
+  },
   findLatestOpenBySessionId: async (sessionId: string) => {
     const [conversation] = await db
       .select()

@@ -6,9 +6,14 @@ import { createDatabase, type Database } from "../../db/client.js";
 import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
 import { createAuditLogsRepository } from "../../db/repositories/audit-logs.repository.js";
 import { createConversationsRepository } from "../../db/repositories/conversations.repository.js";
+import { createMessagesRepository } from "../../db/repositories/messages.repository.js";
 import { createPermissionsRepository } from "../../db/repositories/permissions.repository.js";
 import { createPlansRepository } from "../../db/repositories/plans.repository.js";
+import { createRolesRepository } from "../../db/repositories/roles.repository.js";
+import { createUserRolesRepository } from "../../db/repositories/user-roles.repository.js";
+import { createUsersRepository } from "../../db/repositories/users.repository.js";
 import { createVisitorSessionsRepository } from "../../db/repositories/visitor-sessions.repository.js";
+import { hashPassword } from "../../auth/password.js";
 import { TenantsService } from "./tenants.service.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -274,5 +279,152 @@ describe("TenantsService", () => {
     const all = await tenantsService.listPermissions();
 
     expect(all.some((permission) => permission.slug === slug)).toBe(true);
+  });
+});
+
+describe("TenantsService dashboard surface", () => {
+  it("lists plans", async () => {
+    const plan = await createPlan();
+
+    const plans = await tenantsService.listPlans();
+
+    expect(plans.map((row) => row.id)).toContain(plan.id);
+  });
+
+  it("creates, lists and revokes api keys with audit trail", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Key Tenant",
+      planId: plan.id
+    });
+    const actor = await tenantsService.createUser(tenant.id, {
+      email: `actor-${randomUUID()}@tenant.test`,
+      password: "password123"
+    });
+
+    const created = await tenantsService.createApiKey(tenant.id, "Integracao", actor.id);
+
+    expect(created.secret.startsWith("fqc_")).toBe(true);
+    expect(created.last4).toBe(created.secret.slice(-4));
+    expect(created.revokedAt).toBeNull();
+
+    const listed = await tenantsService.listApiKeys(tenant.id, actor.id);
+    const found = listed.find((key) => key.id === created.id);
+    expect(found?.prefix).toBe(created.prefix);
+    expect(found && "secret" in found).toBe(false);
+
+    const audits = await createAuditLogsRepository(db).listByTenantId(tenant.id);
+    expect(audits.some((log) => log.action === "api_key.created")).toBe(true);
+
+    const revoked = await tenantsService.revokeApiKey(tenant.id, created.id, actor.id);
+    expect(revoked.revokedAt).not.toBeNull();
+  });
+
+  it("does not leak api keys across tenants", async () => {
+    const plan = await createPlan();
+    const tenantA = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Key A",
+      planId: plan.id
+    });
+    const tenantB = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Key B",
+      planId: plan.id
+    });
+
+    const created = await tenantsService.createApiKey(tenantA.id, "Chave A", null);
+
+    await expect(tenantsService.revokeApiKey(tenantB.id, created.id, null)).rejects.toThrow(NotFoundException);
+  });
+
+  it("returns conversation detail with visitor context and messages", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Conv Tenant",
+      planId: plan.id
+    });
+
+    const session = await createVisitorSessionsRepository(db).create({
+      tenantId: tenant.id,
+      visitorId: randomUUID(),
+      pageContext: { url: "https://loja.com/produto", title: "Produto" }
+    });
+    const conversation = await createConversationsRepository(db).create({
+      tenantId: tenant.id,
+      sessionId: session.id
+    });
+    const messagesRepo = createMessagesRepository(db);
+    await messagesRepo.create({
+      tenantId: tenant.id,
+      conversationId: conversation.id,
+      role: "user",
+      type: "text",
+      content: { type: "text", text: "Ola" }
+    });
+    await messagesRepo.create({
+      tenantId: tenant.id,
+      conversationId: conversation.id,
+      role: "assistant",
+      type: "text",
+      content: { type: "text", text: "Ola! Como ajudar?" }
+    });
+
+    const detail = await tenantsService.getConversationDetail(tenant.id, conversation.id);
+
+    expect(detail.visitorId).toBe(session.visitorId);
+    expect(detail.currentPage).toBe("https://loja.com/produto");
+    expect(detail.pageTitle).toBe("Produto");
+    expect(detail.messageCount).toBe(2);
+    expect(detail.messages).toHaveLength(2);
+
+    await expect(
+      tenantsService.getConversationDetail(randomUUID(), conversation.id),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it("updates user status and replaces roles", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "User Tenant",
+      planId: plan.id
+    });
+
+    const rolesRepo = createRolesRepository(db);
+    await rolesRepo.create({ tenantId: tenant.id, slug: "support", name: "Support" });
+    await rolesRepo.create({ tenantId: tenant.id, slug: "viewer", name: "Viewer" });
+
+    const user = await createUsersRepository(db).create({
+      tenantId: tenant.id,
+      email: `user-${randomUUID()}@tenant.test`,
+      passwordHash: await hashPassword("password123")
+    });
+
+    const statusUpdated = await tenantsService.updateUserStatus(tenant.id, user.id, "suspended", user.id);
+    expect(statusUpdated.status).toBe("suspended");
+
+    const rolesUpdated = await tenantsService.updateUserRoles(tenant.id, user.id, ["support"], user.id);
+    expect(rolesUpdated.roles).toEqual(["support"]);
+
+    await tenantsService.updateUserRoles(tenant.id, user.id, [], user.id);
+    const slugs = await createUserRolesRepository(db).listRoleSlugsByUserId(user.id);
+    expect(slugs).toEqual([]);
+
+    const slugsAfterReassign = await (async () => {
+      await tenantsService.updateUserRoles(tenant.id, user.id, ["support", "viewer"], user.id);
+      return createUserRolesRepository(db).listRoleSlugsByUserId(user.id);
+    })();
+    expect(slugsAfterReassign.sort()).toEqual(["support", "viewer"]);
+
+    const audits = await createAuditLogsRepository(db).listByTenantId(tenant.id);
+    expect(audits.some((log) => log.action === "user.status_changed")).toBe(true);
+    expect(audits.some((log) => log.action === "user.roles_changed")).toBe(true);
+
+    await expect(
+      tenantsService.updateUserRoles(tenant.id, user.id, ["nao-existe"], user.id),
+    ).rejects.toThrow(NotFoundException);
   });
 });

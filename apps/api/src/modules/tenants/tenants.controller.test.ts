@@ -157,4 +157,60 @@ describe("TenantsController", () => {
 
     expect(createRole).toHaveBeenCalledWith("t1", body);
   });
+
+  it("delegates listing plans", async () => {
+    const listPlans = vi.fn().mockResolvedValue([]);
+    const controller = new TenantsController(fakeService({ listPlans }));
+
+    await controller.listPlans();
+
+    expect(listPlans).toHaveBeenCalled();
+  });
+
+  it("delegates tenant system logs", async () => {
+    const listTenantSystemLogs = vi.fn().mockResolvedValue([]);
+    const controller = new TenantsController(fakeService({ listTenantSystemLogs }));
+
+    await controller.listSystemLogs("t1");
+
+    expect(listTenantSystemLogs).toHaveBeenCalledWith("t1");
+  });
+
+  it("delegates conversation detail", async () => {
+    const getConversationDetail = vi.fn().mockResolvedValue({ id: "c1" });
+    const controller = new TenantsController(fakeService({ getConversationDetail }));
+
+    await controller.getConversationDetail("t1", "c1");
+
+    expect(getConversationDetail).toHaveBeenCalledWith("t1", "c1");
+  });
+
+  it("delegates api key listing, creation and revocation with actor id", async () => {
+    const listApiKeys = vi.fn().mockResolvedValue([]);
+    const createApiKey = vi.fn().mockResolvedValue({ id: "k1" });
+    const revokeApiKey = vi.fn().mockResolvedValue({ id: "k1" });
+    const controller = new TenantsController(fakeService({ listApiKeys, createApiKey, revokeApiKey }));
+    const request = { user: { sub: "actor-1" } } as unknown as AuthenticatedAdminRequest;
+
+    await controller.listApiKeys(request, "t1");
+    await controller.createApiKey(request, "t1", { name: "Integracao" });
+    await controller.revokeApiKey(request, "t1", "k1");
+
+    expect(listApiKeys).toHaveBeenCalledWith("t1", "actor-1");
+    expect(createApiKey).toHaveBeenCalledWith("t1", "Integracao", "actor-1");
+    expect(revokeApiKey).toHaveBeenCalledWith("t1", "k1", "actor-1");
+  });
+
+  it("delegates user status and role updates with actor id", async () => {
+    const updateUserStatus = vi.fn().mockResolvedValue({ id: "u1" });
+    const updateUserRoles = vi.fn().mockResolvedValue({ id: "u1" });
+    const controller = new TenantsController(fakeService({ updateUserStatus, updateUserRoles }));
+    const request = { user: { sub: "actor-1" } } as unknown as AuthenticatedAdminRequest;
+
+    await controller.updateUserStatus(request, "t1", "u1", { status: "suspended" });
+    await controller.updateUserRoles(request, "t1", "u1", { roleSlugs: ["support"] });
+
+    expect(updateUserStatus).toHaveBeenCalledWith("t1", "u1", "suspended", "actor-1");
+    expect(updateUserRoles).toHaveBeenCalledWith("t1", "u1", ["support"], "actor-1");
+  });
 });

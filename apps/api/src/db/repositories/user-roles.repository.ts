@@ -12,6 +12,16 @@ export const createUserRolesRepository = (db: Database) => ({
 
     return assignment;
   },
+  replaceRoles: async (userId: string, roleIds: readonly string[]) => {
+    await db.delete(userRoles).where(eq(userRoles.userId, userId));
+    if (roleIds.length === 0) {
+      return [];
+    }
+    return db
+      .insert(userRoles)
+      .values(roleIds.map((roleId) => ({ userId, roleId })))
+      .returning();
+  },
   listRoleSlugsByUserId: async (userId: string) => {
     const rows = await db
       .select({ slug: roles.slug })

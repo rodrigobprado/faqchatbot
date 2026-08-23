@@ -7,6 +7,7 @@ export type CreateApiKeyInput = {
   name: string;
   hashedKey: string;
   prefix: string;
+  last4: string;
 };
 
 export const createApiKeysRepository = (db: Database) => ({
@@ -24,6 +25,18 @@ export const createApiKeysRepository = (db: Database) => ({
       .select()
       .from(apiKeys)
       .where(and(eq(apiKeys.prefix, prefix), isNull(apiKeys.revokedAt)));
+
+    return apiKey ?? null;
+  },
+  listByTenantId: async (tenantId: string) => {
+    return db.select().from(apiKeys).where(eq(apiKeys.tenantId, tenantId));
+  },
+  findByIdAndTenantId: async (id: string, tenantId: string) => {
+    const [apiKey] = await db
+      .select()
+      .from(apiKeys)
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.tenantId, tenantId)))
+      .limit(1);
 
     return apiKey ?? null;
   },

@@ -189,3 +189,22 @@ export class RateLimitPolicyDto {
   @IsPositive()
   windowSeconds!: number;
 }
+
+export class CreateTenantApiKeyDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  name!: string;
+}
+
+export class UpdateTenantUserStatusDto {
+  @IsIn(["active", "invited", "suspended"])
+  status!: "active" | "invited" | "suspended";
+}
+
+export class UpdateTenantUserRolesDto {
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  roleSlugs!: string[];
+}

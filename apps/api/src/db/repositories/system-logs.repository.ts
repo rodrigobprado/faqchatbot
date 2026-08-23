@@ -8,6 +8,7 @@ export type CreateSystemLogInput = {
   tenantId?: string | null;
   level: SystemLogLevel;
   message: string;
+  correlationId?: string | null;
   context?: Record<string, unknown>;
 };
 
@@ -19,6 +20,7 @@ export const createSystemLogsRepository = (db: Database) => ({
         tenantId: input.tenantId ?? null,
         level: input.level,
         message: input.message,
+        correlationId: input.correlationId ?? null,
         context: input.context ?? {}
       })
       .returning();

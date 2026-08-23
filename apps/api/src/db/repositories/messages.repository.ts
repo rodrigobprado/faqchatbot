@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { messages } from "../schema.js";
 
@@ -27,5 +27,11 @@ export const createMessagesRepository = (db: Database) => ({
       .select()
       .from(messages)
       .where(eq(messages.conversationId, conversationId))
+      .orderBy(asc(messages.createdAt)),
+  listByConversationAndTenantId: async (conversationId: string, tenantId: string) =>
+    db
+      .select()
+      .from(messages)
+      .where(and(eq(messages.conversationId, conversationId), eq(messages.tenantId, tenantId)))
       .orderBy(asc(messages.createdAt))
 });

@@ -24,7 +24,7 @@ export class ApiKeyService {
     const hashedKey = await hashPassword(secret);
 
     const apiKeys = createApiKeysRepository(this.db);
-    const created = await apiKeys.create({ tenantId, name, hashedKey, prefix });
+    const created = await apiKeys.create({ tenantId, name, hashedKey, prefix, last4: secret.slice(-4) });
 
     return { id: created.id, name: created.name, rawKey: `${prefix}.${secret}` };
   }
