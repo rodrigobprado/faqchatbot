@@ -1,0 +1,6 @@
+# Tokens/credenciais FALSAS usados em fixtures de teste do dashboard
+# (nenhum segredo real; suprimidos por fingerprint de commit historico).
+d79982104914c312ea3cabd75e1a242f96fd8690:apps/dashboard/src/api.test.ts:generic-api-key:218
+d85215efafd47f0e07ad8a848ae40c7a83b092b3:apps/dashboard/src/App.interaction.test.tsx:generic-api-key:1105
+d8a6beeaa3e117db015b54d7b81680b79ecd2b07:apps/dashboard/src/App.interaction.test.tsx:generic-api-key:763
+d8a6beeaa3e117db015b54d7b81680b79ecd2b07:apps/dashboard/src/api.test.ts:generic-api-key:105

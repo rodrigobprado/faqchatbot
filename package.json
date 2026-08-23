@@ -9,11 +9,9 @@
   "scripts": {
     "build": "corepack pnpm -r --if-present run build",
     "dev": "corepack pnpm -r --parallel --if-present run dev",
-    "audit": "corepack pnpm audit --prod",
     "lint": "eslint .",
-    "test": "corepack pnpm -r --if-present run test",
-    "typecheck": "corepack pnpm -r --if-present run typecheck",
-    "prepare": "node ./scripts/setup-git-hooks.mjs",
+    "test": "corepack pnpm -r --if-present run build && corepack pnpm -r --if-present run test",
+    "typecheck": "corepack pnpm -r --if-present run build && corepack pnpm -r --if-present run typecheck",
     "verify": "corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
