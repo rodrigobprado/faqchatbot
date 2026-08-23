@@ -15,30 +15,11 @@ permissions:
   actions: read
 
 jobs:
-  codeql:
-    # Code scanning exige GitHub Advanced Security, que a organizacao
-    # ainda nao possui. O job roda e reporta, mas nao bloqueia o PR.
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        language: [typescript]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-          queries: security-extended
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Analyze
-        uses: github/codeql-action/analyze@v3
-
+  # CodeQL (SAST) fica desativado enquanto a organizacao nao possuir
+  # GitHub Advanced Security: o upload de SARIF falha sem a licenca e
+  # o action reporta failure mesmo com continue-on-error. Reabilitar em
+  # .github/workflows/security.yml apos contratar GHAS ou tornar o repo
+  # publico (ver docs/deploy.md, tabela CI/CD).
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -46,7 +27,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Requer "Dependency graph" habilitado em Settings > Security > Advanced Security.
+      # Requer "Dependency graph" habilitado em Settings > Security.
       # Enquanto isso nao estiver ativo na organizacao, o resultado e informativo.
       - name: Dependency Review
         continue-on-error: true

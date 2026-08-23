@@ -31,7 +31,7 @@ import { loadChatWidget } from "@faqchatbot/sdk-js";
 const widget = await loadChatWidget({
   agentId: "demo",
   apiUrl: "https://api.faqchatbot.example.com",
-  scriptUrl: "https://cdn.faqchatbot.example.com/widget.js" // opcional
+  scriptUrl: "https://cdn.faqchatbot.example.com/widget.js", // opcional
 });
 
 widget.open();
@@ -73,8 +73,8 @@ Cache busting: hospedeiros devem servir `widget.js` com `no-cache` e `widget.<ha
 
 ## CI/CD
 
-| Workflow | Disparo | Etapas |
-|---|---|---|
-| CI (`ci.yml`) | PR / push main | lint, typecheck, migrate, test, build (+ size check), audit |
-| Security (`security.yml`) | PR / semanal | CodeQL, dependency review, gitleaks |
-| Widget CDN (`widget-cdn.yml`) | tag `widget-v*` | build + upload S3 |
+| Workflow                      | Disparo         | Etapas                                                                                |
+| ----------------------------- | --------------- | ------------------------------------------------------------------------------------- |
+| CI (`ci.yml`)                 | PR / push main  | lint, typecheck, migrate, test, e2e (widget + dashboard), build (+ size check), audit |
+| Security (`security.yml`)     | PR / semanal    | dependency review, gitleaks. CodeQL pendente de licenca GHAS na organizacao           |
+| Widget CDN (`widget-cdn.yml`) | tag `widget-v*` | build + upload S3                                                                     |
