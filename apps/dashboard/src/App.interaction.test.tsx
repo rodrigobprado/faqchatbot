@@ -1332,4 +1332,95 @@ describe("App interactions", () => {
     expect(document.body.textContent).toContain("Acesso administrativo");
     expect(window.localStorage.getItem("faqchatbot.dashboard.session.v1")).toBeNull();
   });
+
+  it("manages plans: creates, deletes and unlinks a tenant", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const confirmMock = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmMock);
+    const planCreated = { ...plans[0], id: "plan-new", slug: "novo", name: "Novo" };
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = init?.method ?? "GET";
+
+      if (url.includes("/health")) {
+        return jsonResponse(200, healthResponse);
+      }
+      if (url.endsWith("/v1/admin/plans") && method === "POST") {
+        return jsonResponse(201, { data: planCreated, meta: {} });
+      }
+      if (/\/v1\/admin\/plans\//.test(url) && method === "DELETE") {
+        return jsonResponse(200, { data: { deleted: true }, meta: {} });
+      }
+      if (url === "/v1/admin/tenants" && method === "GET") {
+        return jsonResponse(200, { data: [tenant], meta: {} });
+      }
+      if (url.endsWith("/v1/admin/tenants/plans") && method === "GET") {
+        return jsonResponse(200, { data: [...plans, planCreated], meta: {} });
+      }
+      if (url.endsWith("/plan") || url.includes("plan")) {
+        return jsonResponse(200, { data: null, meta: {} });
+      }
+      return jsonResponse(200, { data: [], meta: {} });
+    });
+
+    window.localStorage.setItem(
+      "faqchatbot.dashboard.session.v1",
+      JSON.stringify(adminSession),
+    );
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await waitForBodyText("Lista de tenants");
+
+    const plansNav = Array.from(document.querySelectorAll(".sidebar-nav button")).find((button) =>
+      button.textContent?.includes("Planos"),
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      plansNav.click();
+    });
+
+    const createSection = document.querySelector("#plans") as HTMLElement;
+    const inputs = Array.from(createSection.querySelectorAll("input")) as HTMLInputElement[];
+    fillInput(inputs[0], "novo");
+    fillInput(inputs[1], "Novo");
+
+    const createButton = Array.from(createSection.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Criar plano"),
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      createButton.click();
+    });
+
+    await waitForBodyText("Plano criado com sucesso.");
+    expect(
+      fetchMock.mock.calls.some(([path, i]) => path === "/v1/admin/plans" && i?.method === "POST"),
+    ).toBe(true);
+
+    const unlinkButton = Array.from(createSection.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Desvincular"),
+    ) as HTMLButtonElement | undefined;
+
+    if (unlinkButton) {
+      await act(async () => {
+        unlinkButton.click();
+      });
+      await waitForBodyText("Plano desvinculado do tenant.");
+    }
+
+    const deleteButton = Array.from(createSection.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Apagar"),
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      deleteButton.click();
+    });
+
+    await waitForBodyText("Plano apagado.");
+    expect(confirmMock).toHaveBeenCalled();
+  });
 });
