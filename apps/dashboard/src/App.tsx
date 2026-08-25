@@ -54,6 +54,8 @@ import {
 } from "./api.js";
 
 const STORAGE_KEY = "faqchatbot.dashboard.session.v1";
+const AUTH_EXPIRED_FLASH_KEY = "faqchatbot.dashboard.auth-expired";
+const AUTH_EXPIRED_MESSAGE = "Sessao expirada. Entre novamente.";
 
 type LoginState = Readonly<{
   email: string;
@@ -526,6 +528,16 @@ export const App = () => {
 
   useEffect(() => {
     setSession(readStoredSession());
+
+    try {
+      const authExpiredFlash = window.sessionStorage.getItem(AUTH_EXPIRED_FLASH_KEY);
+      if (authExpiredFlash) {
+        window.sessionStorage.removeItem(AUTH_EXPIRED_FLASH_KEY);
+        setViewState((current) => ({ ...current, error: authExpiredFlash, notice: null }));
+      }
+    } catch {
+      // sessionStorage indisponivel: segue sem mensagem flash.
+    }
   }, []);
 
   useEffect(() => {
@@ -753,7 +765,16 @@ export const App = () => {
 
   const handleAuthFailure = () => {
     setSession(null);
-    updateError("Sessao expirada. Entre novamente.");
+    updateError(AUTH_EXPIRED_MESSAGE);
+
+    try {
+      window.sessionStorage.setItem(AUTH_EXPIRED_FLASH_KEY, AUTH_EXPIRED_MESSAGE);
+      // Reload garante boot limpo mesmo com bundle/state obsoleto na aba.
+      // Apos recarregar nao ha sessao, logo nenhuma chamada dispara novo 401.
+      window.location.reload();
+    } catch {
+      // Sem navegacao real (ex.: testes): a troca de view por estado cobre o caso.
+    }
   };
 
   const withSessionRetry = async <T,>(action: (accessToken: string) => Promise<T>): Promise<T> => {
