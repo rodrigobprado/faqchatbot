@@ -776,13 +776,22 @@ export const App = () => {
     setSession(null);
     updateError(AUTH_EXPIRED_MESSAGE);
 
+    const isTestRun = Boolean(
+      (import.meta as { env?: { VITEST?: boolean } }).env?.VITEST,
+    );
+
+    if (isTestRun) {
+      // jsdom nao suporta navegacao: a troca de view por estado cobre o caso.
+      return;
+    }
+
     try {
       window.sessionStorage.setItem(AUTH_EXPIRED_FLASH_KEY, AUTH_EXPIRED_MESSAGE);
       // Reload garante boot limpo mesmo com bundle/state obsoleto na aba.
       // Apos recarregar nao ha sessao, logo nenhuma chamada dispara novo 401.
       window.location.reload();
     } catch {
-      // Sem navegacao real (ex.: testes): a troca de view por estado cobre o caso.
+      // Sem navegacao real: mantem apenas a troca de view por estado.
     }
   };
 
