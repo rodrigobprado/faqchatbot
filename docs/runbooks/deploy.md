@@ -26,7 +26,7 @@ As migrations sao idempotentes e devem rodar ANTES do deploy da nova versao:
 kubectl -n faqchatbot run migrate --rm -i --restart=Never \
   --image=ghcr.io/rigbie/faqchatbot-api:TAG \
   --env="DATABASE_URL=$(kubectl -n faqchatbot get secret faqchatbot-secrets -o jsonpath='{.data.DATABASE_URL}' | base64 -d)" \
-  -- node dist/db/migrate.js
+  -- node apps/api/dist/db/migrate.js
 ```
 
 ## 3. Aplicar manifests

@@ -19,7 +19,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/rigbie-sst/faqchatbot-api:IMAGE_TAG_PLACEHOLDER
-          command: ["node", "dist/db/migrate.js"]
+          command: ["node", "apps/api/dist/db/migrate.js"]
           envFrom:
             - configMapRef:
                 name: faq-config
