@@ -390,7 +390,10 @@ const readStoredSession = (): AdminSession | null => {
       typeof parsed.accessToken !== "string" ||
       parsed.accessToken.length === 0 ||
       typeof parsed.refreshToken !== "string" ||
-      parsed.refreshToken.length === 0
+      parsed.refreshToken.length === 0 ||
+      !parsed.user ||
+      typeof parsed.user.email !== "string" ||
+      !Array.isArray(parsed.user.roles)
     ) {
       window.localStorage.removeItem(STORAGE_KEY);
       return null;
@@ -1447,7 +1450,7 @@ export const App = () => {
       return;
     }
 
-    if (!session.user.roles.includes("platform_admin")) {
+    if (!session?.user?.roles.includes("platform_admin")) {
       updateError("Somente platform_admin pode excluir tenants.");
       return;
     }
@@ -1481,7 +1484,7 @@ export const App = () => {
     }
   };
 
-  const isPlatformAdmin = Boolean(session?.user.roles.includes("platform_admin"));
+  const isPlatformAdmin = Boolean(session?.user?.roles?.includes("platform_admin"));
   const canSubmitTenant = Boolean(
     tenantForm.publicId.trim() && tenantForm.name.trim() && session && isPlatformAdmin,
   );
@@ -1657,7 +1660,7 @@ export const App = () => {
         <section className="sidebar-panel">
           <span>Status</span>
           <strong>{session ? "Autenticado" : "Desconectado"}</strong>
-          <p>{session ? session.user.email : "Entre para carregar os dados administrativos."}</p>
+          <p>{session?.user?.email ?? "Entre para carregar os dados administrativos."}</p>
           {session ? <small>{isPlatformAdmin ? "Acesso global" : "Acesso restrito"}</small> : null}
         </section>
       </aside>
@@ -3346,15 +3349,15 @@ export const App = () => {
               <dl className="session-grid">
                 <div>
                   <dt>Email</dt>
-                  <dd>{session.user.email}</dd>
+                  <dd>{session?.user?.email ?? "-"}</dd>
                 </div>
                 <div>
                   <dt>Tenant</dt>
-                  <dd className="mono">{session.user.tenantId}</dd>
+                  <dd className="mono">{session?.user?.tenantId ?? "-"}</dd>
                 </div>
                 <div>
                   <dt>Roles</dt>
-                  <dd>{session.user.roles.join(", ")}</dd>
+                  <dd>{session?.user?.roles?.join(", ") ?? "-"}</dd>
                 </div>
               </dl>
             </section>

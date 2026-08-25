@@ -1303,4 +1303,33 @@ describe("App interactions", () => {
     expect(document.body.textContent).toContain("Acesso administrativo");
     expect(window.localStorage.getItem("faqchatbot.dashboard.session.v1")).toBeNull();
   });
+
+  it("falls back to the login screen when the stored session has no user payload", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.includes("/health")) {
+        return jsonResponse(200, healthResponse);
+      }
+
+      return jsonResponse(401, {
+        error: { statusCode: 401, message: "Missing bearer token" },
+      });
+    });
+
+    window.localStorage.setItem(
+      "faqchatbot.dashboard.session.v1",
+      JSON.stringify({ accessToken: "token-1", refreshToken: "refresh-1", expiresInSeconds: 900 }),
+    );
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    expect(document.body.textContent).toContain("Acesso administrativo");
+    expect(window.localStorage.getItem("faqchatbot.dashboard.session.v1")).toBeNull();
+  });
 });
