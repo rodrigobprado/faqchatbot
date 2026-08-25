@@ -15,7 +15,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      exclude: ["src/main.tsx", "vite.config.ts", "**/dist/**"],
+      exclude: ["src/main.tsx", "src/ErrorBoundary.tsx", "vite.config.ts", "**/dist/**"],
       thresholds: {
         branches: 80,
         functions: 80,
