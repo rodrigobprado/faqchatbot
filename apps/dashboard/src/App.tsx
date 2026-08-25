@@ -63,14 +63,14 @@ type LoginState = Readonly<{
 type TenantFormState = Readonly<{
   publicId: string;
   name: string;
-  planSlug: CreateTenantPayload["planSlug"];
+  planId: CreateTenantPayload["planId"];
   defaultLocale: string;
 }>;
 
 type TenantEditState = Readonly<{
   publicId: string;
   name: string;
-  planSlug: "" | UpdateTenantPayload["planSlug"];
+  planId: string;
   defaultLocale: string;
   status: TenantRecord["status"];
 }>;
@@ -138,36 +138,31 @@ const defaultLoginState = (): LoginState => ({
   password: "",
 });
 
-const getDefaultPlanSlug = (plans: PlanRecord[]): TenantFormState["planSlug"] => {
+const getDefaultPlanId = (plans: PlanRecord[]): TenantFormState["planId"] => {
   const starter = plans.find((plan) => plan.slug === "starter" && plan.isActive);
   if (starter) {
-    return starter.slug as TenantFormState["planSlug"];
+    return starter.id;
   }
 
   const activePlan = plans.find((plan) => plan.isActive);
   if (activePlan) {
-    return activePlan.slug as TenantFormState["planSlug"];
+    return activePlan.id;
   }
 
-  return (plans[0]?.slug ?? "starter") as TenantFormState["planSlug"];
+  return (plans[0]?.id ?? "") as TenantFormState["planId"];
 };
 
 const defaultTenantFormState = (plans: PlanRecord[] = []): TenantFormState => ({
   publicId: "",
   name: "",
-  planSlug: getDefaultPlanSlug(plans),
+  planId: getDefaultPlanId(plans),
   defaultLocale: "pt-BR",
 });
 
-const defaultTenantEditState = (
-  tenant?: TenantRecord | null,
-  plans: PlanRecord[] = [],
-): TenantEditState => ({
+const defaultTenantEditState = (tenant?: TenantRecord | null): TenantEditState => ({
   publicId: tenant?.publicId ?? "",
   name: tenant?.name ?? "",
-  planSlug: (tenant?.planId
-    ? (plans.find((plan) => plan.id === tenant.planId)?.slug ?? "")
-    : "") as TenantEditState["planSlug"],
+  planId: (tenant?.planId ?? "") as TenantEditState["planId"],
   defaultLocale: tenant?.defaultLocale ?? "pt-BR",
   status: tenant?.status ?? "active",
 });
@@ -477,7 +472,7 @@ export const App = () => {
   const [loginState, setLoginState] = useState<LoginState>(defaultLoginState);
   const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState());
   const [tenantEdit, setTenantEdit] = useState<TenantEditState>(
-    defaultTenantEditState(undefined, []),
+    defaultTenantEditState(undefined),
   );
   const [tenantFilters, setTenantFilters] = useState<TenantListFiltersState>(
     defaultTenantListFiltersState,
@@ -592,7 +587,7 @@ export const App = () => {
   useEffect(() => {
     if (tenants.length === 0) {
       setSelectedTenantId(null);
-      setTenantEdit(defaultTenantEditState(undefined, plans));
+      setTenantEdit(defaultTenantEditState(undefined));
       return;
     }
 
@@ -607,7 +602,7 @@ export const App = () => {
 
   useEffect(() => {
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
-    setTenantEdit(defaultTenantEditState(selectedTenant, plans));
+      setTenantEdit(defaultTenantEditState(selectedTenant));
   }, [selectedTenantId, tenants, plans]);
 
   useEffect(() => {
@@ -616,8 +611,8 @@ export const App = () => {
     }
 
     setTenantForm((current) => {
-      const hasSelectedPlan = plans.some((plan) => plan.slug === current.planSlug);
-      return hasSelectedPlan ? current : { ...current, planSlug: getDefaultPlanSlug(plans) };
+      const hasSelectedPlan = plans.some((plan) => plan.id === current.planId);
+      return hasSelectedPlan ? current : { ...current, planId: getDefaultPlanId(plans) };
     });
   }, [plans]);
 
@@ -1021,7 +1016,7 @@ export const App = () => {
     setAccessWorkspace("users");
     setLoginState(defaultLoginState);
     setTenantForm(defaultTenantFormState());
-    setTenantEdit(defaultTenantEditState(undefined, []));
+    setTenantEdit(defaultTenantEditState(undefined));
     setTenantAgentConfig(defaultTenantAgentConfigState());
     setTenantAccessById({});
     setTenantConversationsById({});
@@ -1049,7 +1044,7 @@ export const App = () => {
         createTenant(accessToken, {
           publicId: tenantForm.publicId,
           name: tenantForm.name,
-          planSlug: tenantForm.planSlug,
+          planId: tenantForm.planId,
           defaultLocale: tenantForm.defaultLocale,
         }),
       );
@@ -1458,8 +1453,8 @@ export const App = () => {
         status: tenantEdit.status,
       };
 
-      if (tenantEdit.planSlug) {
-        payload.planSlug = tenantEdit.planSlug;
+      if (tenantEdit.planId) {
+        payload.planId = tenantEdit.planId;
       }
 
       await withSessionRetry((accessToken) =>
@@ -2260,16 +2255,16 @@ export const App = () => {
                   <label>
                     <span>Plano</span>
                     <select
-                      value={tenantForm.planSlug}
+                      value={tenantForm.planId}
                       onChange={(event) =>
                         setTenantForm((current) => ({
                           ...current,
-                          planSlug: event.target.value as CreateTenantPayload["planSlug"],
+                          planId: event.target.value as CreateTenantPayload["planId"],
                         }))
                       }
                     >
                       {plans.map((plan) => (
-                        <option key={`create-plan-${plan.slug}`} value={plan.slug}>
+                        <option key={`create-plan-${plan.slug}`} value={plan.id}>
                           {plan.name}
                         </option>
                       ))}
@@ -2387,17 +2382,17 @@ export const App = () => {
                     <label>
                       <span>Plano</span>
                       <select
-                        value={tenantEdit.planSlug}
+                        value={tenantEdit.planId}
                         onChange={(event) =>
                           setTenantEdit((current) => ({
                             ...current,
-                            planSlug: event.target.value as TenantEditState["planSlug"],
+                            planId: event.target.value as TenantEditState["planId"],
                           }))
                         }
                       >
                         <option value="">Manter plano atual</option>
                         {plans.map((plan) => (
-                          <option key={`edit-plan-${plan.slug}`} value={plan.slug}>
+                          <option key={`edit-plan-${plan.slug}`} value={plan.id}>
                             {plan.name}
                           </option>
                         ))}

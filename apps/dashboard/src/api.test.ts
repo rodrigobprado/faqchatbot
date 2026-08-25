@@ -282,7 +282,7 @@ describe("API helpers", () => {
       createTenant("access-token-1", {
         publicId: "acme",
         name: "Acme",
-        planSlug: "starter",
+        planId: "plan-starter",
         defaultLocale: "pt-BR",
       }),
     ).resolves.toEqual(tenant);

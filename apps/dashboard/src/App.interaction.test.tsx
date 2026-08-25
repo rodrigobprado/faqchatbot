@@ -514,7 +514,7 @@ describe("App interactions", () => {
 
     fillInput(publicIdInput, "nova-conta");
     fillInput(nameInput, "Nova Conta");
-    fillInput(planSelect, "starter");
+    fillInput(planSelect, "plan-starter");
     fillInput(localeInput, "pt-BR");
 
     const createButton = Array.from(createSection.querySelectorAll("button")).find((button) =>
@@ -721,7 +721,7 @@ describe("App interactions", () => {
     const planSelect = createForm.querySelector("select") as HTMLSelectElement;
     fillInput(publicIdInput, "beta");
     fillInput(nameInput, "Beta");
-    fillInput(planSelect, "growth");
+    fillInput(planSelect, "plan-growth");
     fillInput(localeInput, "pt-BR");
 
     await flush();
@@ -860,7 +860,7 @@ describe("App interactions", () => {
 
     fillInput(editPublicIdInput, "acme");
     fillInput(editNameInput, "Acme Atualizada");
-    fillInput(planSelect, "growth");
+    fillInput(planSelect, "plan-growth");
     fillInput(statusSelect, "inactive");
     fillInput(editLocaleInput, "en-US");
 

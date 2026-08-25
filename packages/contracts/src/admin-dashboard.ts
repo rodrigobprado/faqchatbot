@@ -1,4 +1,4 @@
-import type { AgentProvider, TenantPlan, TenantStatus } from "./tenants.js";
+import type { AgentProvider, TenantStatus } from "./tenants.js";
 
 export type AdminUser = Readonly<{
   id: string;
@@ -249,14 +249,14 @@ export type LoginPayload = Readonly<{
 export type CreateTenantPayload = Readonly<{
   publicId: string;
   name: string;
-  planSlug: TenantPlan;
+  planId: string;
   defaultLocale: string;
 }>;
 
 export type UpdateTenantPayload = {
   publicId?: string;
   name?: string;
-  planSlug?: TenantPlan;
+  planId?: string;
   defaultLocale?: string;
   status?: TenantStatus;
 };
