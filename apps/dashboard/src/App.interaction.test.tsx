@@ -1266,4 +1266,41 @@ describe("App interactions", () => {
       ),
     ).toBe(true);
   });
+
+  it("returns to the login screen when a stored session is rejected by the API", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const unauthorizedBody = {
+      error: { statusCode: 401, message: "Missing bearer token" },
+    };
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.includes("/health")) {
+        return jsonResponse(200, healthResponse);
+      }
+
+      if (url.includes("/v1/auth/refresh")) {
+        return jsonResponse(401, {
+          error: { statusCode: 401, message: "Invalid refresh token" },
+        });
+      }
+
+      return jsonResponse(401, unauthorizedBody);
+    });
+
+    window.localStorage.setItem(
+      "faqchatbot.dashboard.session.v1",
+      JSON.stringify(adminSession),
+    );
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await waitForBodyText("Sessao expirada. Entre novamente.");
+
+    expect(document.body.textContent).toContain("Acesso administrativo");
+    expect(window.localStorage.getItem("faqchatbot.dashboard.session.v1")).toBeNull();
+  });
 });

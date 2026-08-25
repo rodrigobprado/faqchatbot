@@ -382,8 +382,21 @@ const readStoredSession = (): AdminSession | null => {
   }
 
   try {
-    return JSON.parse(raw) as AdminSession;
+    const parsed = JSON.parse(raw) as Partial<AdminSession> | null;
+    if (
+      !parsed ||
+      typeof parsed.accessToken !== "string" ||
+      parsed.accessToken.length === 0 ||
+      typeof parsed.refreshToken !== "string" ||
+      parsed.refreshToken.length === 0
+    ) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+
+    return parsed as AdminSession;
   } catch {
+    window.localStorage.removeItem(STORAGE_KEY);
     return null;
   }
 };
@@ -735,6 +748,14 @@ export const App = () => {
     }));
   };
 
+  const isAuthError = (error: unknown): error is ApiError =>
+    error instanceof ApiError && error.status === 401;
+
+  const handleAuthFailure = () => {
+    setSession(null);
+    updateError("Sessao expirada. Entre novamente.");
+  };
+
   const withSessionRetry = async <T,>(action: (accessToken: string) => Promise<T>): Promise<T> => {
     if (!session) {
       throw new ApiError("Sessao administrativa ausente", 401);
@@ -747,9 +768,13 @@ export const App = () => {
         throw error;
       }
 
-      const refreshed = await refreshAdmin(session.refreshToken);
-      setSession(refreshed);
-      return action(refreshed.accessToken);
+      try {
+        const refreshed = await refreshAdmin(session.refreshToken);
+        setSession(refreshed);
+        return action(refreshed.accessToken);
+      } catch {
+        throw new ApiError("Sessao expirada. Entre novamente.", 401);
+      }
     }
   };
 
@@ -780,13 +805,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setPlans([]);
-        setTenantConversationsById({});
-        setTenantInsightsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -900,18 +920,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantDomains([]);
-        setTenantAgentConfig(defaultTenantAgentConfigState());
-        setTenantAccessById({});
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        setTenantInsightsById({});
-        setSelectedTenantId(null);
-        setTenantWorkspace("list");
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -943,13 +953,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        setTenantInsightsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -995,14 +1000,9 @@ export const App = () => {
         loading: false,
         notice: "Sessao renovada com sucesso.",
       }));
-    } catch (error) {
-      setSession(null);
-      setTenants([]);
-      setTenantConversationsById({});
-      setTenantSessionsById({});
-      setTenantInsightsById({});
+    } catch {
       setViewState((current) => ({ ...current, loading: false }));
-      updateError(error instanceof Error ? error.message : "Falha ao renovar sessao");
+      handleAuthFailure();
     }
   };
 
@@ -1058,12 +1058,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1096,14 +1092,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantDomains([]);
-        setSelectedTenantId(null);
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1135,14 +1125,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantDomains([]);
-        setSelectedTenantId(null);
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1177,14 +1161,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantDomains([]);
-        setSelectedTenantId(null);
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1229,15 +1207,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantDomains([]);
-        setTenantAgentConfig(defaultTenantAgentConfigState());
-        setSelectedTenantId(null);
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1276,13 +1247,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantAccessById({});
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1309,13 +1275,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantAccessById({});
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1343,13 +1304,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantAccessById({});
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1390,13 +1346,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantAccessById({});
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1421,13 +1372,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setTenantAccessById({});
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1465,14 +1411,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setSelectedTenantId(null);
-        setTenantAgentConfig(defaultTenantAgentConfigState());
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
@@ -1511,13 +1451,8 @@ export const App = () => {
     } catch (error) {
       setViewState((current) => ({ ...current, loading: false }));
 
-      if (error instanceof ApiError && error.status === 401) {
-        setSession(null);
-        setTenants([]);
-        setSelectedTenantId(null);
-        setTenantConversationsById({});
-        setTenantSessionsById({});
-        updateError("Sessao expirada. Entre novamente.");
+      if (isAuthError(error)) {
+        handleAuthFailure();
         return;
       }
 
