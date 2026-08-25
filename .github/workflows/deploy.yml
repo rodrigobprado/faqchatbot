@@ -193,29 +193,31 @@ jobs:
           set -euo pipefail
 
           # Os testes de integracao NUNCA rodam contra a base viva de
-          # producao/homologacao/develop. Cada execucao cria um banco
-          # descartavel, aplica migrations nele e remove ao final.
-          TEST_DB_NAME="$(basename "${DATABASE_URL}")_cd_${{ github.run_id }}"
+          # producao/homologacao/develop: usam um banco de teste isolado
+          # (<db vivo>_cd_test), cujo schema e recriado a cada execucao.
+          #
+          # Setup unico por ambiente (feito pelo admin do banco):
+          #   CREATE DATABASE <db>_cd_test OWNER <role>;
+          #   ALTER SCHEMA public OWNER TO <role>;  -- dentro do banco novo
+          TEST_DB_NAME="$(basename "${DATABASE_URL}")_cd_test"
           TEST_DATABASE_URL="${DATABASE_URL%/*}/${TEST_DB_NAME}"
-          TEST_REDIS_URL="${REDIS_URL%/}/15"
 
           URL_NO_SCHEME="${DATABASE_URL#*://}"
           DB_USER="${URL_NO_SCHEME%%:*}"
 
-          cleanup() {
-            psql "$DATABASE_URL" -c "DROP DATABASE IF EXISTS \"${TEST_DB_NAME}\"" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
+          TEST_REDIS_URL="${REDIS_URL%/}/15"
 
-          # O papel da aplicacao possui CREATEDB: cria e remove o proprio
-          # banco descartavel sem precisar de superusuario.
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${TEST_DB_NAME}\" OWNER \"${DB_USER}\""
-          # PG15+: bancos novos tem o schema public sem CREATE para o papel.
-          # O dono do banco pode assumir a posse do schema.
-          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER SCHEMA public OWNER TO current_user"
+          if ! psql "$DATABASE_URL" -tc "SELECT 1 FROM pg_database WHERE datname = '${TEST_DB_NAME}'" | grep -q 1; then
+            echo "::error::banco de teste ${TEST_DB_NAME} nao existe. Crie uma vez com OWNER=${DB_USER} e ALTER SCHEMA public OWNER TO ${DB_USER}."
+            exit 1
+          fi
 
           export DATABASE_URL="$TEST_DATABASE_URL"
           export REDIS_URL="$TEST_REDIS_URL"
+
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "DROP SCHEMA public CASCADE" \
+            -c "CREATE SCHEMA public AUTHORIZATION \"${DB_USER}\"" >/dev/null
 
           corepack pnpm lint
           corepack pnpm typecheck
