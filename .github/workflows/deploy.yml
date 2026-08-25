@@ -183,6 +183,7 @@ jobs:
           set -a
           source "${BRANCH_DIR}/shared/.env"
           set +a
+          corepack pnpm --filter "@faqchatbot/api..." run build
           corepack pnpm --filter @faqchatbot/api db:migrate
           corepack pnpm --filter @faqchatbot/api db:seed
 
