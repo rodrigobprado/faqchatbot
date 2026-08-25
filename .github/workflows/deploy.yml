@@ -203,11 +203,13 @@ jobs:
           DB_USER="${URL_NO_SCHEME%%:*}"
 
           cleanup() {
-            sudo -u postgres psql -c "DROP DATABASE IF EXISTS \"${TEST_DB_NAME}\"" >/dev/null 2>&1 || true
+            psql "$DATABASE_URL" -c "DROP DATABASE IF EXISTS \"${TEST_DB_NAME}\"" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
-          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${TEST_DB_NAME}\" OWNER \"${DB_USER}\""
+          # O papel da aplicacao possui CREATEDB: cria e remove o proprio
+          # banco descartavel sem precisar de superusuario.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${TEST_DB_NAME}\" OWNER \"${DB_USER}\""
 
           export DATABASE_URL="$TEST_DATABASE_URL"
           export REDIS_URL="$TEST_REDIS_URL"
