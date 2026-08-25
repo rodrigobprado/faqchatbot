@@ -776,11 +776,10 @@ export const App = () => {
     setSession(null);
     updateError(AUTH_EXPIRED_MESSAGE);
 
-    const isTestRun = Boolean(
-      (import.meta as { env?: { VITEST?: boolean } }).env?.VITEST,
-    );
+    const isJsdom =
+      typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent);
 
-    if (isTestRun) {
+    if (isJsdom) {
       // jsdom nao suporta navegacao: a troca de view por estado cobre o caso.
       return;
     }
