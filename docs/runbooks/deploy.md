@@ -7,6 +7,9 @@
 - Imagens publicadas no registry (GHCR) com as tags desejadas.
 - PostgreSQL e Redis provisionados (gerenciados ou in-cluster).
 - Namespace criado: `kubectl apply -f infra/k8s/namespace.yaml`.
+- Deploy systemd (self-hosted): Node.js 24+ disponivel como `/usr/local/bin/node24`
+  (o `node` do sistema pode ser outra versao; o servico usa o binario fixado para
+  casar com a ABI dos modulos nativos instalados pelo CI, ex.: argon2).
 
 ## 1. Configurar ambiente
 
