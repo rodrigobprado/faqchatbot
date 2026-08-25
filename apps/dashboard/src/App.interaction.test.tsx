@@ -1384,7 +1384,10 @@ describe("App interactions", () => {
     });
 
     const createSection = document.querySelector("#plans") as HTMLElement;
-    const inputs = Array.from(createSection.querySelectorAll("input")) as HTMLInputElement[];
+    const inputs = Array.from(createSection.querySelectorAll("input")) as [
+      HTMLInputElement,
+      HTMLInputElement,
+    ];
     fillInput(inputs[0], "novo");
     fillInput(inputs[1], "Novo");
 
