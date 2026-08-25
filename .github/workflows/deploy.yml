@@ -215,8 +215,12 @@ jobs:
           export DATABASE_URL="$TEST_DATABASE_URL"
           export REDIS_URL="$TEST_REDIS_URL"
 
+          # Reset total: public (tabelas) E drizzle (journal de migracoes,
+          # que vive num schema proprio e enganaria o migrate se sobrevivesse).
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-            -c "DROP SCHEMA public CASCADE" \
+            -c "DROP SCHEMA IF EXISTS public CASCADE" \
+            -c "DROP SCHEMA IF EXISTS drizzle CASCADE" \
+            -c "DROP SCHEMA IF EXISTS extensions CASCADE" \
             -c "CREATE SCHEMA public AUTHORIZATION \"${DB_USER}\"" >/dev/null
 
           corepack pnpm lint
@@ -255,6 +259,7 @@ jobs:
           ls -1dt */ | tail -n +5 | xargs -r -I{} sudo rm -Rf "{}"
 
       - name: sonarqube
+        id: sonar
         shell: bash
         env:
           SONAR_PROJECTKEY: ${{ secrets.SONAR_PROJECTKEY }}
@@ -266,3 +271,18 @@ jobs:
             -Dsonar.sources=. \
             -Dsonar.host.url="$SONAR_HOST_URL" \
             -Dsonar.token="$SONAR_TOKEN"
+
+      - name: sonarqube quality gate e pendencias
+        if: always() && steps.sonar.outcome == 'success'
+        shell: bash
+        env:
+          SONAR_PROJECTKEY: ${{ secrets.SONAR_PROJECTKEY }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Aguarda o processamento da analise, verifica o Quality Gate
+          # (reprovando o job se falhar) e publica as pendencias abertas
+          # como tarefas no resumo do job.
+          node scripts/sonar-report.mjs >> "$GITHUB_STEP_SUMMARY"
