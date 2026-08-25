@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: reloc-dev
+  labels:
+    app.kubernetes.io/part-of: faqchatbot
+    environment: staging

@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: faq-migrate
+  namespace: reloc-dev
+  labels:
+    app: faqchatbot
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: faqchatbot-migrate
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: migrate
+          image: ghcr.io/rigbie-sst/faqchatbot-api:IMAGE_TAG_PLACEHOLDER
+          command: ["node", "dist/db/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: faq-config
+            - secretRef:
+                name: faq-secrets

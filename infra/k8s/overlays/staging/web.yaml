@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: faq-dashboard
+  namespace: reloc-dev
+  labels:
+    app: faq-dashboard
+    app.kubernetes.io/part-of: faqchatbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: faq-dashboard
+  template:
+    metadata:
+      labels:
+        app: faq-dashboard
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: dashboard
+          image: ghcr.io/rigbie-sst/faqchatbot-dashboard:IMAGE_TAG_PLACEHOLDER
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: faq-dashboard
+  namespace: reloc-dev
+spec:
+  selector:
+    app: faq-dashboard
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: faq-widget
+  namespace: reloc-dev
+  labels:
+    app: faq-widget
+    app.kubernetes.io/part-of: faqchatbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: faq-widget
+  template:
+    metadata:
+      labels:
+        app: faq-widget
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: widget
+          image: ghcr.io/rigbie-sst/faqchatbot-widget:IMAGE_TAG_PLACEHOLDER
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: faq-widget
+  namespace: reloc-dev
+spec:
+  selector:
+    app: faq-widget
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
