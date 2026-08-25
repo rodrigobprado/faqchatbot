@@ -55,7 +55,7 @@ export class UpdateTenantDto implements UpdateTenantRequest {
 
   @IsOptional()
   @IsUUID()
-  planId?: string;
+  planId?: string | null;
 
   @IsOptional()
   @IsString()

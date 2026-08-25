@@ -12,7 +12,7 @@ export type CreateTenantInput = {
 export type UpdateTenantInput = Partial<{
   name: string;
   status: "active" | "inactive" | "suspended";
-  planId: string;
+  planId: string | null;
   defaultLocale: string;
 }>;
 

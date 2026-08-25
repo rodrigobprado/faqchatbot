@@ -285,4 +285,8 @@ jobs:
           # Aguarda o processamento da analise, verifica o Quality Gate
           # (reprovando o job se falhar) e publica as pendencias abertas
           # como tarefas no resumo do job.
-          node scripts/sonar-report.mjs >> "$GITHUB_STEP_SUMMARY"
+          REPORT="$(node scripts/sonar-report.mjs)"
+          printf "%s\n" "$REPORT"
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            printf "%s\n" "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+          fi

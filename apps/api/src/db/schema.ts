@@ -62,9 +62,7 @@ export const tenants = pgTable(
     publicId: varchar("public_id", { length: 120 }).notNull().unique(),
     name: varchar("name", { length: 180 }).notNull(),
     status: tenantStatusEnum("status").notNull().default("active"),
-    planId: uuid("plan_id")
-      .notNull()
-      .references(() => plans.id),
+    planId: uuid("plan_id").references(() => plans.id),
     defaultLocale: varchar("default_locale", { length: 20 }).notNull().default("pt-BR"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

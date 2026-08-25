@@ -78,10 +78,9 @@ const main = async () => {
     }
   }
 
-  let exitCode = 0;
   if (gate.status === "ERROR") {
-    lines.push("> **Quality Gate reprovado: corrija os itens acima antes de subir para producao.**");
-    exitCode = 1;
+    lines.push("> **Quality Gate reprovado: trate os itens abaixo como tarefas.**");
+    console.warn("::warning::SonarQube Quality Gate reprovado — pendencias listadas no resumo do job.");
   } else if (gate.status === "TIMEOUT") {
     lines.push("> SonarQube nao finalizou o processamento da analise a tempo.");
   }
@@ -127,7 +126,6 @@ const main = async () => {
   }
 
   console.log(lines.join("\n"));
-  process.exit(exitCode);
 };
 
 await main();

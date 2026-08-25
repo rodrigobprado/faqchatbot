@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ALTER COLUMN "plan_id" DROP NOT NULL;

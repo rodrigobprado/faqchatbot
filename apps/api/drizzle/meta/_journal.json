@@ -22,6 +22,13 @@
       "when": 1787454701744,
       "tag": "0002_add_api_key_last4_and_log_correlation",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787692213728,
+      "tag": "0003_tenant_plan_optional",
+      "breakpoints": true
     }
   ]
 }

@@ -75,7 +75,11 @@ export class WidgetSessionService {
       throw new ForbiddenException(INVALID_AGENT_OR_ORIGIN);
     }
 
-    const tenant = await createTenantsRepository(this.db).findByPublicId(input.agentId);
+    const tenantsRepository = createTenantsRepository(this.db);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.agentId);
+    const tenant = isUuid
+      ? ((await tenantsRepository.findById(input.agentId)) ?? (await tenantsRepository.findByPublicId(input.agentId)))
+      : await tenantsRepository.findByPublicId(input.agentId);
     if (!tenant) {
       throw new ForbiddenException(INVALID_AGENT_OR_ORIGIN);
     }
@@ -87,7 +91,7 @@ export class WidgetSessionService {
       throw new ForbiddenException(INVALID_AGENT_OR_ORIGIN);
     }
 
-    const plan = await createPlansRepository(this.db).findById(tenant.planId);
+    const plan = tenant.planId ? await createPlansRepository(this.db).findById(tenant.planId) : null;
     if (!plan) {
       throw new ForbiddenException(INVALID_AGENT_OR_ORIGIN);
     }

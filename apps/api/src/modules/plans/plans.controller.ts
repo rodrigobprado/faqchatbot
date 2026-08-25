@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { RequirePermissions } from "../auth/decorators/require-permissions.decorator.js";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard.js";
@@ -39,5 +39,12 @@ export class PlansController {
   @RequirePermissions("plans:write")
   update(@Param("id") id: string, @Body() body: UpdatePlanDto) {
     return this.plansService.update(id, body);
+  }
+
+  @Delete(":id")
+  @RequirePermissions("plans:write")
+  async remove(@Param("id") id: string) {
+    await this.plansService.remove(id);
+    return { deleted: true };
   }
 }

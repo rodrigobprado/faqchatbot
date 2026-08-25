@@ -26,7 +26,7 @@ const resolvePlanMessageLimit = async (db: Database, tenantId: string): Promise<
     return null;
   }
 
-  const plan = await createPlansRepository(db).findById(tenant.planId);
+  const plan = tenant.planId ? await createPlansRepository(db).findById(tenant.planId) : null;
   const messagesPerMinute = (plan?.limits as { messagesPerMinute?: unknown } | undefined)?.messagesPerMinute;
 
   return typeof messagesPerMinute === "number" ? { limit: messagesPerMinute, windowSeconds: 60 } : null;

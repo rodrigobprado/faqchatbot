@@ -256,7 +256,22 @@ export type CreateTenantPayload = Readonly<{
 export type UpdateTenantPayload = {
   publicId?: string;
   name?: string;
-  planId?: string;
+  planId?: string | null;
   defaultLocale?: string;
   status?: TenantStatus;
 };
+
+export type CreatePlanPayload = Readonly<{
+  slug: string;
+  name: string;
+  priceCents?: number;
+  limits?: Record<string, unknown>;
+}>;
+
+export type UpdatePlanPayload = Partial<{
+  slug: string;
+  name: string;
+  priceCents: number;
+  limits: Record<string, unknown>;
+  isActive: boolean;
+}>;

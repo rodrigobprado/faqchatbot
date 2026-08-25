@@ -2,6 +2,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   ApiError,
   buildWidgetSnippet,
+  createPlan,
+  updatePlan as updatePlanRequest,
+  deletePlan,
   createTenantApiKey,
   deleteTenant,
   deleteTenantDomain,
@@ -488,6 +491,9 @@ export const App = () => {
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [tenantDomains, setTenantDomains] = useState<TenantDomainRecord[]>([]);
   const [loginState, setLoginState] = useState<LoginState>(defaultLoginState);
+  const [planForm, setPlanForm] = useState({ slug: "", name: "", priceCents: "" });
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [planEdit, setPlanEdit] = useState({ name: "", priceCents: "", isActive: true });
   const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState());
   const [tenantEdit, setTenantEdit] = useState<TenantEditState>(
     defaultTenantEditState(undefined),
@@ -1030,6 +1036,77 @@ export const App = () => {
     }
   };
 
+  const handleCreatePlanSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      await withSessionRetry((t) =>
+        createPlan(t, { slug: planForm.slug.trim(), name: planForm.name.trim(), priceCents: Number(planForm.priceCents || 0) }),
+      );
+      setPlanForm({ slug: "", name: "", priceCents: "" });
+      await loadTenants();
+      updateNotice("Plano criado com sucesso.");
+    } catch (error) {
+      if (isAuthError(error)) {
+        handleAuthFailure();
+        return;
+      }
+      updateError(error instanceof Error ? error.message : "Falha ao criar plano");
+    }
+  };
+
+  const handleUpdatePlanSubmit = async (planId: string) => {
+    try {
+      await withSessionRetry((t) =>
+        updatePlanRequest(t, planId, {
+          name: planEdit.name.trim(),
+          priceCents: Number(planEdit.priceCents || 0),
+          isActive: planEdit.isActive,
+        }),
+      );
+      setEditingPlanId(null);
+      await loadTenants();
+      updateNotice("Plano atualizado com sucesso.");
+    } catch (error) {
+      if (isAuthError(error)) {
+        handleAuthFailure();
+        return;
+      }
+      updateError(error instanceof Error ? error.message : "Falha ao atualizar plano");
+    }
+  };
+
+  const handleDeletePlan = async (planId: string) => {
+    if (!window.confirm("Apagar este plano?")) {
+      return;
+    }
+
+    try {
+      await withSessionRetry((t) => deletePlan(t, planId));
+      await loadTenants();
+      updateNotice("Plano apagado.");
+    } catch (error) {
+      if (isAuthError(error)) {
+        handleAuthFailure();
+        return;
+      }
+      updateError(error instanceof Error ? error.message : "Falha ao apagar plano");
+    }
+  };
+
+  const handleUnlinkTenantPlan = async (tenantId: string) => {
+    try {
+      await withSessionRetry((t) => updateTenant(t, tenantId, { planId: null }));
+      await loadTenants();
+      updateNotice("Plano desvinculado do tenant.");
+    } catch (error) {
+      if (isAuthError(error)) {
+        handleAuthFailure();
+        return;
+      }
+      updateError(error instanceof Error ? error.message : "Falha ao desvincular plano");
+    }
+  };
+
   const handleLogout = () => {
     setSession(null);
     setTenants([]);
@@ -1423,7 +1500,9 @@ export const App = () => {
         status: tenantEdit.status,
       };
 
-      if (tenantEdit.planId) {
+      if (tenantEdit.planId === "__none__") {
+        payload.planId = null;
+      } else if (tenantEdit.planId) {
         payload.planId = tenantEdit.planId;
       }
 
@@ -1503,7 +1582,7 @@ export const App = () => {
   const platformEnvironment = import.meta.env.MODE;
   const widgetScriptUrl = `${platformOrigin}/widget.js`;
   const selectedTenantSnippet = selectedTenant?.publicId
-    ? buildWidgetSnippet(selectedTenant.publicId)
+    ? buildWidgetSnippet(selectedTenant.id)
     : null;
   const canSubmitDomain = Boolean(session && selectedTenant && domainForm.trim());
   const safeTenantDomains = Array.isArray(tenantDomains) ? tenantDomains : [];
@@ -1967,6 +2046,29 @@ export const App = () => {
                 </button>
               </div>
 
+              <form
+                className="stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleCreatePlanSubmit(event);
+                }}
+              >
+                <h3>Criar plano</h3>
+                <label>
+                  <span>Slug</span>
+                  <input required value={planForm.slug} onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value })} />
+                </label>
+                <label>
+                  <span>Nome</span>
+                  <input required value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} />
+                </label>
+                <label>
+                  <span>Preco (centavos)</span>
+                  <input value={planForm.priceCents} onChange={(e) => setPlanForm({ ...planForm, priceCents: e.target.value })} />
+                </label>
+                <button type="submit" className="primary">Criar plano</button>
+              </form>
+
               <div className="plan-grid">
                 {plans.length === 0 ? (
                   <div className="empty-state">
@@ -2002,6 +2104,57 @@ export const App = () => {
                           </div>
                         </dl>
                         <small>ID {plan.id}</small>
+                        <div className="plan-actions">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingPlanId(editingPlanId === plan.id ? null : plan.id);
+                              setPlanEdit({ name: plan.name, priceCents: String(plan.priceCents), isActive: plan.isActive });
+                            }}
+                          >
+                            Editar
+                          </button>
+                          <button type="button" onClick={() => void handleDeletePlan(plan.id)}>Apagar</button>
+                        </div>
+                        {editingPlanId === plan.id && (
+                          <form
+                            className="stack"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void handleUpdatePlanSubmit(plan.id);
+                            }}
+                          >
+                            <label>
+                              <span>Nome</span>
+                              <input value={planEdit.name} onChange={(e) => setPlanEdit({ ...planEdit, name: e.target.value })} />
+                            </label>
+                            <label>
+                              <span>Preco (centavos)</span>
+                              <input value={planEdit.priceCents} onChange={(e) => setPlanEdit({ ...planEdit, priceCents: e.target.value })} />
+                            </label>
+                            <label>
+                              <span>Ativo</span>
+                              <input type="checkbox" checked={planEdit.isActive} onChange={(e) => setPlanEdit({ ...planEdit, isActive: e.target.checked })} />
+                            </label>
+                            <button type="submit" className="primary">Salvar plano</button>
+                          </form>
+                        )}
+                        {tenants.some((t) => t.planId === plan.id) && (
+                          <div className="plan-tenants">
+                            <small>Tenants vinculados</small>
+                            <ul>
+                              {tenants.filter((t) => t.planId === plan.id).map((t) => (
+                                <li key={`unlink-${t.id}`}>
+                                  {t.publicId}
+                                  {" "}
+                                  <button type="button" onClick={() => void handleUnlinkTenantPlan(t.id)}>
+                                    Desvincular
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </article>
                     );
                   })
@@ -2350,6 +2503,7 @@ export const App = () => {
                         }
                       >
                         <option value="">Manter plano atual</option>
+                        <option value="__none__">Sem plano</option>
                         {plans.map((plan) => (
                           <option key={`edit-plan-${plan.slug}`} value={plan.id}>
                             {plan.name}

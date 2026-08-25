@@ -395,6 +395,22 @@ const escapeAttribute = (value: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
+export const createPlan = (
+  accessToken: string,
+  payload: { slug: string; name: string; priceCents?: number; limits?: Record<string, unknown> },
+): Promise<PlanRecord> =>
+  requestJson<PlanRecord>("/v1/admin/plans", { method: "POST", body: JSON.stringify(payload) }, accessToken);
+
+export const updatePlan = (
+  accessToken: string,
+  planId: string,
+  payload: Partial<{ slug: string; name: string; priceCents: number; limits: Record<string, unknown>; isActive: boolean }>,
+): Promise<PlanRecord> =>
+  requestJson<PlanRecord>(`/v1/admin/plans/${planId}`, { method: "PATCH", body: JSON.stringify(payload) }, accessToken);
+
+export const deletePlan = (accessToken: string, planId: string): Promise<{ deleted: boolean }> =>
+  requestJson<{ deleted: boolean }>(`/v1/admin/plans/${planId}`, { method: "DELETE" }, accessToken);
+
 export const buildWidgetSnippet = (publicId: string): string => {
   const escapedPublicId = escapeAttribute(publicId);
   return `<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=${escapedPublicId}" data-agent="${escapedPublicId}" async></script>`;

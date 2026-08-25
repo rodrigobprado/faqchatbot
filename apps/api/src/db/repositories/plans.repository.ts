@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { tenants } from "../schema.js";
 import type { Database } from "../client.js";
 import { plans } from "../schema.js";
 
@@ -38,9 +39,22 @@ export const createPlansRepository = (db: Database) => ({
   list: async () => {
     return db.select().from(plans);
   },
+  remove: async (id: string) => {
+    await db.delete(plans).where(eq(plans.id, id));
+  },
+  countUsage: async (id: string) => {
+    const rows = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.planId, id));
+    return rows.length;
+  },
   update: async (
     id: string,
-    input: Partial<{ name: string; priceCents: number; limits: Record<string, unknown> }>,
+    input: Partial<{
+      name: string;
+      slug: string;
+      priceCents: number;
+      limits: Record<string, unknown>;
+      isActive: boolean;
+    }>,
   ) => {
     const [plan] = await db.update(plans).set(input).where(eq(plans.id, id)).returning();
 

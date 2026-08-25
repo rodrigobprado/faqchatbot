@@ -1,4 +1,4 @@
-import { IsInt, IsObject, IsOptional, IsString, Min, MaxLength, MinLength } from "class-validator";
+import { IsBoolean, IsInt, IsObject, IsOptional, IsString, Min, MaxLength, MinLength } from "class-validator";
 
 export class CreatePlanDto {
   @IsString()
@@ -22,6 +22,16 @@ export class CreatePlanDto {
 }
 
 export class UpdatePlanDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  slug?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
   @IsOptional()
   @IsString()
   @MinLength(1)
