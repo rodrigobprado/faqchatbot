@@ -198,7 +198,7 @@ export class TenantsController {
   @Get(":id/api-keys")
   @RequirePermissions("tenants:read")
   listApiKeys(@Req() request: AuthenticatedAdminRequest, @Param("id") id: string) {
-    return this.tenantsService.listApiKeys(id);
+    return this.tenantsService.listApiKeys(id, request.user.sub);
   }
 
   @Post(":id/api-keys")
