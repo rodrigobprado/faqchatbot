@@ -440,40 +440,46 @@ export class FaqChatWidgetElement extends LitElement {
   }
 
   override render() {
-    return html`
-      ${this.isOpen
-        ? html`<section class="panel" aria-label="Chat" @keydown=${this.handleKeydown}>
-            <header>
-              <span>${this.tenantName || "Assistente"}</span>
-              <button class="close" type="button" aria-label="Fechar chat" @click=${this.close}>
-                x
-              </button>
-            </header>
-            <div class="messages" role="log" aria-live="polite">
-              <p class="msg msg--assistant">${this.initialMessage}</p>
-              ${this.entries.map(
-                (entry) =>
-                  entry.text
-                    ? html`<p class="msg msg--${entry.role}" data-entry-id=${entry.id}>${entry.text}</p>`
-                    : null,
-              )}
-              ${this.streamingText ? html`<p class="msg msg--assistant">${this.streamingText}</p>` : null}
-              ${this.isTyping ? html`<p class="msg typing">Digitando</p>` : null}
-            </div>
-            <form @submit=${this.handleSubmit}>
-              <input
-                aria-label="Mensagem"
-                placeholder=${this.placeholder}
-                .value=${this.draft}
-                @input=${(event: InputEvent) => {
-                  this.draft = (event.target as HTMLInputElement).value;
-                }}
-              />
-              <button class="send" type="submit">Enviar</button>
-            </form>
-          </section>`
-        : null}
+    const launcher = html`
       <button class="launcher" type="button" aria-label="Abrir chat" @click=${this.toggle}>AI</button>
+    `;
+
+    if (!this.isOpen) {
+      return launcher;
+    }
+
+    return html`
+      <section class="panel" aria-label="Chat" @keydown=${this.handleKeydown}>
+        <header>
+          <span>${this.tenantName || "Assistente"}</span>
+          <button class="close" type="button" aria-label="Fechar chat" @click=${this.close}>
+            x
+          </button>
+        </header>
+        <div class="messages" role="log" aria-live="polite">
+          <p class="msg msg--assistant">${this.initialMessage}</p>
+          ${this.entries.map(
+            (entry) =>
+              entry.text
+                ? html`<p class="msg msg--${entry.role}" data-entry-id=${entry.id}>${entry.text}</p>`
+                : null,
+          )}
+          ${this.streamingText ? html`<p class="msg msg--assistant">${this.streamingText}</p>` : null}
+          ${this.isTyping ? html`<p class="msg typing">Digitando</p>` : null}
+        </div>
+        <form @submit=${this.handleSubmit}>
+          <input
+            aria-label="Mensagem"
+            placeholder=${this.placeholder}
+            .value=${this.draft}
+            @input=${(event: InputEvent) => {
+              this.draft = (event.target as HTMLInputElement).value;
+            }}
+          />
+          <button class="send" type="submit">Enviar</button>
+        </form>
+      </section>
+      ${launcher}
     `;
   }
 }

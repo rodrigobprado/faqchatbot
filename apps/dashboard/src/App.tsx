@@ -2406,7 +2406,7 @@ export const App = () => {
                       onChange={(event) =>
                         setTenantForm((current) => ({
                           ...current,
-                          planId: event.target.value as CreateTenantPayload["planId"],
+                          planId: event.target.value,
                         }))
                       }
                     >
@@ -2533,7 +2533,7 @@ export const App = () => {
                         onChange={(event) =>
                           setTenantEdit((current) => ({
                             ...current,
-                            planId: event.target.value as TenantEditState["planId"],
+                            planId: event.target.value,
                           }))
                         }
                       >
