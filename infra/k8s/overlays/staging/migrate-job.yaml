@@ -13,6 +13,7 @@ spec:
       labels:
         app: faqchatbot-migrate
     spec:
+      automountServiceAccountToken: false
       restartPolicy: Never
       imagePullSecrets:
         - name: ghcr-pull-secret

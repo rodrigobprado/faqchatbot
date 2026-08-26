@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, } from "react";
 import {
   ApiError,
   buildWidgetSnippet,
@@ -119,12 +119,11 @@ type TenantAnalyticsState = Readonly<{
 }>;
 
 type TenantStatusFilter = "" | TenantRecord["status"];
-type TenantPlanFilter = string;
 
 type TenantListFiltersState = Readonly<{
   search: string;
   status: TenantStatusFilter;
-  planId: TenantPlanFilter;
+  planId: string;
 }>;
 
 type ViewState = Readonly<{
@@ -154,7 +153,7 @@ const getDefaultPlanId = (plans: PlanRecord[]): TenantFormState["planId"] => {
     return activePlan.id;
   }
 
-  return (plans[0]?.id ?? "") as TenantFormState["planId"];
+  return (plans[0]?.id ?? "");
 };
 
 const defaultTenantFormState = (plans: PlanRecord[] = []): TenantFormState => ({
@@ -496,7 +495,7 @@ export const App = () => {
   const [planEdit, setPlanEdit] = useState({ name: "", priceCents: "", isActive: true });
   const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState());
   const [tenantEdit, setTenantEdit] = useState<TenantEditState>(
-    defaultTenantEditState(undefined),
+    defaultTenantEditState(),
   );
   const [tenantFilters, setTenantFilters] = useState<TenantListFiltersState>(
     defaultTenantListFiltersState,
@@ -621,7 +620,7 @@ export const App = () => {
   useEffect(() => {
     if (tenants.length === 0) {
       setSelectedTenantId(null);
-      setTenantEdit(defaultTenantEditState(undefined));
+      setTenantEdit(defaultTenantEditState());
       return;
     }
 
@@ -1000,7 +999,7 @@ export const App = () => {
     }
   };
 
-  const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleLoginSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
     setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
 
@@ -1044,7 +1043,7 @@ export const App = () => {
     }
   };
 
-  const handleCreatePlanSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleCreatePlanSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
     try {
       await withSessionRetry((t) =>
@@ -1125,7 +1124,7 @@ export const App = () => {
     setAccessWorkspace("users");
     setLoginState(defaultLoginState);
     setTenantForm(defaultTenantFormState());
-    setTenantEdit(defaultTenantEditState(undefined));
+    setTenantEdit(defaultTenantEditState());
     setTenantAgentConfig(defaultTenantAgentConfigState());
     setTenantAccessById({});
     setTenantConversationsById({});
@@ -1139,7 +1138,7 @@ export const App = () => {
     });
   };
 
-  const handleCreateTenantSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleCreateTenantSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
     if (!session?.user.roles.includes("platform_admin")) {
       updateError("Somente platform_admin pode criar tenants.");
@@ -1182,7 +1181,7 @@ export const App = () => {
     setTenantWorkspace("details");
   };
 
-  const handleCreateDomainSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleCreateDomainSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
 
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
@@ -1243,7 +1242,7 @@ export const App = () => {
     }
   };
 
-  const handleSaveWidgetConfigSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveWidgetConfigSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
 
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
@@ -1281,7 +1280,7 @@ export const App = () => {
     }
   };
 
-  const handleSaveAgentConfigSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveAgentConfigSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
 
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
@@ -1327,7 +1326,7 @@ export const App = () => {
     }
   };
 
-  const handleInviteUserSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleInviteUserSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
 
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
@@ -1422,7 +1421,7 @@ export const App = () => {
     }
   };
 
-  const handleCreateApiKeySubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleCreateApiKeySubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
 
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
@@ -1490,7 +1489,7 @@ export const App = () => {
     }
   };
 
-  const handleUpdateTenantSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleUpdateTenantSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
 
     const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
@@ -2234,7 +2233,7 @@ export const App = () => {
                       onChange={(event) =>
                         setTenantFilters((current) => ({
                           ...current,
-                          planId: event.target.value as TenantPlanFilter,
+                          planId: event.target.value ,
                         }))
                       }
                     >

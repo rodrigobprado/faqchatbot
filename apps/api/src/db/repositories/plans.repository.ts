@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
-import { tenants } from "../schema.js";
 import type { Database } from "../client.js";
-import { plans } from "../schema.js";
+import { plans, tenants } from "../schema.js";
 
 export type CreatePlanInput = {
   slug: string;

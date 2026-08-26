@@ -8,7 +8,8 @@ if (!HOST || !TOKEN || !PROJECT_KEY) {
 }
 
 const sonarFetch = async (path) => {
-  const response = await fetch(`${HOST}${path}`, {
+  const url = HOST.concat(path);
+  const response = await fetch(url, {
     headers: { Authorization: `Basic ${Buffer.from(`${TOKEN}:`).toString("base64")}` },
     signal: AbortSignal.timeout(20_000),
   });

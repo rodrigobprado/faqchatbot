@@ -17,7 +17,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     console.error("Erro inesperado na interface administrativa", error);
   }
 
-  private handleReset = () => {
+  private readonly handleReset = () => {
     try {
       window.localStorage.removeItem(STORAGE_KEY);
       window.sessionStorage.clear();

@@ -192,10 +192,9 @@ export class TenantsService {
     return createPlansRepository(this.db).list();
   }
 
-  async listApiKeys(tenantId: string, actorUserId?: string | null) {
+  async listApiKeys(tenantId: string) {
     await this.get(tenantId);
     const keys = await createApiKeysRepository(this.db).listByTenantId(tenantId);
-    void actorUserId;
     return keys.map((key) => ({
       id: key.id,
       name: key.name,

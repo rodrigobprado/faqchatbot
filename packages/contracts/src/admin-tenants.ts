@@ -40,7 +40,7 @@ export const tenantDomainAdminViewSchema = z.object({
 export const tenantConfigRequestSchema = z.object({
   theme: z.enum(["light", "dark", "auto"]).default("auto"),
   primaryColor: z.string().min(1).max(20).default("#2563eb"),
-  iconUrl: z.string().url().optional(),
+  iconUrl: z.url().optional(),
   initialMessage: z.string().max(500).default(""),
   placeholder: z.string().max(120).default("")
 });
@@ -48,7 +48,7 @@ export const tenantConfigRequestSchema = z.object({
 export const tenantAgentConfigRequestSchema = z.object({
   provider: agentProviderSchema,
   model: z.string().max(120).optional(),
-  webhookUrl: z.string().url().optional(),
+  webhookUrl: z.url().optional(),
   webhookSecretRef: z.string().min(1).max(255).optional(),
   timeoutMs: z.number().int().positive().default(15000),
   retryPolicy: z.record(z.string(), z.unknown()).default({})

@@ -74,7 +74,7 @@ export class AgentRouterService {
 
   async route(request: AgentRequest): Promise<AgentResponse> {
     const config = await createTenantAgentConfigsRepository(this.db).findByTenantId(request.tenantId);
-    if (!config || !config.isActive) {
+    if (!config?.isActive) {
       throw new AgentRoutingError("No active agent configured for this tenant");
     }
 
