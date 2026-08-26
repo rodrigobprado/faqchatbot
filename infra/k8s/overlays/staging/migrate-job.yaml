@@ -29,6 +29,7 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+              ephemeral-storage: 256Mi
           envFrom:
             - configMapRef:
                 name: faq-config

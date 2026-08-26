@@ -22,6 +22,27 @@ const sonarFetch = async (path) => {
   return response.json();
 };
 
+const waitForAnalysisProcessing = async () => {
+  for (let attempt = 1; attempt <= 60; attempt += 1) {
+    try {
+      const payload = await sonarFetch(
+        `/api/ce/component?component=${encodeURIComponent(PROJECT_KEY)}`,
+      );
+      const status = payload.task?.status;
+
+      if (status && status !== "PENDING" && status !== "PROCESSING") {
+        return status;
+      }
+    } catch {
+      // tarefa ainda nao visivel: tenta novamente ate esgotar as tentativas
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+  }
+
+  return "TIMEOUT";
+};
+
 const waitForQualityGate = async () => {
   for (let attempt = 1; attempt <= 30; attempt += 1) {
     try {
@@ -70,6 +91,12 @@ const fetchTopIssues = async () => {
 };
 
 const main = async () => {
+  const taskStatus = await waitForAnalysisProcessing();
+
+  if (taskStatus === "FAILED") {
+    console.error("::warning::Analise do SonarQube falhou no Compute Engine — dados podem estar defasados.");
+  }
+
   const gate = await waitForQualityGate();
 
   const lines = ["## SonarQube", "", `- **Quality Gate:** \`${gate.status}\``, ""];
