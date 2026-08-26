@@ -99,38 +99,55 @@ export const pickResponseText = (payload: unknown, paths: readonly string[]): st
   throw new AgentRoutingError("Unexpected response shape from agent provider");
 };
 
+const collectRecordText = (record: UnknownRecord, depth: number, parts: string[]): void => {
+  const direct = asString(record.text) ?? asString(record.content) ?? asString(record.value);
+  if (direct) {
+    parts.push(direct);
+    return;
+  }
+
+  for (const value of Object.values(record)) {
+    if (!Array.isArray(value)) {
+      continue;
+    }
+    const nested = collectArrayText(value, depth + 1);
+    if (nested) {
+      parts.push(nested);
+      break;
+    }
+  }
+};
+
+const collectItemText = (item: unknown, depth: number, parts: string[]): void => {
+  if (typeof item === "string") {
+    const text = asString(item);
+    if (text) {
+      parts.push(text);
+    }
+    return;
+  }
+
+  if (Array.isArray(item)) {
+    const nested = collectArrayText(item, depth + 1);
+    if (nested) {
+      parts.push(nested);
+    }
+    return;
+  }
+
+  if (isRecord(item)) {
+    collectRecordText(item, depth, parts);
+  }
+};
+
 const collectArrayText = (items: readonly unknown[], depth = 0): string | null => {
   if (depth > 4) {
     return null;
   }
+
   const parts: string[] = [];
   for (const item of items) {
-    if (typeof item === "string") {
-      const text = asString(item);
-      if (text) {
-        parts.push(text);
-      }
-    } else if (Array.isArray(item)) {
-      const nested = collectArrayText(item, depth + 1);
-      if (nested) {
-        parts.push(nested);
-      }
-    } else if (isRecord(item)) {
-      const direct = asString(item.text) ?? asString(item.content) ?? asString(item.value);
-      if (direct) {
-        parts.push(direct);
-        continue;
-      }
-      for (const value of Object.values(item)) {
-        if (Array.isArray(value)) {
-          const nested = collectArrayText(value, depth + 1);
-          if (nested) {
-            parts.push(nested);
-            break;
-          }
-        }
-      }
-    }
+    collectItemText(item, depth, parts);
   }
   return parts.length > 0 ? parts.join("") : null;
 };

@@ -166,7 +166,7 @@ const defaultTenantFormState = (plans: PlanRecord[] = []): TenantFormState => ({
 const defaultTenantEditState = (tenant?: TenantRecord | null): TenantEditState => ({
   publicId: tenant?.publicId ?? "",
   name: tenant?.name ?? "",
-  planId: (tenant?.planId ?? "") as TenantEditState["planId"],
+  planId: tenant?.planId ?? "",
   defaultLocale: tenant?.defaultLocale ?? "pt-BR",
   status: tenant?.status ?? "active",
 });
@@ -430,7 +430,7 @@ const formatPlanPrice = (priceCents: number) =>
   priceCents <= 0 ? "Gratuito" : currencyFormatter.format(priceCents / 100);
 
 const formatPlanLimits = (limits: PlanRecord["limits"]) => {
-  const record = limits && typeof limits === "object" ? (limits as Record<string, unknown>) : {};
+  const record = limits && typeof limits === "object" ? limits : {};
   const messagesPerMinute =
     typeof record.messagesPerMinute === "number" ? record.messagesPerMinute : null;
   const conversationsPerDay =
@@ -446,30 +446,11 @@ const normalizeTenantUser = (user: TenantUserRecord): TenantUserRecord =>
   }) as TenantUserRecord;
 
 const copyTextToClipboard = async (text: string) => {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  if (typeof document === "undefined") {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
     throw new Error("Clipboard indisponivel");
   }
 
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-
-  const copied = document.execCommand?.("copy") ?? false;
-  document.body.removeChild(textarea);
-
-  if (!copied) {
-    throw new Error("Falha ao copiar para a area de transferencia");
-  }
+  await navigator.clipboard.writeText(text);
 };
 
 const agentProviderOptions = [
@@ -482,6 +463,73 @@ const agentProviderOptions = [
   { value: "mcp", label: "MCP" },
   { value: "custom", label: "Custom" },
 ] as const;
+
+type PlatformHealthStatus = "loading" | "ok" | "error";
+
+const platformStatusLabel = (status: PlatformHealthStatus, loadingLabel: string): string => {
+  if (status === "loading") {
+    return loadingLabel;
+  }
+  return status === "ok" ? "Operacional" : "Indisponivel";
+};
+
+const describePlatformHealth = (
+  status: PlatformHealthStatus,
+  health: PlatformHealthRecord | null,
+): string => {
+  if (status === "loading") {
+    return "Carregando status da API...";
+  }
+
+  if (status === "ok" && health) {
+    return `API ${health.service} operacional em ${new Date(health.timestamp).toLocaleString("pt-BR")}.`;
+  }
+
+  return "API indisponivel no momento.";
+};
+
+const describeDatabaseHealthCheck = (
+  status: PlatformHealthStatus,
+  health: PlatformHealthRecord | null,
+): string => {
+  if (health?.checks?.database === "ok") {
+    return "Banco de dados respondendo normalmente.";
+  }
+
+  return status === "ok" ? "Banco de dados sem detalhe." : "Sem verificacao de banco disponivel.";
+};
+
+const formatSessionTimestamp = (record: TenantSessionRecord): string => {
+  if (record.lastSeenAt) {
+    return new Date(record.lastSeenAt).toLocaleString("pt-BR");
+  }
+
+  if (record.startedAt) {
+    return new Date(record.startedAt).toLocaleString("pt-BR");
+  }
+
+  return "-";
+};
+
+const tenantUserStatusLabel = (status: TenantUserRecord["status"]): string => {
+  if (status === "active") {
+    return "Ativo";
+  }
+
+  return status === "invited" ? "Convidado" : "Suspenso";
+};
+
+const describeAnalyticsEventSource = (
+  payload: Record<string, unknown>,
+  conversationId: string | null,
+): string => {
+  const url = payload.url;
+  if (typeof url === "string" && url.length > 0) {
+    return url;
+  }
+
+  return conversationId ?? "Sem contexto";
+};
 
 export const App = () => {
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -1861,18 +1909,10 @@ export const App = () => {
               <div className="health-panel">
                 <strong>Status da plataforma</strong>
                 <p>
-                  {platformHealthStatus === "loading"
-                    ? "Carregando status da API..."
-                    : platformHealthStatus === "ok" && platformHealth
-                      ? `API ${platformHealth.service} operacional em ${new Date(platformHealth.timestamp).toLocaleString("pt-BR")}.`
-                      : "API indisponivel no momento."}
+                  {describePlatformHealth(platformHealthStatus, platformHealth)}
                 </p>
                 <small>
-                  {platformHealth?.checks?.database === "ok"
-                    ? "Banco de dados respondendo normalmente."
-                    : platformHealthStatus === "ok"
-                      ? "Banco de dados sem detalhe."
-                      : "Sem verificacao de banco disponivel."}
+                  {describeDatabaseHealthCheck(platformHealthStatus, platformHealth)}
                 </small>
               </div>
               <ul>
@@ -1922,16 +1962,10 @@ export const App = () => {
         ) : (
           <>
             <section className="metric-grid panel-section panel-overview" id="overview">
-              <article className="surface metric-card">
-                <span>Status da plataforma</span>
-                <strong>
-                  {platformHealthStatus === "loading"
-                    ? "..."
-                    : platformHealthStatus === "ok"
-                      ? "Operacional"
-                      : "Indisponivel"}
-                </strong>
-              </article>
+                <article className="surface metric-card">
+                  <span>Status da plataforma</span>
+                  <strong>{platformStatusLabel(platformHealthStatus, "...")}</strong>
+                </article>
               <article className="surface metric-card">
                 <span>Tenants ativos</span>
                 <strong>{totalActiveTenants}</strong>
@@ -2010,13 +2044,7 @@ export const App = () => {
               <div className="two-column compact">
                 <article className="surface settings-card">
                   <span>Estado da API</span>
-                  <strong>
-                    {platformHealthStatus === "loading"
-                      ? "Carregando"
-                      : platformHealthStatus === "ok"
-                        ? "Operacional"
-                        : "Indisponivel"}
-                  </strong>
+                  <strong>{platformStatusLabel(platformHealthStatus, "Carregando")}</strong>
                   <p>
                     {platformHealth?.checks?.database === "ok"
                       ? `Banco online desde ${new Date(platformHealth.timestamp).toLocaleString("pt-BR")}.`
@@ -2961,13 +2989,7 @@ export const App = () => {
                           </small>
                         </div>
                         <div>
-                          <small>
-                            {sessionRecord.lastSeenAt
-                              ? new Date(sessionRecord.lastSeenAt).toLocaleString("pt-BR")
-                              : sessionRecord.startedAt
-                                ? new Date(sessionRecord.startedAt).toLocaleString("pt-BR")
-                                : "-"}
-                          </small>
+                          <small>{formatSessionTimestamp(sessionRecord)}</small>
                         </div>
                       </button>
                     ))
@@ -3036,9 +3058,7 @@ export const App = () => {
                           <div>
                             <strong>{event.eventType}</strong>
                             <p className="mono">
-                              {event.payload.url
-                                ? String(event.payload.url)
-                                : (event.conversationId ?? "Sem contexto")}
+                              {describeAnalyticsEventSource(event.payload, event.conversationId)}
                             </p>
                           </div>
                           <span>{new Date(event.createdAt).toLocaleString("pt-BR")}</span>
@@ -3319,11 +3339,7 @@ export const App = () => {
                           <div>
                             <strong>{user.email}</strong>
                             <p>
-                              {user.status === "active"
-                                ? "Ativo"
-                                : user.status === "invited"
-                                  ? "Convidado"
-                                  : "Suspenso"}
+                              {tenantUserStatusLabel(user.status)}
                             </p>
                             <small>
                               Convidado em{" "}

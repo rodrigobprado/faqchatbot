@@ -29,8 +29,8 @@ export const resolveTenantPublicConfig = (
     theme: config?.theme ?? "auto",
     primaryColor: config?.primaryColor ?? "#2563eb",
     iconUrl: config?.iconUrl ?? undefined,
-    initialMessage: config?.initialMessage ? config.initialMessage : "Ola! Como posso ajudar?",
-    placeholder: config?.placeholder ? config.placeholder : "Digite sua mensagem",
+    initialMessage: config?.initialMessage ?? "Ola! Como posso ajudar?",
+    placeholder: config?.placeholder ?? "Digite sua mensagem",
     limits: {
       ...DEFAULT_LIMITS,
       ...(plan.limits as Partial<typeof DEFAULT_LIMITS> | undefined)

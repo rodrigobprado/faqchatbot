@@ -1,6 +1,6 @@
 import { LitElement, css, html } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
-import type { ChatMessage, ChatStreamEvent, MessageContent } from "@faqchatbot/contracts";
+import type { ChatMessage, ChatStreamEvent } from "@faqchatbot/contracts";
 import { collectPageContext } from "./page-context.js";
 import { fetchChatHistory, sendChatMessage } from "./chat-client.js";
 import { openChatStream } from "./chat-stream-client.js";
@@ -64,12 +64,12 @@ export class FaqChatWidgetElement extends LitElement {
   private streamAbortController: AbortController | null = null;
 
   @query(".launcher")
-  private launcherButton?: HTMLButtonElement;
+  private readonly launcherButton?: HTMLButtonElement;
 
   @query(".panel input")
-  private messageInput?: HTMLInputElement;
+  private readonly messageInput?: HTMLInputElement;
 
-  static override styles = css`
+  static override readonly styles = css`
     :host {
       all: initial;
       color-scheme: light dark;
@@ -364,7 +364,7 @@ export class FaqChatWidgetElement extends LitElement {
           {
             id: event.message.id ?? `assistant-${this.entries.length}`,
             role: "assistant",
-            text: describeMessageContent(event.message.content as MessageContent)
+            text: describeMessageContent(event.message.content)
           }
         ];
         break;
@@ -376,13 +376,13 @@ export class FaqChatWidgetElement extends LitElement {
 
   private toEntry(message: ChatMessage, index: number): WidgetChatEntry {
     if (message.role === "user") {
-      return { id: message.id ?? `user-${index}`, role: "user", text: describeMessageContent(message.content as MessageContent) };
+      return { id: message.id ?? `user-${index}`, role: "user", text: describeMessageContent(message.content) };
     }
 
     return {
       id: message.id ?? `assistant-${index}`,
       role: "assistant",
-      text: describeMessageContent(message.content as MessageContent)
+      text: describeMessageContent(message.content)
     };
   }
 
