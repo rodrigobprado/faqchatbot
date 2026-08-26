@@ -24,25 +24,25 @@ export const pageContextSchema = z.object({
   }),
   userAgent: z.string().max(1000).optional(),
   currentPage: z.string().max(2000).optional(),
-  timestamp: z.string().datetime()
+  timestamp: z.iso.datetime()
 });
 
 export const widgetSessionStartRequestSchema = z.object({
   agentId: z.string().min(1).max(120),
-  visitorId: z.string().uuid().optional(),
-  sessionId: z.string().uuid().optional(),
-  conversationId: z.string().uuid().optional(),
+  visitorId: z.uuid().optional(),
+  sessionId: z.uuid().optional(),
+  conversationId: z.uuid().optional(),
   context: pageContextSchema
 });
 
 export const widgetSessionStartResponseSchema = z.object({
   accessToken: z.string().min(1),
   expiresInSeconds: z.number().int().positive(),
-  visitorId: z.string().uuid(),
-  sessionId: z.string().uuid(),
-  conversationId: z.string().uuid(),
+  visitorId: z.uuid(),
+  sessionId: z.uuid(),
+  conversationId: z.uuid(),
   tenant: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     publicId: z.string().min(1),
     name: z.string().min(1)
   }),

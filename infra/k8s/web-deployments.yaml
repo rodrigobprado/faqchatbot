@@ -15,9 +15,11 @@ spec:
       labels:
         app: faqchatbot-dashboard
     spec:
+      automountServiceAccountToken: false
       containers:
+      automountServiceAccountToken: false
         - name: dashboard
-          image: ghcr.io/rigbie/faqchatbot-dashboard:latest
+          image: ghcr.io/rigbie/faqchatbot-dashboard:1.0.0
           ports:
             - containerPort: 80
               name: http
@@ -36,6 +38,7 @@ spec:
             requests:
               cpu: 50m
               memory: 64Mi
+            storage: 64Mi
             limits:
               cpu: 200m
               memory: 128Mi
@@ -70,9 +73,11 @@ spec:
       labels:
         app: faqchatbot-widget
     spec:
+      automountServiceAccountToken: false
       containers:
+      automountServiceAccountToken: false
         - name: widget
-          image: ghcr.io/rigbie/faqchatbot-widget:latest
+          image: ghcr.io/rigbie/faqchatbot-widget:1.0.0
           ports:
             - containerPort: 80
               name: http
@@ -91,6 +96,7 @@ spec:
             requests:
               cpu: 50m
               memory: 64Mi
+            storage: 64Mi
             limits:
               cpu: 200m
               memory: 128Mi

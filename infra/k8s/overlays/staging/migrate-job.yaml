@@ -20,6 +20,14 @@ spec:
         - name: migrate
           image: ghcr.io/rigbie-sst/faqchatbot-api:IMAGE_TAG_PLACEHOLDER
           command: ["node", "apps/api/dist/db/migrate.js"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              storage: 64Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           envFrom:
             - configMapRef:
                 name: faq-config

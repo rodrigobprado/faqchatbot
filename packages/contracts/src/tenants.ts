@@ -26,7 +26,7 @@ export const agentProviderSchema = z.enum([
 ]);
 
 export const tenantPublicConfigSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   publicId: z.string().min(1).max(120),
   name: z.string().min(1).max(180),
   status: tenantStatusSchema,

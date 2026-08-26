@@ -15,11 +15,11 @@ const httpUrlSchema = z
 export const messageRoleSchema = z.enum(["user", "assistant", "system"]);
 
 export const baseMessageSchema = z.object({
-  id: z.string().uuid().optional(),
-  conversationId: z.string().uuid(),
-  tenantId: z.string().uuid().optional(),
+  id: z.uuid().optional(),
+  conversationId: z.uuid(),
+  tenantId: z.uuid().optional(),
   role: messageRoleSchema,
-  createdAt: z.string().datetime().optional(),
+  createdAt: z.iso.datetime().optional(),
   metadata: z.record(z.string(), z.unknown()).default({})
 });
 
@@ -103,7 +103,7 @@ export const statusMessageContentSchema = z.object({
 export const calendarMessageContentSchema = z.object({
   type: z.literal("calendar"),
   title: z.string().min(1).max(120),
-  availableSlots: z.array(z.string().datetime()).min(1).max(50)
+  availableSlots: z.array(z.iso.datetime()).min(1).max(50)
 });
 
 export const messageContentSchema = z.discriminatedUnion("type", [
@@ -130,13 +130,13 @@ export const chatMessageCreateRequestSchema = z.object({
 });
 
 export const chatMessageExchangeResponseSchema = z.object({
-  conversationId: z.string().uuid(),
+  conversationId: z.uuid(),
   userMessage: chatMessageSchema,
   assistantMessage: chatMessageSchema
 });
 
 export const chatMessageHistoryResponseSchema = z.object({
-  conversationId: z.string().uuid(),
+  conversationId: z.uuid(),
   messages: z.array(chatMessageSchema)
 });
 

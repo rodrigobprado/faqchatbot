@@ -2,7 +2,7 @@ import { z } from "zod";
 import { chatMessageSchema, messageContentSchema } from "./messages.js";
 
 export const sendMessageRequestSchema = z.object({
-  conversationId: z.string().uuid(),
+  conversationId: z.uuid(),
   content: messageContentSchema
 });
 

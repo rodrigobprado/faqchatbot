@@ -17,6 +17,7 @@ spec:
         app: faq-dashboard
     spec:
       imagePullSecrets:
+      automountServiceAccountToken: false
         - name: ghcr-pull-secret
       containers:
         - name: dashboard
@@ -33,6 +34,7 @@ spec:
             requests:
               cpu: 25m
               memory: 64Mi
+            storage: 64Mi
             limits:
               cpu: 200m
               memory: 128Mi
@@ -69,6 +71,7 @@ spec:
         app: faq-widget
     spec:
       imagePullSecrets:
+      automountServiceAccountToken: false
         - name: ghcr-pull-secret
       containers:
         - name: widget
@@ -85,6 +88,7 @@ spec:
             requests:
               cpu: 25m
               memory: 64Mi
+            storage: 64Mi
             limits:
               cpu: 200m
               memory: 128Mi

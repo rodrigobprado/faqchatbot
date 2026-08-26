@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const adminLoginRequestSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8)
 });
 
@@ -10,9 +10,9 @@ export const adminLoginResponseSchema = z.object({
   refreshToken: z.string().min(1),
   expiresInSeconds: z.number().int().positive(),
   user: z.object({
-    id: z.string().uuid(),
-    email: z.string().email(),
-    tenantId: z.string().uuid(),
+    id: z.uuid(),
+    email: z.email(),
+    tenantId: z.uuid(),
     roles: z.array(z.string()).default([])
   })
 });

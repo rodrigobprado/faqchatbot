@@ -19,9 +19,11 @@ spec:
       labels:
         app: faqchatbot-api
     spec:
+      automountServiceAccountToken: false
       containers:
+      automountServiceAccountToken: false
         - name: api
-          image: ghcr.io/rigbie/faqchatbot-api:latest
+          image: ghcr.io/rigbie/faqchatbot-api:1.0.0
           ports:
             - containerPort: 3000
               name: http

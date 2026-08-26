@@ -4,23 +4,23 @@ import { agentProviderSchema, tenantStatusSchema } from "./tenants.js";
 export const createTenantRequestSchema = z.object({
   publicId: z.string().min(1).max(120),
   name: z.string().min(1).max(180),
-  planId: z.string().uuid(),
+  planId: z.uuid(),
   defaultLocale: z.string().min(2).max(20).default("pt-BR")
 });
 
 export const updateTenantRequestSchema = z.object({
   name: z.string().min(1).max(180).optional(),
   status: tenantStatusSchema.optional(),
-  planId: z.string().uuid().nullish(),
+  planId: z.uuid().nullish(),
   defaultLocale: z.string().min(2).max(20).optional()
 });
 
 export const tenantAdminViewSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   publicId: z.string(),
   name: z.string(),
   status: tenantStatusSchema,
-  planId: z.string().uuid(),
+  planId: z.uuid(),
   defaultLocale: z.string(),
   createdAt: z.string(),
   updatedAt: z.string()
@@ -31,8 +31,8 @@ export const createTenantDomainRequestSchema = z.object({
 });
 
 export const tenantDomainAdminViewSchema = z.object({
-  id: z.string().uuid(),
-  tenantId: z.string().uuid(),
+  id: z.uuid(),
+  tenantId: z.uuid(),
   domain: z.string(),
   isVerified: z.boolean()
 });
