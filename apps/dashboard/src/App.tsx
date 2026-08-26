@@ -597,6 +597,18 @@ export const App = () => {
   }, []);
 
   useEffect(() => {
+    if (!viewState.notice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setViewState((current) => ({ ...current, notice: null }));
+    }, 4000);
+
+    return () => window.clearTimeout(timer);
+  }, [viewState.notice]);
+
+  useEffect(() => {
     let alive = true;
 
     const loadPlatformHealth = async () => {
