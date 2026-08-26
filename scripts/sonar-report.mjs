@@ -90,16 +90,10 @@ const fetchTopIssues = async () => {
   }));
 };
 
-const main = async () => {
-  const taskStatus = await waitForAnalysisProcessing();
-
+const appendGateLines = (lines, gate, taskStatus) => {
   if (taskStatus === "FAILED") {
     console.error("::warning::Analise do SonarQube falhou no Compute Engine — dados podem estar defasados.");
   }
-
-  const gate = await waitForQualityGate();
-
-  const lines = ["## SonarQube", "", `- **Quality Gate:** \`${gate.status}\``, ""];
 
   for (const condition of gate.conditions) {
     if (condition.status === "ERROR") {
@@ -113,28 +107,28 @@ const main = async () => {
   } else if (gate.status === "TIMEOUT") {
     lines.push("> SonarQube nao finalizou o processamento da analise a tempo.");
   }
+};
 
+const appendFacetTable = (lines, label, entries) => {
+  if (entries.length === 0) {
+    return;
+  }
+
+  lines.push(`| ${label} | Quantidade |`, "| --- | --- |");
+  for (const entry of entries) {
+    lines.push(`| ${entry.val} | ${entry.count} |`);
+  }
+  lines.push("");
+};
+
+const appendIssueLines = async (lines) => {
   try {
     const facets = await fetchIssueFacets();
     const topIssues = await fetchTopIssues();
 
     lines.push("", `### Pendencias abertas: ${facets.total}`, "");
-
-    if (facets.types.length > 0) {
-      lines.push("| Tipo | Quantidade |", "| --- | --- |");
-      for (const entry of facets.types) {
-        lines.push(`| ${entry.val} | ${entry.count} |`);
-      }
-      lines.push("");
-    }
-
-    if (facets.severities.length > 0) {
-      lines.push("| Severidade | Quantidade |", "| --- | --- |");
-      for (const entry of facets.severities) {
-        lines.push(`| ${entry.val} | ${entry.count} |`);
-      }
-      lines.push("");
-    }
+    appendFacetTable(lines, "Tipo", facets.types);
+    appendFacetTable(lines, "Severidade", facets.severities);
 
     if (topIssues.length > 0) {
       lines.push(
@@ -153,6 +147,16 @@ const main = async () => {
   } catch (error) {
     lines.push(`> Nao foi possivel listar pendencias: ${error.message}`);
   }
+};
+
+const main = async () => {
+  const taskStatus = await waitForAnalysisProcessing();
+  const gate = await waitForQualityGate();
+
+  const lines = ["## SonarQube", "", `- **Quality Gate:** \`${gate.status}\``, ""];
+
+  appendGateLines(lines, gate, taskStatus);
+  await appendIssueLines(lines);
 
   console.log(lines.join("\n"));
 };
