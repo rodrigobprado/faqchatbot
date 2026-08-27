@@ -2,9 +2,6 @@ import { randomUUID } from "node:crypto";
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import type { Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-
-const { resolveTxt } = vi.hoisted(() => ({ resolveTxt: vi.fn() }));
-vi.mock("node:dns/promises", () => ({ resolveTxt }));
 import { createDatabase, type Database } from "../../db/client.js";
 import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
 import { createAuditLogsRepository } from "../../db/repositories/audit-logs.repository.js";
@@ -93,7 +90,13 @@ describe("TenantsService", () => {
     expect(domain.isVerified).toBe(false);
     expect(domain.verificationToken).toHaveLength(48);
 
-    resolveTxt.mockResolvedValueOnce([["wrong-token"]]);
+    const fetchSpy = vi.spyOn(global, "fetch");
+    const dohResponse = (data: string) =>
+      new Response(JSON.stringify({ Status: 0, Answer: [{ type: 16, data: `"${data}"` }] }), {
+        status: 200,
+      });
+
+    fetchSpy.mockResolvedValueOnce(dohResponse("wrong-token"));
     await expect(tenantsService.verifyDomain(tenant.id, domain.id)).rejects.toBeInstanceOf(
       ConflictException,
     );
@@ -101,10 +104,15 @@ describe("TenantsService", () => {
       expect.objectContaining({ isVerified: false }),
     ]);
 
-    resolveTxt.mockResolvedValueOnce([[domain.verificationToken]]);
+    fetchSpy.mockResolvedValueOnce(dohResponse(domain.verificationToken));
     const verified = await tenantsService.verifyDomain(tenant.id, domain.id);
     expect(verified.isVerified).toBe(true);
-    expect(resolveTxt).toHaveBeenCalledWith("_faqchatbot-verify.verify.example.com");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("name=_faqchatbot-verify.verify.example.com"),
+      expect.anything(),
+    );
+
+    fetchSpy.mockRestore();
   });
 
   it("upserts the visual config for a tenant", async () => {

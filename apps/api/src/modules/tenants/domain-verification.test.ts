@@ -1,10 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildVerificationRecordName, verifyDomainOwnership } from "./domain-verification.js";
 
-const { resolveTxt } = vi.hoisted(() => ({ resolveTxt: vi.fn() }));
+const dohResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-vi.mock("node:dns/promises", () => ({ resolveTxt }));
-
-const { buildVerificationRecordName, verifyDomainOwnership } = await import("./domain-verification.js");
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn());
+});
 
 describe("domain-verification", () => {
   it("builds the expected TXT record hostname", () => {
@@ -12,18 +14,34 @@ describe("domain-verification", () => {
   });
 
   it("confirms ownership when the TXT record matches the token", async () => {
-    resolveTxt.mockResolvedValueOnce([["abc123"]]);
+    vi.mocked(fetch).mockResolvedValueOnce(
+      dohResponse({ Status: 0, Answer: [{ type: 16, data: '"abc123"' }] }),
+    );
+
     await expect(verifyDomainOwnership("example.com", "abc123")).resolves.toBe(true);
-    expect(resolveTxt).toHaveBeenCalledWith("_faqchatbot-verify.example.com");
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      expect.stringContaining("name=_faqchatbot-verify.example.com"),
+      expect.objectContaining({ headers: { accept: "application/dns-json" } }),
+    );
   });
 
   it("rejects ownership when no TXT record matches the token", async () => {
-    resolveTxt.mockResolvedValueOnce([["other-value"]]);
+    vi.mocked(fetch).mockResolvedValueOnce(
+      dohResponse({ Status: 0, Answer: [{ type: 16, data: '"other-value"' }] }),
+    );
+
     await expect(verifyDomainOwnership("example.com", "abc123")).resolves.toBe(false);
   });
 
-  it("rejects ownership when DNS lookup fails", async () => {
-    resolveTxt.mockRejectedValueOnce(new Error("ENOTFOUND"));
+  it("rejects ownership when there is no TXT record at all", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(dohResponse({ Status: 3 }));
+
+    await expect(verifyDomainOwnership("example.com", "abc123")).resolves.toBe(false);
+  });
+
+  it("rejects ownership when the DoH lookup fails", async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("network error"));
+
     await expect(verifyDomainOwnership("example.com", "abc123")).resolves.toBe(false);
   });
 });
