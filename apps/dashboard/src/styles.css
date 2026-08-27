@@ -321,6 +321,31 @@ h2 {
   color: #0f172a;
 }
 
+.tenant-rail-active {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.85rem 1rem;
+}
+
+.tenant-rail-active span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.tenant-rail-active strong {
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.tenant-rail-active small {
+  color: #64748b;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 .tenant-rail .tab-link {
   justify-content: flex-start;
   width: 100%;

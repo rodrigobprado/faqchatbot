@@ -1939,8 +1939,17 @@ export const App = () => {
           </div>
         ) : null}
 
-        {session && activeSection === "tenants" ? (
+        {activeSection === "tenants" ? (
           <div className="workspace-tabs tenant-rail" aria-label="Navegação de tenants">
+            <div className="surface tenant-rail-active">
+              <span>Tenant selecionado</span>
+              <strong>{selectedTenant ? selectedTenant.name : "Nenhum"}</strong>
+              <small>
+                {selectedTenant
+                  ? selectedTenant.publicId
+                  : "Escolha um tenant na aba Lista para liberar Detalhes, Widget, Segurança e Agente."}
+              </small>
+            </div>
             {tenantWorkspaces.map((workspace) => (
               <button
                 key={workspace.id}
