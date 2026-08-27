@@ -587,6 +587,57 @@ describe("App interactions", () => {
     expect(visibleRows()).toHaveLength(2);
   });
 
+  it("switches the active tenant from the workspace rail dropdown", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant, tenantTwo], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
+    queueTenantDetails(fetchMock);
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    const [emailInput, passwordInput] = Array.from(
+      document.querySelectorAll('input[type="email"], input[type="password"]'),
+    ) as [HTMLInputElement, HTMLInputElement];
+
+    fillInput(emailInput, "admin@acme.test");
+    fillInput(passwordInput, "senha-super-secreta");
+
+    await act(async () => {
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("Lista de tenants");
+
+    const tenantsNav = Array.from(document.querySelectorAll(".sidebar-nav button")).find(
+      (button) => button.textContent?.includes("Tenants"),
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      tenantsNav.click();
+    });
+
+    const tenantSelect = document.querySelector(
+      'select[aria-label="Selecionar tenant"]',
+    ) as HTMLSelectElement;
+
+    expect(tenantSelect.value).toBe(tenant.id);
+    expect(document.body.textContent).toContain(tenant.publicId);
+
+    queueTenantDetails(fetchMock, { domains: [] });
+
+    fillInput(tenantSelect, tenantTwo.id);
+
+    await waitForBodyText(tenantTwo.publicId);
+    expect(tenantSelect.value).toBe(tenantTwo.id);
+  });
+
   it("paginates the tenant list", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));

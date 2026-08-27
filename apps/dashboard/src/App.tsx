@@ -1943,7 +1943,21 @@ export const App = () => {
           <div className="workspace-tabs tenant-rail" aria-label="Navegação de tenants">
             <div className="surface tenant-rail-active">
               <span>Tenant selecionado</span>
-              <strong>{selectedTenant ? selectedTenant.name : "Nenhum"}</strong>
+              {tenants.length > 0 ? (
+                <select
+                  aria-label="Selecionar tenant"
+                  value={selectedTenantId ?? ""}
+                  onChange={(event) => setSelectedTenantId(event.target.value)}
+                >
+                  {tenants.map((tenant) => (
+                    <option key={tenant.id} value={tenant.id}>
+                      {tenant.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <strong>Nenhum</strong>
+              )}
               <small>
                 {selectedTenant
                   ? selectedTenant.publicId
@@ -2287,6 +2301,7 @@ export const App = () => {
               </div>
             </section>
 
+            <div className="panel-section panel-tenants tenant-panels-stack">
             <section
               className="two-column panel-section panel-tenants"
               data-tenant-panel-group="list create"
@@ -3036,6 +3051,7 @@ export const App = () => {
                 </form>
               </section>
             ) : null}
+            </div>
 
             {selectedTenant ? (
               <section

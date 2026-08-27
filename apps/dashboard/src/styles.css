@@ -272,6 +272,12 @@ h2 {
   grid-column: 1 / -1;
 }
 
+.tenant-panels-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
 .content[data-active-section="tenants"] > .workspace-tabs.tenant-rail {
   grid-column: 1;
   align-self: start;
@@ -333,6 +339,12 @@ h2 {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #64748b;
+}
+
+.tenant-rail-active select {
+  padding: 0.5rem 0.7rem;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .tenant-rail-active strong {
