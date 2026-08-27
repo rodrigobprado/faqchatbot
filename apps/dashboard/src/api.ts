@@ -85,6 +85,10 @@ type Envelope<T> = Readonly<{
 }>;
 
 const parseResponseBody = async <T>(response: Response): Promise<T> => {
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   const json = (await response.json().catch(() => null)) as
     Envelope<T> | Readonly<{ error?: Readonly<{ message?: string; code?: string }> }> | null;
 
@@ -193,8 +197,8 @@ export const updateTenant = (
     accessToken,
   );
 
-export const deleteTenant = (accessToken: string, tenantId: string): Promise<TenantRecord> =>
-  requestJson<TenantRecord>(
+export const deleteTenant = (accessToken: string, tenantId: string): Promise<void> =>
+  requestJson<void>(
     `/v1/admin/tenants/${tenantId}`,
     {
       method: "DELETE",
@@ -226,8 +230,8 @@ export const deleteTenantDomain = (
   accessToken: string,
   tenantId: string,
   domainId: string,
-): Promise<TenantDomainRecord> =>
-  requestJson<TenantDomainRecord>(
+): Promise<void> =>
+  requestJson<void>(
     `/v1/admin/tenants/${tenantId}/domains/${domainId}`,
     {
       method: "DELETE",

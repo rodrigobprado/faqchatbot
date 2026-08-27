@@ -227,6 +227,8 @@ const jsonResponse = (status: number, data: unknown) =>
     },
   });
 
+const noContentResponse = () => new Response(null, { status: 204 });
+
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
 });
@@ -251,7 +253,7 @@ describe("API helpers", () => {
       .mockResolvedValueOnce(jsonResponse(200, [tenant]))
       .mockResolvedValueOnce(jsonResponse(200, tenant))
       .mockResolvedValueOnce(jsonResponse(200, tenant))
-      .mockResolvedValueOnce(jsonResponse(200, tenant))
+      .mockResolvedValueOnce(noContentResponse())
       .mockResolvedValueOnce(jsonResponse(200, [domain]))
       .mockResolvedValueOnce(jsonResponse(200, domain))
       .mockResolvedValueOnce(jsonResponse(200, config))
@@ -294,7 +296,7 @@ describe("API helpers", () => {
         status: "inactive",
       }),
     ).resolves.toEqual(tenant);
-    await expect(deleteTenant("access-token-1", "tenant-1")).resolves.toEqual(tenant);
+    await expect(deleteTenant("access-token-1", "tenant-1")).resolves.toBeUndefined();
     await expect(listTenantDomains("access-token-1", "tenant-1")).resolves.toEqual([domain]);
     await expect(createTenantDomain("access-token-1", "tenant-1", "acme.com")).resolves.toEqual(
       domain,
@@ -382,18 +384,12 @@ describe("API helpers", () => {
     );
   });
 
-  it("deletes a tenant domain", async () => {
-    const removedDomain = {
-      ...domain,
-      id: "domain-2",
-      domain: "removed.example.com",
-    };
+  it("deletes a tenant domain from a 204 No Content response", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(noContentResponse());
 
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, removedDomain));
-
-    await expect(deleteTenantDomain("access-token-1", "tenant-1", "domain-2")).resolves.toEqual(
-      removedDomain,
-    );
+    await expect(
+      deleteTenantDomain("access-token-1", "tenant-1", "domain-2"),
+    ).resolves.toBeUndefined();
   });
 
   it("updates a tenant user status", async () => {

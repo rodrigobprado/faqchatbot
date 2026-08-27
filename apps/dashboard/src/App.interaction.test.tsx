@@ -325,6 +325,8 @@ const jsonResponse = (status: number, body: MockResponseBody) =>
     },
   });
 
+const noContentResponse = () => new Response(null, { status: 204 });
+
 const healthResponse = {
   status: "ok" as const,
   service: "api" as const,
@@ -867,6 +869,8 @@ describe("App interactions", () => {
           meta: {},
         }),
       )
+      .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }))
+      .mockResolvedValueOnce(noContentResponse())
       .mockResolvedValueOnce(jsonResponse(200, { data: [], meta: {} }));
 
     await act(async () => {
@@ -930,10 +934,14 @@ describe("App interactions", () => {
       ).click();
     });
 
-    await flush();
+    await waitForBodyText("Tenant excluido com sucesso.");
 
     expect(
-      vi.mocked(fetch).mock.calls.some((call) => call[0] === "/v1/admin/tenants/tenant-1"),
+      vi
+        .mocked(fetch)
+        .mock.calls.some(
+          ([path, init]) => path === "/v1/admin/tenants/tenant-1" && init?.method === "DELETE",
+        ),
     ).toBe(true);
     expect(confirmMock).toHaveBeenCalledWith("Excluir Acme Atualizada? Esta acao nao pode ser desfeita.");
   });
