@@ -642,7 +642,7 @@ describe("App interactions", () => {
     expect(tenantsSection.textContent).toContain("foxtrot");
   });
 
-  it("creates a tenant, refreshes the session and logs out", async () => {
+  it("creates a tenant and logs out", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock
@@ -735,22 +735,9 @@ describe("App interactions", () => {
     expect(document.body.textContent).toContain("Beta");
     expect(document.body.textContent).toContain("Tenant criado com sucesso.");
 
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }));
-
-    const refreshButton = Array.from(document.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Renovar sessao"),
-    ) as HTMLButtonElement;
     const logoutButton = Array.from(document.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Sair"),
     ) as HTMLButtonElement;
-
-    await act(async () => {
-      refreshButton.click();
-    });
-
-    await flush();
-
-    expect(vi.mocked(fetch).mock.calls.some((call) => call[0] === "/v1/auth/refresh")).toBe(true);
 
     await act(async () => {
       logoutButton.click();
@@ -1403,6 +1390,7 @@ describe("App interactions", () => {
     expect(
       fetchMock.mock.calls.some(([path, i]) => path === "/v1/admin/plans" && i?.method === "POST"),
     ).toBe(true);
+    await waitForBodyText("Novo");
 
     const unlinkButton = Array.from(createSection.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Desvincular"),

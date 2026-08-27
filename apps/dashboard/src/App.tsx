@@ -940,6 +940,24 @@ export const App = () => {
     }
   };
 
+  const loadPlans = async () => {
+    if (!session) {
+      return;
+    }
+
+    try {
+      const nextPlans = await withSessionRetry((accessToken) => listPlans(accessToken));
+      setPlans(nextPlans);
+    } catch (error) {
+      if (isAuthError(error)) {
+        handleAuthFailure();
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao carregar planos");
+    }
+  };
+
   const loadTenantDetails = async (tenantId: string) => {
     if (!session) {
       return;
@@ -1111,27 +1129,6 @@ export const App = () => {
     }
   };
 
-  const handleRefresh = async () => {
-    if (!session) {
-      return;
-    }
-
-    setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
-
-    try {
-      const refreshed = await refreshAdmin(session.refreshToken);
-      setSession(refreshed);
-      setViewState((current) => ({
-        ...current,
-        loading: false,
-        notice: "Sessao renovada com sucesso.",
-      }));
-    } catch {
-      setViewState((current) => ({ ...current, loading: false }));
-      handleAuthFailure();
-    }
-  };
-
   const handleCreatePlanSubmit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
     try {
@@ -1144,7 +1141,7 @@ export const App = () => {
         }),
       );
       setPlanForm({ slug: "", name: "", priceCents: "", messagesPerMinute: "", conversationsPerDay: "" });
-      await loadTenants();
+      await loadPlans();
       updateNotice("Plano criado com sucesso.");
     } catch (error) {
       if (isAuthError(error)) {
@@ -1166,7 +1163,7 @@ export const App = () => {
         }),
       );
       setEditingPlanId(null);
-      await loadTenants();
+      await loadPlans();
       updateNotice("Plano atualizado com sucesso.");
     } catch (error) {
       if (isAuthError(error)) {
@@ -1184,7 +1181,7 @@ export const App = () => {
 
     try {
       await withSessionRetry((t) => deletePlan(t, planId));
-      await loadTenants();
+      await loadPlans();
       updateNotice("Plano apagado.");
     } catch (error) {
       if (isAuthError(error)) {
@@ -1927,21 +1924,9 @@ export const App = () => {
           </div>
 
           <div className="header-actions">
-            {session ? (
-              <>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={handleRefresh}
-                  disabled={viewState.loading}
-                >
-                  Renovar sessao
-                </button>
-                <button type="button" className="secondary danger" onClick={handleLogout}>
-                  Sair
-                </button>
-              </>
-            ) : null}
+            <button type="button" className="secondary danger" onClick={handleLogout}>
+              Sair
+            </button>
           </div>
         </header>
 
