@@ -9,6 +9,8 @@ import {
   deleteTenant,
   deleteTenantDomain,
   createTenantDomain,
+  verifyTenantDomain,
+  buildDomainVerificationRecordName,
   createTenant,
   getPlatformHealth,
   getTenantAgentConfig,
@@ -1327,6 +1329,32 @@ export const App = () => {
       }
 
       updateError(error instanceof Error ? error.message : "Falha ao remover dominio");
+    }
+  };
+
+  const handleVerifyDomain = async (domainId: string) => {
+    const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+    if (!session || !selectedTenant) {
+      return;
+    }
+
+    setViewState((current) => ({ ...current, loading: true, error: null, notice: null }));
+
+    try {
+      await withSessionRetry((accessToken) =>
+        verifyTenantDomain(accessToken, selectedTenant.id, domainId),
+      );
+      await loadTenantDetails(selectedTenant.id);
+      updateNotice("Dominio verificado com sucesso.");
+    } catch (error) {
+      setViewState((current) => ({ ...current, loading: false }));
+
+      if (isAuthError(error)) {
+        handleAuthFailure();
+        return;
+      }
+
+      updateError(error instanceof Error ? error.message : "Falha ao verificar dominio");
     }
   };
 
@@ -2746,19 +2774,51 @@ export const App = () => {
                       <p>Nenhum dominio autorizado ainda.</p>
                     ) : (
                       safeTenantDomains.map((domain) => (
-                        <div className="list-row" key={domain.id}>
+                        <div className="list-row domain-row" key={domain.id}>
                           <div>
                             <strong className="mono">{domain.domain}</strong>
                             <p>{domain.isVerified ? "Verificado" : "Pendente"}</p>
+                            {!domain.isVerified ? (
+                              <div className="domain-verification-hint">
+                                <p>
+                                  Para verificar, adicione um registro <strong>TXT</strong> no DNS
+                                  do domínio:
+                                </p>
+                                <dl>
+                                  <div>
+                                    <dt>Nome</dt>
+                                    <dd className="mono">
+                                      {buildDomainVerificationRecordName(domain.domain)}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt>Valor</dt>
+                                    <dd className="mono">{domain.verificationToken}</dd>
+                                  </div>
+                                </dl>
+                              </div>
+                            ) : null}
                           </div>
-                          <button
-                            type="button"
-                            className="secondary danger"
-                            onClick={() => void handleDeleteDomain(domain.id, domain.domain)}
-                            disabled={viewState.loading}
-                          >
-                            Remover
-                          </button>
+                          <div className="domain-row-actions">
+                            {!domain.isVerified ? (
+                              <button
+                                type="button"
+                                className="secondary"
+                                onClick={() => void handleVerifyDomain(domain.id)}
+                                disabled={viewState.loading}
+                              >
+                                Verificar agora
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="secondary danger"
+                              onClick={() => void handleDeleteDomain(domain.id, domain.domain)}
+                              disabled={viewState.loading}
+                            >
+                              Remover
+                            </button>
+                          </div>
                         </div>
                       ))
                     )}

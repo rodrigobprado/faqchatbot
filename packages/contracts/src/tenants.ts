@@ -12,6 +12,11 @@ const httpUrlSchema = z
     message: "URL must use http or https"
   });
 
+export const DOMAIN_VERIFICATION_RECORD_PREFIX = "_faqchatbot-verify";
+
+export const buildDomainVerificationRecordName = (domain: string): string =>
+  `${DOMAIN_VERIFICATION_RECORD_PREFIX}.${domain}`;
+
 export const tenantStatusSchema = z.enum(["active", "inactive", "suspended"]);
 export const tenantPlanSchema = z.enum(["free", "starter", "growth", "enterprise"]);
 export const agentProviderSchema = z.enum([

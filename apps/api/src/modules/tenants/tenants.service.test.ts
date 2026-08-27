@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { NotFoundException } from "@nestjs/common";
+import { ConflictException, NotFoundException } from "@nestjs/common";
 import type { Sql } from "postgres";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+const { resolveTxt } = vi.hoisted(() => ({ resolveTxt: vi.fn() }));
+vi.mock("node:dns/promises", () => ({ resolveTxt }));
 import { createDatabase, type Database } from "../../db/client.js";
 import { createAnalyticsEventsRepository } from "../../db/repositories/analytics-events.repository.js";
 import { createAuditLogsRepository } from "../../db/repositories/audit-logs.repository.js";
@@ -73,6 +76,32 @@ describe("TenantsService", () => {
 
     await tenantsService.removeDomain(tenant.id, domain.id);
     expect(await tenantsService.listDomains(tenant.id)).toHaveLength(0);
+  });
+
+  it("verifies a domain once its TXT record matches the issued token, and rejects it otherwise", async () => {
+    const plan = await createPlan();
+    const tenant = await tenantsService.create({
+      publicId: `tenant-${randomUUID()}`,
+      name: "Acme Inc",
+      planId: plan.id
+    });
+
+    const domain = await tenantsService.addDomain(tenant.id, { domain: "verify.example.com" });
+    expect(domain.isVerified).toBe(false);
+    expect(domain.verificationToken).toHaveLength(48);
+
+    resolveTxt.mockResolvedValueOnce([["wrong-token"]]);
+    await expect(tenantsService.verifyDomain(tenant.id, domain.id)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(await tenantsService.listDomains(tenant.id)).toEqual([
+      expect.objectContaining({ isVerified: false }),
+    ]);
+
+    resolveTxt.mockResolvedValueOnce([[domain.verificationToken]]);
+    const verified = await tenantsService.verifyDomain(tenant.id, domain.id);
+    expect(verified.isVerified).toBe(true);
+    expect(resolveTxt).toHaveBeenCalledWith("_faqchatbot-verify.verify.example.com");
   });
 
   it("upserts the visual config for a tenant", async () => {

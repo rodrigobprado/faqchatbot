@@ -78,6 +78,7 @@ export const tenantDomains = pgTable(
     tenantId: tenantIdColumn().references(() => tenants.id),
     domain: varchar("domain", { length: 255 }).notNull(),
     isVerified: boolean("is_verified").notNull().default(false),
+    verificationToken: varchar("verification_token", { length: 64 }).notNull(),
     createdAt: createdAt()
   },
   (table) => [

@@ -105,6 +105,12 @@ export class TenantsController {
     return this.tenantsService.removeDomain(id, domainId);
   }
 
+  @Post(":id/domains/:domainId/verify")
+  @RequirePermissions("tenants:write")
+  verifyDomain(@Param("id") id: string, @Param("domainId") domainId: string) {
+    return this.tenantsService.verifyDomain(id, domainId);
+  }
+
   @Put(":id/config")
   @RequirePermissions("tenants:write")
   upsertConfig(@Param("id") id: string, @Body() body: TenantConfigDto) {

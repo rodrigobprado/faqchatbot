@@ -87,7 +87,7 @@ export class WidgetSessionService {
     await this.rateLimit.enforce("tenant", tenant.id, tenant.id);
 
     const registeredDomains = await createTenantDomainsRepository(this.db).listByTenantId(tenant.id);
-    if (!registeredDomains.some((registered) => registered.domain === domain)) {
+    if (!registeredDomains.some((registered) => registered.domain === domain && registered.isVerified)) {
       throw new ForbiddenException(INVALID_AGENT_OR_ORIGIN);
     }
 

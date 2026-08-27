@@ -6,7 +6,7 @@ import type {
   UpdateTenantRequest
 } from "@faqchatbot/contracts";
 import { createHash, randomBytes } from "node:crypto";
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { hashPassword } from "../../auth/password.js";
 import type { Database } from "../../db/client.js";
 import { createAnalyticsEventsRepository, type AnalyticsPeriod } from "../../db/repositories/analytics-events.repository.js";
@@ -29,6 +29,7 @@ import {
 import { createTenantAgentConfigsRepository } from "../../db/repositories/tenant-agent-configs.repository.js";
 import { createTenantConfigsRepository } from "../../db/repositories/tenant-configs.repository.js";
 import { createTenantDomainsRepository } from "../../db/repositories/tenant-domains.repository.js";
+import { buildVerificationRecordName, verifyDomainOwnership } from "./domain-verification.js";
 import { createTenantsRepository } from "../../db/repositories/tenants.repository.js";
 import { createWebhookEndpointsRepository } from "../../db/repositories/webhook-endpoints.repository.js";
 import { DATABASE } from "../core/core.module.js";
@@ -82,6 +83,36 @@ export class TenantsService {
   async removeDomain(tenantId: string, domainId: string): Promise<void> {
     await this.get(tenantId);
     await createTenantDomainsRepository(this.db).remove(domainId);
+  }
+
+  async verifyDomain(tenantId: string, domainId: string) {
+    await this.get(tenantId);
+    const domainsRepository = createTenantDomainsRepository(this.db);
+    const domain = await domainsRepository.findById(domainId);
+
+    if (!domain || domain.tenantId !== tenantId) {
+      throw new NotFoundException("Domain not found");
+    }
+
+    if (domain.isVerified) {
+      return domain;
+    }
+
+    const owned = await verifyDomainOwnership(domain.domain, domain.verificationToken);
+
+    if (!owned) {
+      throw new ConflictException(
+        `Registro TXT nao encontrado. Adicione ${buildVerificationRecordName(domain.domain)} com o valor ${domain.verificationToken}.`,
+      );
+    }
+
+    const verified = await domainsRepository.markVerified(domainId);
+
+    if (!verified) {
+      throw new NotFoundException("Domain not found");
+    }
+
+    return verified;
   }
 
   async upsertConfig(tenantId: string, input: TenantConfigRequest) {

@@ -34,7 +34,8 @@ export const tenantDomainAdminViewSchema = z.object({
   id: z.uuid(),
   tenantId: z.uuid(),
   domain: z.string(),
-  isVerified: z.boolean()
+  isVerified: z.boolean(),
+  verificationToken: z.string()
 });
 
 export const tenantConfigRequestSchema = z.object({

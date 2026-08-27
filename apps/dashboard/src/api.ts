@@ -1,3 +1,5 @@
+export { buildDomainVerificationRecordName } from "@faqchatbot/contracts";
+
 import type {
   AdminSession,
   AdminUser,
@@ -229,6 +231,19 @@ export const deleteTenantDomain = (
     `/v1/admin/tenants/${tenantId}/domains/${domainId}`,
     {
       method: "DELETE",
+    },
+    accessToken,
+  );
+
+export const verifyTenantDomain = (
+  accessToken: string,
+  tenantId: string,
+  domainId: string,
+): Promise<TenantDomainRecord> =>
+  requestJson<TenantDomainRecord>(
+    `/v1/admin/tenants/${tenantId}/domains/${domainId}/verify`,
+    {
+      method: "POST",
     },
     accessToken,
   );

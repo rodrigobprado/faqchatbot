@@ -921,6 +921,43 @@ h2 {
   background: rgb(248 250 252 / 0.9);
 }
 
+.domain-row {
+  align-items: flex-start;
+}
+
+.domain-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.domain-verification-hint {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.85);
+  font-size: 0.82rem;
+}
+
+.domain-verification-hint dl {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0;
+}
+
+.domain-verification-hint dt {
+  font-weight: 700;
+  color: #64748b;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.domain-verification-hint dd {
+  margin: 0;
+  word-break: break-all;
+}
+
 .three-column {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

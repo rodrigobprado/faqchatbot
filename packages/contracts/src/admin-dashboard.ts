@@ -38,6 +38,7 @@ export type TenantDomainRecord = Readonly<{
   tenantId: string;
   domain: string;
   isVerified: boolean;
+  verificationToken: string;
   createdAt?: string;
 }>;
 

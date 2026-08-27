@@ -54,7 +54,8 @@ const createTenantWithDomain = async (domain: string) => {
     name: "Acme Inc",
     planId
   });
-  await domains.create({ tenantId: tenant.id, domain });
+  const created = await domains.create({ tenantId: tenant.id, domain });
+  await domains.markVerified(created.id);
 
   return tenant;
 };

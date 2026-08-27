@@ -29,6 +29,13 @@
       "when": 1787692213728,
       "tag": "0003_tenant_plan_optional",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787865270848,
+      "tag": "0004_add_domain_verification_token",
+      "breakpoints": true
     }
   ]
 }

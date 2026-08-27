@@ -133,6 +133,7 @@ const domain = {
   tenantId: "tenant-1",
   domain: "acme.com",
   isVerified: false,
+  verificationToken: "verify-token-abc",
 };
 
 const widgetConfig = {
@@ -1143,6 +1144,63 @@ describe("App interactions", () => {
     expect(confirmMock).toHaveBeenCalledWith(
       "Remover dominio example.com? Esta acao nao pode ser desfeita.",
     );
+  });
+
+  it("shows DNS instructions for a pending domain and verifies it", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { data: adminSession, meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [tenant], meta: {} }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: plans, meta: {} }));
+    queueTenantDetails(fetchMock, { domains: [domain] });
+
+    await act(async () => {
+      root!.render(<App />);
+    });
+
+    await flush();
+
+    const [emailInput, passwordInput] = Array.from(
+      document.querySelectorAll('input[type="email"], input[type="password"]'),
+    ) as [HTMLInputElement, HTMLInputElement];
+
+    fillInput(emailInput, "admin@acme.test");
+    fillInput(passwordInput, "senha-super-secreta");
+
+    await act(async () => {
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    await waitForBodyText("Dominios autorizados");
+
+    expect(document.body.textContent).toContain("_faqchatbot-verify.acme.com");
+    expect(document.body.textContent).toContain(domain.verificationToken);
+
+    const verifyButton = Array.from(document.querySelectorAll("#domains button")).find((button) =>
+      button.textContent?.includes("Verificar agora"),
+    ) as HTMLButtonElement;
+    expect(verifyButton).toBeTruthy();
+
+    const verifiedDomain = { ...domain, isVerified: true };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: verifiedDomain, meta: {} }));
+    queueTenantDetails(fetchMock, { domains: [verifiedDomain] });
+
+    await act(async () => {
+      verifyButton.click();
+    });
+
+    await waitForBodyText("Dominio verificado com sucesso.");
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.some(
+          ([path, init]) =>
+            path === "/v1/admin/tenants/tenant-1/domains/domain-1/verify" &&
+            init?.method === "POST",
+        ),
+    ).toBe(true);
+    expect(document.body.textContent).not.toContain("Verificar agora");
   });
 
   it("manages tenant users, roles and api keys through the API", async () => {
