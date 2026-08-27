@@ -44,7 +44,7 @@ const admin =
     passwordHash: await hashPassword(process.env.SEED_ADMIN_PASSWORD ?? "change-me-now")
   }));
 
-const PERMISSION_SLUGS = ["tenants:read", "tenants:write"] as const;
+const PERMISSION_SLUGS = ["tenants:read", "tenants:write", "plans:read", "plans:write"] as const;
 const permissionIds: string[] = [];
 
 for (const slug of PERMISSION_SLUGS) {
@@ -56,8 +56,15 @@ const platformAdminRole =
   (await rolesRepo.findBySlugForTenant(tenant.id, "platform_admin")) ??
   (await rolesRepo.create({ tenantId: tenant.id, slug: "platform_admin", name: "Platform Admin" }));
 
-for (const permissionId of permissionIds) {
-  await rolePermissions.assign(platformAdminRole.id, permissionId).catch(() => undefined);
+// platform_admin existe como uma role por tenant; qualquer permissao nova
+// seedada aqui precisa alcancar todas as roles platform_admin ja criadas
+// (ex.: tenants de producao provisionados fora deste seed), nao apenas a
+// do tenant demo usado para bootstrap local.
+const platformAdminRoles = await rolesRepo.listBySlug("platform_admin");
+for (const role of platformAdminRoles) {
+  for (const permissionId of permissionIds) {
+    await rolePermissions.assign(role.id, permissionId).catch(() => undefined);
+  }
 }
 
 const adminRoleSlugs = await userRoles.listRoleSlugsByUserId(admin.id);

@@ -439,6 +439,23 @@ const formatPlanLimits = (limits: PlanRecord["limits"]) => {
   return { messagesPerMinute, conversationsPerDay };
 };
 
+const buildPlanLimits = (
+  messagesPerMinute: string,
+  conversationsPerDay: string,
+): Record<string, number> | undefined => {
+  const limits: Record<string, number> = {};
+
+  if (messagesPerMinute.trim()) {
+    limits.messagesPerMinute = Number(messagesPerMinute);
+  }
+
+  if (conversationsPerDay.trim()) {
+    limits.conversationsPerDay = Number(conversationsPerDay);
+  }
+
+  return Object.keys(limits).length > 0 ? limits : undefined;
+};
+
 const normalizeTenantUser = (user: TenantUserRecord): TenantUserRecord =>
   ({
     ...user,
@@ -538,9 +555,21 @@ export const App = () => {
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [tenantDomains, setTenantDomains] = useState<TenantDomainRecord[]>([]);
   const [loginState, setLoginState] = useState<LoginState>(defaultLoginState);
-  const [planForm, setPlanForm] = useState({ slug: "", name: "", priceCents: "" });
+  const [planForm, setPlanForm] = useState({
+    slug: "",
+    name: "",
+    priceCents: "",
+    messagesPerMinute: "",
+    conversationsPerDay: "",
+  });
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
-  const [planEdit, setPlanEdit] = useState({ name: "", priceCents: "", isActive: true });
+  const [planEdit, setPlanEdit] = useState({
+    name: "",
+    priceCents: "",
+    isActive: true,
+    messagesPerMinute: "",
+    conversationsPerDay: "",
+  });
   const [tenantForm, setTenantForm] = useState<TenantFormState>(defaultTenantFormState());
   const [tenantEdit, setTenantEdit] = useState<TenantEditState>(
     defaultTenantEditState(),
@@ -1107,9 +1136,14 @@ export const App = () => {
     event.preventDefault();
     try {
       await withSessionRetry((t) =>
-        createPlan(t, { slug: planForm.slug.trim(), name: planForm.name.trim(), priceCents: Number(planForm.priceCents || 0) }),
+        createPlan(t, {
+          slug: planForm.slug.trim(),
+          name: planForm.name.trim(),
+          priceCents: Number(planForm.priceCents || 0),
+          limits: buildPlanLimits(planForm.messagesPerMinute, planForm.conversationsPerDay),
+        }),
       );
-      setPlanForm({ slug: "", name: "", priceCents: "" });
+      setPlanForm({ slug: "", name: "", priceCents: "", messagesPerMinute: "", conversationsPerDay: "" });
       await loadTenants();
       updateNotice("Plano criado com sucesso.");
     } catch (error) {
@@ -1128,6 +1162,7 @@ export const App = () => {
           name: planEdit.name.trim(),
           priceCents: Number(planEdit.priceCents || 0),
           isActive: planEdit.isActive,
+          limits: buildPlanLimits(planEdit.messagesPerMinute, planEdit.conversationsPerDay),
         }),
       );
       setEditingPlanId(null);
@@ -2116,6 +2151,26 @@ export const App = () => {
                   <span>Preco (centavos)</span>
                   <input value={planForm.priceCents} onChange={(e) => setPlanForm({ ...planForm, priceCents: e.target.value })} />
                 </label>
+                <label>
+                  <span>Mensagens/min</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={planForm.messagesPerMinute}
+                    onChange={(e) => setPlanForm({ ...planForm, messagesPerMinute: e.target.value })}
+                    placeholder="Sem limite"
+                  />
+                </label>
+                <label>
+                  <span>Conversas/dia</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={planForm.conversationsPerDay}
+                    onChange={(e) => setPlanForm({ ...planForm, conversationsPerDay: e.target.value })}
+                    placeholder="Sem limite"
+                  />
+                </label>
                 <button type="submit" className="primary">Criar plano</button>
               </form>
 
@@ -2159,7 +2214,13 @@ export const App = () => {
                             type="button"
                             onClick={() => {
                               setEditingPlanId(editingPlanId === plan.id ? null : plan.id);
-                              setPlanEdit({ name: plan.name, priceCents: String(plan.priceCents), isActive: plan.isActive });
+                              setPlanEdit({
+                                name: plan.name,
+                                priceCents: String(plan.priceCents),
+                                isActive: plan.isActive,
+                                messagesPerMinute: limits.messagesPerMinute ? String(limits.messagesPerMinute) : "",
+                                conversationsPerDay: limits.conversationsPerDay ? String(limits.conversationsPerDay) : "",
+                              });
                             }}
                           >
                             Editar
@@ -2185,6 +2246,26 @@ export const App = () => {
                             <label>
                               <span>Ativo</span>
                               <input type="checkbox" checked={planEdit.isActive} onChange={(e) => setPlanEdit({ ...planEdit, isActive: e.target.checked })} />
+                            </label>
+                            <label>
+                              <span>Mensagens/min</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={planEdit.messagesPerMinute}
+                                onChange={(e) => setPlanEdit({ ...planEdit, messagesPerMinute: e.target.value })}
+                                placeholder="Sem limite"
+                              />
+                            </label>
+                            <label>
+                              <span>Conversas/dia</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={planEdit.conversationsPerDay}
+                                onChange={(e) => setPlanEdit({ ...planEdit, conversationsPerDay: e.target.value })}
+                                placeholder="Sem limite"
+                              />
                             </label>
                             <button type="submit" className="primary">Salvar plano</button>
                           </form>

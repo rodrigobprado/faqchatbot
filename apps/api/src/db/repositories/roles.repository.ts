@@ -29,6 +29,9 @@ export const createRolesRepository = (db: Database) => ({
     const [role] = await db.select().from(roles).where(eq(roles.slug, slug));
     return role ?? null;
   },
+  listBySlug: async (slug: string) => {
+    return db.select().from(roles).where(eq(roles.slug, slug));
+  },
   listByTenantId: async (tenantId: string) => {
     return db.select().from(roles).where(eq(roles.tenantId, tenantId));
   },
