@@ -234,14 +234,22 @@ beforeEach(() => {
 });
 
 describe("buildWidgetSnippet", () => {
-  it("builds a production embed snippet for a tenant", () => {
-    expect(buildWidgetSnippet("acme")).toBe(
+  it("builds an embed snippet for a tenant using the given origin", () => {
+    expect(buildWidgetSnippet("https://faqchatbot.rigbie.com.br", "acme")).toBe(
       '<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=acme" data-agent="acme" async></script>',
     );
   });
 
+  it("builds the snippet against a different environment's origin", () => {
+    expect(buildWidgetSnippet("https://faqchatbot-staging.rigbie.com.br", "acme")).toContain(
+      "https://faqchatbot-staging.rigbie.com.br/widget.js",
+    );
+  });
+
   it("escapes attribute characters in the embed snippet", () => {
-    expect(buildWidgetSnippet('acme" onload="alert(1)')).toContain("&quot;");
+    expect(
+      buildWidgetSnippet("https://faqchatbot.rigbie.com.br", 'acme" onload="alert(1)'),
+    ).toContain("&quot;");
   });
 });
 

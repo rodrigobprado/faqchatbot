@@ -444,7 +444,7 @@ describe("App interactions", () => {
     expect(document.body.textContent).toContain("acme");
     expect(document.body.textContent).toContain("Dominios autorizados");
     expect(document.body.textContent).toContain(
-      '<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=tenant-1" data-agent="tenant-1" async></script>',
+      '<script src="http://localhost:3000/widget.js?data-agent=tenant-1" data-agent="tenant-1" async></script>',
     );
 
     const settingsButton = Array.from(document.querySelectorAll(".sidebar-nav button")).find(
@@ -467,7 +467,7 @@ describe("App interactions", () => {
 
     await waitForBodyText("Snippet copiado para a area de transferencia.");
     expect(clipboardWriteText).toHaveBeenCalledWith(
-      '<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=tenant-1" data-agent="tenant-1" async></script>',
+      '<script src="http://localhost:3000/widget.js?data-agent=tenant-1" data-agent="tenant-1" async></script>',
     );
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
       3,

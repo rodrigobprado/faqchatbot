@@ -430,7 +430,7 @@ export const updatePlan = (
 export const deletePlan = (accessToken: string, planId: string): Promise<{ deleted: boolean }> =>
   requestJson<{ deleted: boolean }>(`/v1/admin/plans/${planId}`, { method: "DELETE" }, accessToken);
 
-export const buildWidgetSnippet = (publicId: string): string => {
+export const buildWidgetSnippet = (origin: string, publicId: string): string => {
   const escapedPublicId = escapeAttribute(publicId);
-  return `<script src="https://faqchatbot.rigbie.com.br/widget.js?data-agent=${escapedPublicId}" data-agent="${escapedPublicId}" async></script>`;
+  return `<script src="${origin}/widget.js?data-agent=${escapedPublicId}" data-agent="${escapedPublicId}" async></script>`;
 };

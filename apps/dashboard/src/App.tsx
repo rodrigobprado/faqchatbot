@@ -1697,7 +1697,7 @@ export const App = () => {
   const platformEnvironment = import.meta.env.MODE;
   const widgetScriptUrl = `${platformOrigin}/widget.js`;
   const selectedTenantSnippet = selectedTenant?.publicId
-    ? buildWidgetSnippet(selectedTenant.id)
+    ? buildWidgetSnippet(platformOrigin, selectedTenant.id)
     : null;
   const canSubmitDomain = Boolean(session && selectedTenant && domainForm.trim());
   const safeTenantDomains = Array.isArray(tenantDomains) ? tenantDomains : [];

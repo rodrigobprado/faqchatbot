@@ -31,11 +31,13 @@ const plan =
     limits: { messagesPerMinute: 30, conversationsPerDay: 200 }
   }));
 
+const tenantPublicId = process.env.SEED_TENANT_PUBLIC_ID ?? "demo";
+const tenantName = process.env.SEED_TENANT_NAME ?? "Demo Tenant";
 const tenant =
-  (await tenants.findByPublicId("demo")) ??
-  (await tenants.create({ publicId: "demo", name: "Demo Tenant", planId: plan.id }));
+  (await tenants.findByPublicId(tenantPublicId)) ??
+  (await tenants.create({ publicId: tenantPublicId, name: tenantName, planId: plan.id }));
 
-const adminEmail = "admin@faqchatbot.local";
+const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@faqchatbot.local";
 const admin =
   (await users.findByEmail(adminEmail)) ??
   (await users.create({
