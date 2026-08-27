@@ -477,7 +477,7 @@ describe("App interactions", () => {
     );
   });
 
-  it("shows restricted mode for admins without platform_admin", async () => {
+  it("surfaces the backend's own permission error for admins without tenants:write", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(jsonResponse(200, healthResponse));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: restrictedSession, meta: {} }));
@@ -505,7 +505,8 @@ describe("App interactions", () => {
 
     await flush();
 
-    expect(document.body.textContent).toContain("modo restrito");
+    expect(document.body.textContent).not.toContain("modo restrito");
+    expect(document.body.textContent).toContain(restrictedSession.user.roles.join(", "));
 
     const createSection = document.querySelector("#config") as HTMLElement;
     const [publicIdInput, nameInput, planSelect, localeInput] = Array.from(
@@ -521,7 +522,17 @@ describe("App interactions", () => {
       button.textContent?.includes("Criar tenant"),
     ) as HTMLButtonElement;
 
-    expect(createButton.disabled).toBe(true);
+    expect(createButton.disabled).toBe(false);
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(403, { error: { message: "Missing required permission", code: "forbidden" } }),
+    );
+
+    await act(async () => {
+      createButton.click();
+    });
+
+    await waitForBodyText("Missing required permission");
   });
 
   it("filters the tenant list by search, status and plan", async () => {
