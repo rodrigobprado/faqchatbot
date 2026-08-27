@@ -1776,6 +1776,72 @@ export const App = () => {
     }
   };
 
+  if (!session) {
+    return (
+      <main className="app-shell auth-shell">
+        {viewState.error ? <div className="banner error">{viewState.error}</div> : null}
+        {viewState.notice ? <div className="banner success">{viewState.notice}</div> : null}
+        <section className="auth-grid" id="overview">
+          <article className="hero-card">
+            <p className="eyebrow">Controle operacional</p>
+            <h2>Entre no painel para administrar tenants, widgets e configuracoes.</h2>
+            <p>
+              O dashboard consome a API atual da plataforma e permite iniciar a operacao sem tocar
+              diretamente no banco.
+            </p>
+            <div className="health-panel">
+              <strong>Status da plataforma</strong>
+              <p>{describePlatformHealth(platformHealthStatus, platformHealth)}</p>
+              <small>{describeDatabaseHealthCheck(platformHealthStatus, platformHealth)}</small>
+            </div>
+            <ul>
+              <li>Login administrativo com refresh token.</li>
+              <li>Cadastro de tenants pronto para uso.</li>
+              <li>Snippet do widget gerado por tenant.</li>
+            </ul>
+          </article>
+
+          <article className="surface auth-card">
+            <h2>Acesso administrativo</h2>
+            <form className="stack" onSubmit={handleLoginSubmit}>
+              <label>
+                <span>E-mail</span>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={loginState.email}
+                  onChange={(event) =>
+                    setLoginState((current) => ({ ...current, email: event.target.value }))
+                  }
+                  placeholder="admin@empresa.com"
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Senha</span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={loginState.password}
+                  onChange={(event) =>
+                    setLoginState((current) => ({ ...current, password: event.target.value }))
+                  }
+                  placeholder="••••••••"
+                  required
+                />
+              </label>
+
+              <button type="submit" className="primary" disabled={viewState.loading}>
+                {viewState.loading ? "Entrando..." : "Entrar"}
+              </button>
+            </form>
+          </article>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar" aria-label="Navegacao principal">
@@ -1909,70 +1975,7 @@ export const App = () => {
           </div>
         ) : null}
 
-        {!session ? (
-          <section className="auth-grid" id="overview">
-            <article className="hero-card">
-              <p className="eyebrow">Controle operacional</p>
-              <h2>Entre no painel para administrar tenants, widgets e configuracoes.</h2>
-              <p>
-                O dashboard consome a API atual da plataforma e permite iniciar a operacao sem tocar
-                diretamente no banco.
-              </p>
-              <div className="health-panel">
-                <strong>Status da plataforma</strong>
-                <p>
-                  {describePlatformHealth(platformHealthStatus, platformHealth)}
-                </p>
-                <small>
-                  {describeDatabaseHealthCheck(platformHealthStatus, platformHealth)}
-                </small>
-              </div>
-              <ul>
-                <li>Login administrativo com refresh token.</li>
-                <li>Cadastro de tenants pronto para uso.</li>
-                <li>Snippet do widget gerado por tenant.</li>
-              </ul>
-            </article>
-
-            <article className="surface auth-card">
-              <h2>Acesso administrativo</h2>
-              <form className="stack" onSubmit={handleLoginSubmit}>
-                <label>
-                  <span>E-mail</span>
-                  <input
-                    type="email"
-                    autoComplete="email"
-                    value={loginState.email}
-                    onChange={(event) =>
-                      setLoginState((current) => ({ ...current, email: event.target.value }))
-                    }
-                    placeholder="admin@empresa.com"
-                    required
-                  />
-                </label>
-
-                <label>
-                  <span>Senha</span>
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    value={loginState.password}
-                    onChange={(event) =>
-                      setLoginState((current) => ({ ...current, password: event.target.value }))
-                    }
-                    placeholder="••••••••"
-                    required
-                  />
-                </label>
-
-                <button type="submit" className="primary" disabled={viewState.loading}>
-                  {viewState.loading ? "Entrando..." : "Entrar"}
-                </button>
-              </form>
-            </article>
-          </section>
-        ) : (
-          <>
+        <>
             <section className="metric-grid panel-section panel-overview" id="overview">
                 <article className="surface metric-card">
                   <span>Status da plataforma</span>
@@ -3551,7 +3554,6 @@ export const App = () => {
               </dl>
             </section>
           </>
-        )}
       </section>
     </main>
   );
