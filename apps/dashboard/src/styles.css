@@ -399,6 +399,10 @@ h2 {
   [data-tenant-panel]:not([data-tenant-panel="security"]),
 .content[data-active-section="tenants"][data-tenant-workspace="agent"]
   [data-tenant-panel]:not([data-tenant-panel="agent"]),
+.content[data-active-section="tenants"]:not([data-tenant-workspace="list"]):not([data-tenant-workspace="create"])
+  [data-tenant-panel-group~="list"],
+.content[data-active-section="tenants"]:not([data-tenant-workspace="security"]):not([data-tenant-workspace="widget"])
+  [data-tenant-panel-group~="security"],
 .content[data-active-section="operations"][data-operations-workspace="sessions"]
   [data-operations-panel]:not([data-operations-panel="sessions"]),
 .content[data-active-section="operations"][data-operations-workspace="analytics"]

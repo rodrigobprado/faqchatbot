@@ -2287,7 +2287,10 @@ export const App = () => {
               </div>
             </section>
 
-            <section className="two-column panel-section panel-tenants">
+            <section
+              className="two-column panel-section panel-tenants"
+              data-tenant-panel-group="list create"
+            >
               <article
                 className="surface panel-section panel-tenants"
                 id="tenants"
@@ -2711,7 +2714,10 @@ export const App = () => {
             </section>
 
             {selectedTenant ? (
-              <section className="two-column panel-section panel-tenants">
+              <section
+                className="two-column panel-section panel-tenants"
+                data-tenant-panel-group="security widget"
+              >
                 <article
                   className="surface domain-card panel-section panel-tenants"
                   id="domains"
