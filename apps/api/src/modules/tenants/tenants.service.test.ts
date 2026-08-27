@@ -54,6 +54,9 @@ describe("TenantsService", () => {
     const updated = await tenantsService.update(created.id, { status: "suspended" });
     expect(updated?.status).toBe("suspended");
 
+    const renamed = await tenantsService.update(created.id, { publicId: `renamed-${randomUUID()}` });
+    expect(renamed?.publicId).not.toBe(created.publicId);
+
     await tenantsService.remove(created.id);
     await expect(tenantsService.get(created.id)).rejects.toBeInstanceOf(NotFoundException);
   });

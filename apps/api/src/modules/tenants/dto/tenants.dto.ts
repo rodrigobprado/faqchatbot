@@ -46,6 +46,12 @@ export class CreateTenantDto implements CreateTenantRequest {
 export class UpdateTenantDto implements UpdateTenantRequest {
   @IsOptional()
   @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  publicId?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(180)
   name?: string;
 

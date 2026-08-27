@@ -9,6 +9,7 @@ export const createTenantRequestSchema = z.object({
 });
 
 export const updateTenantRequestSchema = z.object({
+  publicId: z.string().min(1).max(120).optional(),
   name: z.string().min(1).max(180).optional(),
   status: tenantStatusSchema.optional(),
   planId: z.uuid().nullish(),
