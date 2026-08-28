@@ -1832,7 +1832,7 @@ export const App = () => {
         <section className="auth-grid" id="overview">
           <article className="hero-card">
             <p className="eyebrow">Controle operacional</p>
-            <h2>Entre no painel para administrar tenants, widgets e configuracoes.</h2>
+            <h1>Entre no painel para administrar tenants, widgets e configuracoes.</h1>
             <p>
               O dashboard consome a API atual da plataforma e permite iniciar a operacao sem tocar
               diretamente no banco.
