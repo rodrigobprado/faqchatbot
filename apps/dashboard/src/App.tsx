@@ -2149,49 +2149,6 @@ export const App = () => {
                 </button>
               </div>
 
-              <form
-                className="stack"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleCreatePlanSubmit(event);
-                }}
-              >
-                <h3>Criar plano</h3>
-                <label>
-                  <span>Slug</span>
-                  <input required value={planForm.slug} onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value })} />
-                </label>
-                <label>
-                  <span>Nome</span>
-                  <input required value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} />
-                </label>
-                <label>
-                  <span>Preco (centavos)</span>
-                  <input value={planForm.priceCents} onChange={(e) => setPlanForm({ ...planForm, priceCents: e.target.value })} />
-                </label>
-                <label>
-                  <span>Mensagens/min</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={planForm.messagesPerMinute}
-                    onChange={(e) => setPlanForm({ ...planForm, messagesPerMinute: e.target.value })}
-                    placeholder="Sem limite"
-                  />
-                </label>
-                <label>
-                  <span>Conversas/dia</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={planForm.conversationsPerDay}
-                    onChange={(e) => setPlanForm({ ...planForm, conversationsPerDay: e.target.value })}
-                    placeholder="Sem limite"
-                  />
-                </label>
-                <button type="submit" className="primary">Criar plano</button>
-              </form>
-
               <div className="plan-grid">
                 {plans.length === 0 ? (
                   <div className="empty-state">
@@ -2309,6 +2266,49 @@ export const App = () => {
                   })
                 )}
               </div>
+
+              <form
+                className="stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleCreatePlanSubmit(event);
+                }}
+              >
+                <h3>Criar plano</h3>
+                <label>
+                  <span>Slug</span>
+                  <input required value={planForm.slug} onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value })} />
+                </label>
+                <label>
+                  <span>Nome</span>
+                  <input required value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} />
+                </label>
+                <label>
+                  <span>Preco (centavos)</span>
+                  <input value={planForm.priceCents} onChange={(e) => setPlanForm({ ...planForm, priceCents: e.target.value })} />
+                </label>
+                <label>
+                  <span>Mensagens/min</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={planForm.messagesPerMinute}
+                    onChange={(e) => setPlanForm({ ...planForm, messagesPerMinute: e.target.value })}
+                    placeholder="Sem limite"
+                  />
+                </label>
+                <label>
+                  <span>Conversas/dia</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={planForm.conversationsPerDay}
+                    onChange={(e) => setPlanForm({ ...planForm, conversationsPerDay: e.target.value })}
+                    placeholder="Sem limite"
+                  />
+                </label>
+                <button type="submit" className="primary">Criar plano</button>
+              </form>
             </section>
 
             <div className="panel-section panel-tenants tenant-panels-stack">
