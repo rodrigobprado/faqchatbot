@@ -26,6 +26,21 @@ describe("readWidgetConfig", () => {
     expect(config.apiUrl).toBe("https://api.override.com");
   });
 
+  it("derives the API URL from the script's own src, ignoring the build-time default", () => {
+    const script = createScript({ "data-agent": "acme" });
+    script.src = "https://faqchatbot.example.com/widget.js?data-agent=acme";
+
+    const config = readWidgetConfig(script, "http://localhost:3000");
+
+    expect(config.apiUrl).toBe("https://faqchatbot.example.com");
+  });
+
+  it("falls back to the build-time default when the script has no usable src", () => {
+    const config = readWidgetConfig(createScript({ "data-agent": "acme" }), "https://api.default.com");
+
+    expect(config.apiUrl).toBe("https://api.default.com");
+  });
+
   it("returns null agentId when the script tag is missing", () => {
     const config = readWidgetConfig(null, "https://api.default.com");
 
