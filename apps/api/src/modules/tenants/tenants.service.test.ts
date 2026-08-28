@@ -217,7 +217,11 @@ describe("TenantsService", () => {
     });
     const sessions = createVisitorSessionsRepository(db);
     const conversations = createConversationsRepository(db);
-    const session = await sessions.create({ tenantId: tenant.id, visitorId: randomUUID(), pageContext: {} });
+    const session = await sessions.create({
+      tenantId: tenant.id,
+      visitorId: randomUUID(),
+      pageContext: { url: "https://status.example.com/", title: "Status" }
+    });
     const first = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
     await new Promise((resolve) => setTimeout(resolve, 5));
     const second = await conversations.create({ tenantId: tenant.id, sessionId: session.id });
@@ -226,6 +230,9 @@ describe("TenantsService", () => {
 
     expect(page).toHaveLength(1);
     expect(page[0]?.id).toBe(second.id);
+    expect(page[0]?.pageUrl).toBe("https://status.example.com/");
+    expect(page[0]?.pageTitle).toBe("Status");
+    expect(page[0]?.visitorId).toBe(session.visitorId);
     void first;
   });
 

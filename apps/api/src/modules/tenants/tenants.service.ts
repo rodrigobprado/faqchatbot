@@ -9,6 +9,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { hashPassword } from "../../auth/password.js";
 import type { Database } from "../../db/client.js";
+import type { conversations } from "../../db/schema.js";
 import { createAnalyticsEventsRepository, type AnalyticsPeriod } from "../../db/repositories/analytics-events.repository.js";
 import { createApiKeysRepository } from "../../db/repositories/api-keys.repository.js";
 import { createAuditLogsRepository } from "../../db/repositories/audit-logs.repository.js";
@@ -37,6 +38,8 @@ import { resolveRateLimitPolicy } from "../rate-limit/rate-limit-policy.js";
 
 const RATE_LIMIT_SCOPES: readonly RateLimitScope[] = ["ip", "tenant", "api_key", "visitor", "conversation"];
 const DEFAULT_ANALYTICS_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
+
+type ConversationRow = typeof conversations.$inferSelect;
 
 @Injectable()
 export class TenantsService {
@@ -192,7 +195,36 @@ export class TenantsService {
 
   async listConversations(tenantId: string, page: { limit?: number; offset?: number }) {
     await this.get(tenantId);
-    return createConversationsRepository(this.db).listByTenantId(tenantId, page);
+    const conversations = await createConversationsRepository(this.db).listByTenantId(tenantId, page);
+    return Promise.all(
+      conversations.map((conversation) => this.summarizeConversation(tenantId, conversation)),
+    );
+  }
+
+  private async summarizeConversation(tenantId: string, conversation: ConversationRow) {
+    const [session, messages] = await Promise.all([
+      createVisitorSessionsRepository(this.db).findById(conversation.sessionId),
+      createMessagesRepository(this.db).listByConversationAndTenantId(conversation.id, tenantId)
+    ]);
+
+    const pageContext = (session?.pageContext ?? {}) as { url?: unknown; title?: unknown };
+    const lastMessage = messages.at(-1);
+
+    return {
+      id: conversation.id,
+      tenantId: conversation.tenantId,
+      sessionId: conversation.sessionId,
+      status: conversation.status,
+      startedAt: conversation.startedAt.toISOString(),
+      endedAt: conversation.endedAt?.toISOString() ?? null,
+      visitorId: session?.visitorId ?? null,
+      lastSeenAt: session?.lastSeenAt?.toISOString() ?? null,
+      currentPage: typeof pageContext.url === "string" ? pageContext.url : null,
+      pageTitle: typeof pageContext.title === "string" ? pageContext.title : null,
+      pageUrl: typeof pageContext.url === "string" ? pageContext.url : null,
+      messageCount: messages.length,
+      lastMessageAt: lastMessage?.createdAt.toISOString() ?? null
+    };
   }
 
   async listSessions(tenantId: string, page: { limit?: number; offset?: number }) {
@@ -319,30 +351,13 @@ export class TenantsService {
       throw new NotFoundException("Conversation not found");
     }
 
-    const [session] = [await createVisitorSessionsRepository(this.db).findById(conversation.sessionId)];
-    const messages = await createMessagesRepository(this.db).listByConversationAndTenantId(
-      conversationId,
-      tenantId,
-    );
-
-    const pageContext = (session?.pageContext ?? {}) as {
-      url?: unknown;
-      title?: unknown;
-    };
+    const [summary, messages] = await Promise.all([
+      this.summarizeConversation(tenantId, conversation),
+      createMessagesRepository(this.db).listByConversationAndTenantId(conversationId, tenantId)
+    ]);
 
     return {
-      id: conversation.id,
-      tenantId: conversation.tenantId,
-      sessionId: conversation.sessionId,
-      status: conversation.status,
-      startedAt: conversation.startedAt.toISOString(),
-      endedAt: conversation.endedAt?.toISOString() ?? null,
-      visitorId: session?.visitorId ?? null,
-      lastSeenAt: session?.lastSeenAt?.toISOString() ?? null,
-      currentPage: typeof pageContext.url === "string" ? pageContext.url : null,
-      pageTitle: typeof pageContext.title === "string" ? pageContext.title : null,
-      pageUrl: typeof pageContext.url === "string" ? pageContext.url : null,
-      messageCount: messages.length,
+      ...summary,
       messages: messages.map((message) => ({
         id: message.id,
         tenantId: message.tenantId,
