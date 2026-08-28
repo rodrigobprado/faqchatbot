@@ -35,7 +35,7 @@ export const tenantPublicConfigSchema = z.object({
   publicId: z.string().min(1).max(120),
   name: z.string().min(1).max(180),
   status: tenantStatusSchema,
-  plan: tenantPlanSchema,
+  plan: z.string().min(1).max(80),
   domain: z.string().min(1).max(255),
   locale: z.string().default("pt-BR"),
   theme: z.enum(["light", "dark", "auto"]).default("auto"),

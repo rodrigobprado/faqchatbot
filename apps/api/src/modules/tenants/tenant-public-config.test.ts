@@ -73,4 +73,12 @@ describe("resolveTenantPublicConfig", () => {
 
     expect(JSON.stringify(result)).not.toMatch(/webhook/i);
   });
+
+  it("accepts a custom plan slug outside the legacy fixed tiers", () => {
+    const customPlan: PlanRow = { ...basePlan, slug: "black-friday-2026" };
+
+    const result = resolveTenantPublicConfig(baseTenant, customPlan, null, "acme.example.com");
+
+    expect(result.plan).toBe("black-friday-2026");
+  });
 });
